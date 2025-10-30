@@ -1,9 +1,5 @@
-import Image from "next/image";
+import { redirect } from "next/navigation";
 
-export default function Home() {
-  return (
-    <h1 className="text-4xl font-bold text-blue-500">
-      Hello Outfitr 👗
-    </h1>
-  );
+export default function Page() {
+  redirect("/auth/login");
 }
