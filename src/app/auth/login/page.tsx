@@ -1,30 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation"; //import router
-import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter(); 
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
 
-    if (error) {
-      alert("Login failed: " + error.message);
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert("Login failed: " + data.error);
       return;
     }
 
+    alert("Welcome back, " + data.user.first_name + "!");
     router.push("/home");
- };
- 
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
