@@ -1,43 +1,29 @@
 "use client";
 
 import { useState } from "react";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
-
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-  });
-
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setErrorMsg("");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: form.email,
-      password: form.password,
+    const res = await signIn("credentials", {
+      redirect: false,
+      email,
+      password,
     });
 
-    if (error) {
-      setErrorMsg(error.message);
-      setLoading(false);
-      return;
+    if (res?.error) {
+      setErrorMsg(res.error);
+    } else {
+      router.push("/home");
     }
-
-    // Redirect to home after successful login
-    router.push("/home");
   };
 
   return (
@@ -46,60 +32,46 @@ export default function LoginPage() {
         <h1 className="text-2xl font-semibold text-center mb-6">Login</h1>
 
         {errorMsg && (
-          <p className="text-red-500 text-center mb-4">{errorMsg}</p>
+          <p className="text-center text-red-500 mb-4">{errorMsg}</p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-600">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              className="w-full mt-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
+          <input
+            type="email"
+            placeholder="Email"
+            className="w-full border px-4 py-2 rounded-lg"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-600">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              className="w-full mt-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+          <input
+            type="password"
+            placeholder="Password"
+            className="w-full border px-4 py-2 rounded-lg"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
           >
-            {loading ? "Signing in..." : "Sign In"}
+            Sign In
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-4">
-          Don’t have an account?{" "}
+        {/* Register redirect using router.push */}
+        <div className="text-center mt-6">
+          <p className="text-gray-600 mb-2">Don’t have an account?</p>
           <button
             onClick={() => router.push("/auth/register")}
             className="text-blue-600 hover:underline"
           >
-            Register
+            Register here
           </button>
-        </p>
+        </div>
       </div>
     </div>
   );

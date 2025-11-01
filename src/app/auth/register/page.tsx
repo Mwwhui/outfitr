@@ -1,8 +1,6 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -31,32 +29,24 @@ export default function SignupPage() {
     setErrorMsg("");
 
     try {
-      // Step 1: Register with Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-      });
-
-      if (error) throw new Error(error.message);
-
-      const userId = data.user?.id;
-
-      // Step 2: Store extra info in "users" table
-      const { error: insertError } = await supabase.from("users").insert([
-        {
-          id: userId, // foreign key to Supabase Auth
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           username: form.username,
+          email: form.email,
+          password_hash: form.password, // will be hashed in backend
           first_name: form.first_name,
           last_name: form.last_name,
           dob: form.dob,
           nationality: form.nationality,
-          email: form.email,
-        },
-      ]);
+        }),
+      });
 
-      if (insertError) throw new Error(insertError.message);
+      const data = await res.json();
 
-      alert("Account created! Please verify your email before logging in.");
+      if (!res.ok) throw new Error(data.error || "Failed to register");
+
       router.push("/auth/login");
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -72,7 +62,9 @@ export default function SignupPage() {
           Create an Account
         </h2>
 
-        {errorMsg && <p className="text-red-500 text-center mb-4">{errorMsg}</p>}
+        {errorMsg && (
+          <p className="text-red-500 text-center mb-4">{errorMsg}</p>
+        )}
 
         <form onSubmit={handleSignup} className="flex flex-col gap-4">
           <input
