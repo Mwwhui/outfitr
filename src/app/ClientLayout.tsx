@@ -1,7 +1,9 @@
 "use client";
 
+import { SessionProvider } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Header from "./components/Header";
+import Footer from "./components/Footer";
 
 export default function ClientLayout({
   children,
@@ -14,9 +16,14 @@ export default function ClientLayout({
     pathname === "/auth/login" || pathname === "/auth/register";
 
   return (
-    <>
-      {!hideHeader && <Header />}
-      <main>{children}</main>
-    </>
+    <SessionProvider>
+      <div className="flex flex-col min-h-screen">
+        {!hideHeader && <Header />}
+
+        <main className="flex-grow">{children}</main>
+
+        {!hideHeader && <Footer />}
+      </div>
+    </SessionProvider>
   );
 }
