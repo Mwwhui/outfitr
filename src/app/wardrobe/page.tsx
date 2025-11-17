@@ -41,19 +41,19 @@ export default function WardrobePage() {
 
   if (loading) {
     return (
-      <div className="p-6 text-center text-gray-600">
+      <div className="min-h-screen text-center text-gray-700">
         Loading your wardrobe… ✨
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <h1 className="text-2xl font-semibold mb-5">👚 My Wardrobe</h1>
+    <div className="min-h-screen p-6">
+      <h1 className="text-2xl text-black font-semibold mb-5 ">👚 My Wardrobe</h1>
 
       {/* if wardrobe empty */}
       {clothes.length === 0 && (
-        <div className="text-center text-gray-500">
+        <div className="text-center text-black">
           Your wardrobe is empty 😢
           <br />
           <button
@@ -86,7 +86,7 @@ export default function WardrobePage() {
             )}
 
             <div className="p-3">
-              <p className="font-medium">{item.name}</p>
+              <p className="text-black font-medium">{item.name}</p>
               <p className="text-sm text-gray-500">{item.type}</p>
             </div>
           </div>

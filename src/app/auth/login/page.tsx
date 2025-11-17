@@ -29,7 +29,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-semibold text-center mb-6">Login</h1>
+        <h1 className="text-2xl font-semibold text-center mb-6 text-black">Login</h1>
 
         {errorMsg && (
           <p className="text-center text-red-500 mb-4">{errorMsg}</p>
@@ -39,7 +39,7 @@ export default function LoginPage() {
           <input
             type="email"
             placeholder="Email"
-            className="w-full border px-4 py-2 rounded-lg"
+            className="w-full border border-black px-4 py-2 rounded-lg text-black placeholder-gray-400"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -48,12 +48,11 @@ export default function LoginPage() {
           <input
             type="password"
             placeholder="Password"
-            className="w-full border px-4 py-2 rounded-lg"
+            className="w-full border border-black px-4 py-2 rounded-lg text-black placeholder-gray-400"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-
           <button
             type="submit"
             className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
