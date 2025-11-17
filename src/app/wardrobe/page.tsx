@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Loader from "../components/Loader";
 
 type ClothingItem = {
   id: string;
@@ -40,16 +41,14 @@ export default function WardrobePage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen text-center text-gray-700">
-        Loading your wardrobe… ✨
-      </div>
-    );
+    return <Loader message={"Loading your wardrobe… ✨"} />;
   }
 
   return (
     <div className="min-h-screen p-6">
-      <h1 className="text-2xl text-black font-semibold mb-5 ">👚 My Wardrobe</h1>
+      <h1 className="text-2xl text-black font-semibold mb-5 ">
+        👚 My Wardrobe
+      </h1>
 
       {/* if wardrobe empty */}
       {clothes.length === 0 && (

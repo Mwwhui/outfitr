@@ -3,33 +3,54 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Loader from "../../components/Loader";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const res = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-    });
+    setErrorMsg("");
+    setIsLoading(true);
+    try {
+      const res = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+      });
 
-    if (res?.error) {
-      setErrorMsg(res.error);
-    } else {
-      router.push("/home");
+      if (res?.error) {
+        setErrorMsg(res.error);
+      } else {
+        router.push("/home");
+      }
+    } catch (err) {
+      setErrorMsg("An unexpected error occurred.");
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  // While signing in, hide the form and show only the loader
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <Loader message={"Signing in…"} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-semibold text-center mb-6 text-black">Login</h1>
+        <h1 className="text-2xl font-semibold text-center mb-6 text-black">
+          Login
+        </h1>
 
         {errorMsg && (
           <p className="text-center text-red-500 mb-4">{errorMsg}</p>
@@ -43,6 +64,7 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            disabled={isLoading}
           />
 
           <input
@@ -52,10 +74,12 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            disabled={isLoading}
           />
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={isLoading}
           >
             Sign In
           </button>
