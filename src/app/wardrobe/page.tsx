@@ -23,7 +23,7 @@ export default function WardrobePage() {
   useEffect(() => {
     // not logged in, force to login first
     if (status === "unauthenticated") {
-      router.push("/login");
+      router.push("/auth/login");
       return;
     }
 
@@ -69,8 +69,9 @@ export default function WardrobePage() {
         {clothes.map((item) => (
           <div
             key={item.id}
-            className="bg-white rounded-xl overflow-hidden shadow hover:shadow-lg cursor-pointer"
+            className="bg-white rounded-xl overflow-hidden shadow hover:shadow-lg cursor-pointer transition-transform transform hover:scale-105"
             onClick={() => router.push(`/wardrobe/${item.id}`)}
+            style={{ cursor: "pointer" }} // Ensures cursor turns to pointer
           >
             {item.image_url ? (
               <img
@@ -92,12 +93,13 @@ export default function WardrobePage() {
         ))}
       </div>
 
-      {/* Floating Add Button (bottom right) */}
+      {/* Floating Add Button*/}
       <button
         onClick={() => router.push("/wardrobe/upload")}
-        className="fixed bottom-6 right-6 bg-blue-600 text-white rounded-full p-4 shadow-lg hover:bg-blue-700"
+        className="fixed bottom-6 right-6 bg-black text-white rounded-full w-16 h-16 shadow-lg hover:bg-gray-800 flex items-center justify-center text-3xl"
+        aria-label="Add item"
       >
-        ➕
+        <span className="leading-none">+</span>
       </button>
     </div>
   );

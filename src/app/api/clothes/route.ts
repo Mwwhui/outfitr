@@ -1,6 +1,7 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+// GET /api/clothes
 export async function GET(req: Request) {
   const supabase = supabaseServer();
 
@@ -10,6 +11,7 @@ export async function GET(req: Request) {
   const query = supabase
     .from("clothes")
     .select("*")
+    .is("deleted_at", null) // ignore soft-deleted
     .order("created_at", { ascending: false });
 
   if (user_id) query.eq("user_id", user_id);
@@ -21,6 +23,7 @@ export async function GET(req: Request) {
   return NextResponse.json(data);
 }
 
+// POST /api/clothes
 export async function POST(req: Request) {
   const supabase = supabaseServer();
   const body = await req.json();
