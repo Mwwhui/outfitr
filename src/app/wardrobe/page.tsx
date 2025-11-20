@@ -77,10 +77,10 @@ export default function WardrobePage() {
               <img
                 src={item.image_url}
                 alt={item.name}
-                className="h-44 w-full object-cover"
+                className="h-50 w-full object-cover"
               />
             ) : (
-              <div className="h-44 w-full bg-gray-200 flex items-center justify-center text-gray-500">
+              <div className="h-50 w-full bg-gray-200 flex items-center justify-center text-gray-500">
                 No Image
               </div>
             )}

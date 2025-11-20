@@ -65,6 +65,7 @@ export default function EditWardrobePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isEditingMainInfo, setIsEditingMainInfo] = useState(false);
 
   // Fetch item and category list
   useEffect(() => {
@@ -247,14 +248,75 @@ export default function EditWardrobePage() {
             </button>
 
             <div className="p-4">
-              <h2 className="text-lg font-semibold">{clothes.name}</h2>
-              <p className="text-sm text-gray-500">{clothes.color}</p>
+              <div className="flex items-start justify-between gap-3">
+                {/* Name + color */}
+                <div className="flex-1 space-y-1">
+                  {isEditingMainInfo ? (
+                    <>
+                      {/* Editable name */}
+                      <input
+                        type="text"
+                        value={clothes.name}
+                        onChange={(e) => updateField("name", e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 text-sm font-semibold
+                                  placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                        placeholder="Clothing name"
+                      />
+
+                      {/* Editable color */}
+                      <input
+                        type="text"
+                        value={clothes.color}
+                        onChange={(e) => updateField("color", e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 text-sm
+                                  placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                        placeholder="Color"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="text-lg font-semibold truncate">
+                        {clothes.name}
+                      </h2>
+                      <p className="text-sm text-gray-500">{clothes.color}</p>
+                    </>
+                  )}
+                </div>
+
+                {/* Pencil / done icon */}
+                <button
+                  type="button"
+                  onClick={() => setIsEditingMainInfo((prev) => !prev)}
+                  className="inline-flex items-center text-gray-500 hover:text-gray-700 transition"
+                  aria-label={
+                    isEditingMainInfo
+                      ? "Done editing name and color"
+                      : "Edit name and color"
+                  }
+                >
+                  {/* pencil icon (slightly lower) */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    className="w-4 h-4 relative top-1.25"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M16.862 3.487l3.651 3.651a1.5 1.5 0 0 1 0 2.121l-9.193 9.193a2 2 0 0 1-1.061.555l-3.94.657a.75.75 0 0 1-.866-.866l.657-3.94a2 2 0 0 1 .555-1.061l9.193-9.193a1.5 1.5 0 0 1 2.121 0z"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* RIGHT */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm space-y-6">
+        <div className="bg-white rounded-3xl p-6 shadow-md space-y-6">
           <h2 className="text-lg font-semibold">Details</h2>
           <p className="text-sm text-gray-500">
             Edit the details of your clothing item below.
@@ -268,7 +330,7 @@ export default function EditWardrobePage() {
               <select
                 value={clothes.season ?? ""}
                 onChange={(e) => updateField("season", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70"
+                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
               >
                 <option value="">Select season...</option>
                 {SEASONS.map((s) => (
@@ -285,7 +347,7 @@ export default function EditWardrobePage() {
               <select
                 value={clothes.size ?? ""}
                 onChange={(e) => updateField("size", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70"
+                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
               >
                 <option value="">Select size...</option>
                 {SIZES.map((s) => (
@@ -303,7 +365,7 @@ export default function EditWardrobePage() {
                 type="text"
                 value={clothes.brand ?? ""}
                 onChange={(e) => updateField("brand", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70"
+                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                 placeholder="e.g. Uniqlo"
               />
             </div>
@@ -321,7 +383,7 @@ export default function EditWardrobePage() {
                     e.target.value === "" ? null : Number(e.target.value)
                   )
                 }
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70"
+                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                 placeholder="0.00"
               />
             </div>
@@ -334,7 +396,7 @@ export default function EditWardrobePage() {
               <select
                 value={clothes.material ?? ""}
                 onChange={(e) => updateField("material", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70"
+                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
               >
                 <option value="">Select material...</option>
                 {MATERIALS.map((m) => (
@@ -353,7 +415,7 @@ export default function EditWardrobePage() {
                 type="date"
                 value={purchaseDateValue}
                 onChange={(e) => updateField("purchase_date", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70"
+                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
               />
             </div>
 
@@ -366,7 +428,7 @@ export default function EditWardrobePage() {
                 type="text"
                 value={clothes.location ?? ""}
                 onChange={(e) => updateField("location", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70"
+                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                 placeholder="e.g. Wardrobe A, Drawer 2"
               />
             </div>
@@ -383,7 +445,7 @@ export default function EditWardrobePage() {
             <textarea
               value={clothes.description ?? ""}
               onChange={(e) => updateField("description", e.target.value)}
-              className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 min-h-[80px]"
+              className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2 min-h-[80px]"
               placeholder="Extra details about this piece..."
             />
           </div>
@@ -394,7 +456,7 @@ export default function EditWardrobePage() {
             <textarea
               value={clothes.notes ?? ""}
               onChange={(e) => updateField("notes", e.target.value)}
-              className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 min-h-[80px]"
+              className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2 min-h-[80px]"
               placeholder="Care instructions, outfit ideas, where you wore it..."
             />
           </div>
