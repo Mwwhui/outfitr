@@ -45,6 +45,7 @@ const MATERIALS = [
   "Denim",
   "Leather",
   "Synthetic",
+  "Nylon",
 ];
 
 export default function EditWardrobePage() {
