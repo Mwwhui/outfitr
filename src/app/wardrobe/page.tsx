@@ -74,7 +74,7 @@ export default function WardrobePage() {
 
   return (
     <div className="min-h-screen p-6">
-      <h1 className="text-2xl text-black font-semibold mb-5 ">My Wardrobe</h1>
+      <h1 className="text-xl text-black font-semibold mb-5 ">My Wardrobe</h1>
 
       {/* if wardrobe empty */}
       {clothes.length === 0 && (
@@ -91,7 +91,7 @@ export default function WardrobePage() {
       )}
 
       {/* wardrobe grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {clothes.map((item) => (
           <div
             key={item.id}
