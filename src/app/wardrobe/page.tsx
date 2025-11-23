@@ -123,7 +123,7 @@ export default function WardrobePage() {
             key={item.id}
             className="bg-white rounded-xl overflow-hidden shadow hover:shadow-lg cursor-pointer transition-transform transform hover:scale-105"
             onClick={() => router.push(`/wardrobe/${item.id}`)}
-            style={{ cursor: "pointer" }} // Ensures cursor turns to pointer
+            style={{ cursor: "pointer" }}
           >
             {item.image_url ? (
               <img
@@ -147,7 +147,66 @@ export default function WardrobePage() {
                   {item.type}
                 </div>
               )}
-              <p className="text-black font-medium block px-2">{item.name}</p>
+
+              {/* NAME + CLICKABLE FAVOURITE ICON */}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-black font-medium px-2 truncate">
+                  {item.name}
+                </p>
+
+                {/* Favourite toggle */}
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation(); // prevent opening item page
+
+                    const updatedFav = !item.favorite;
+
+                    // update UI instantly
+                    setClothes((prev) =>
+                      prev.map((c) =>
+                        c.id === item.id ? { ...c, favorite: updatedFav } : c
+                      )
+                    );
+
+                    // send update to backend
+                    await fetch(`/api/clothes/${item.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ favorite: updatedFav }),
+                    });
+                  }}
+                  className="p-1"
+                  aria-label="Toggle favourite"
+                >
+                  {item.favorite ? (
+                    // Filled heart
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      className="w-5 h-5 text-pink-500"
+                      fill="currentColor"
+                    >
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l8.84 8.84 8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                  ) : (
+                    // Outline heart
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      className="w-5 h-5 text-gray-500"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.7}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l8.84 8.84 8.84-8.84a5.5 5.5 0 0 0 0-7.78z"
+                      />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         ))}
