@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Satisfy } from "next/font/google";
+import { Dancing_Script } from "next/font/google";
 import "./globals.css";
 import ClientLayout from "./ClientLayout";
 
@@ -11,6 +13,18 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const dancingScript = Dancing_Script({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-dancingscript",
+});
+
+const satisfy = Satisfy({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-satisfy",
 });
 
 export const metadata: Metadata = {
@@ -26,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="light">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${dancingScript.variable} ${satisfy.variable} antialiased`}
       >
         {/* Client-side logic is handled here */}
         <ClientLayout>{children}</ClientLayout>

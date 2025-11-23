@@ -33,7 +33,7 @@ export default function Header() {
   return (
     <header className="w-full bg-white shadow-sm py-4 px-8 flex justify-between items-center">
       <h1
-        className="text-2xl font-bold cursor-pointer"
+        className="font-dancingscript font-extrabold text-black text-3xl cursor-pointer "
         onClick={() => router.push("/home")}
       >
         Outfitr

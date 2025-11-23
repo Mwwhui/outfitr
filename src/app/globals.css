@@ -47,3 +47,10 @@ a,
 label[for] {
   cursor: pointer;
 }
+
+.font-satisfy {
+  font-family: var(--font-satisfy);
+}
+.font-dancingscript {
+  font-family: var(--font-dancingscript);
+}
