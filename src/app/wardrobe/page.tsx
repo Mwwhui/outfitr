@@ -75,7 +75,8 @@ export default function WardrobePage() {
   };
 
   const filteredClothes = useMemo(() => {
-    return clothes.filter((item) => {
+    // 1) Filter
+    const filtered = clothes.filter((item) => {
       if (filters.favoritesOnly && !item.favorite) return false;
       if (filters.category && item.type !== filters.category) return false;
       if (
@@ -85,6 +86,15 @@ export default function WardrobePage() {
         return false;
       }
       return true;
+    });
+
+    // 2) Sort: favourites first, then others
+    return filtered.sort((a, b) => {
+      const aFav = !!a.favorite;
+      const bFav = !!b.favorite;
+
+      if (aFav === bFav) return 0; // keep relative order
+      return aFav ? -1 : 1; // favourites first
     });
   }, [clothes, filters]);
 
