@@ -4,6 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
+interface Category {
+  id: string;
+  name: string;
+  color: string;
+  textColor: string;
+}
+
 const SEASONS = ["All", "Spring", "Summer", "Autumn", "Winter"];
 const SIZES = ["XS", "S", "M", "L", "XL"];
 const MATERIALS = [
@@ -14,21 +21,6 @@ const MATERIALS = [
   "Denim",
   "Leather",
   "Synthetic",
-];
-const CATEGORIES = [
-  "Tops",
-  "Bottoms",
-  "Outerwear",
-  "Dresses",
-  "One-Pieces",
-  "Activewear",
-  "Loungewear",
-  "Sleepwear",
-  "Underwear",
-  "Swimwear",
-  "Footwear",
-  "Accessories",
-  "Bags",
 ];
 
 const inputBase =
@@ -57,6 +49,26 @@ export default function UploadClothesPage() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch("/api/categories");
+        if (!res.ok) throw new Error("Failed to fetch categories");
+        const data = await res.json();
+        setCategories(data);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        setCategories([]);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   // Clean up blob URLs when file changes
   useEffect(() => {
@@ -249,9 +261,9 @@ export default function UploadClothesPage() {
                     required
                   >
                     <option value="">Select type...</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.name}>
+                        {cat.name}
                       </option>
                     ))}
                   </select>

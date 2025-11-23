@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Image from "next/image";
 
+interface Category {
+  id: string;
+  name: string;
+  color: string;
+  textColor: string;
+}
+
 type Clothes = {
   id: string;
   user_id: string;
@@ -39,21 +46,6 @@ const MATERIALS = [
   "Leather",
   "Synthetic",
 ];
-const CATEGORIES = [
-  "Tops",
-  "Bottoms",
-  "Outerwear",
-  "Dresses",
-  "One-Pieces",
-  "Activewear",
-  "Loungewear",
-  "Sleepwear",
-  "Underwear",
-  "Swimwear",
-  "Footwear",
-  "Accessories",
-  "Bags",
-];
 
 export default function EditWardrobePage() {
   const router = useRouter();
@@ -61,7 +53,7 @@ export default function EditWardrobePage() {
   const id = params?.id;
 
   const [clothes, setClothes] = useState<Clothes | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -185,6 +177,20 @@ export default function EditWardrobePage() {
 
       <h1 className="text-3xl font-bold mb-6">Edit Clothing</h1>
 
+      {clothes.type && (
+        <div className="mb-3">
+          <span
+            className={`inline-block px-4 py-1.5 rounded-full text-sm font-semibold ${
+              categories.find((c) => c.name === clothes.type)?.color ?? ""
+            } ${
+              categories.find((c) => c.name === clothes.type)?.textColor ?? ""
+            }`}
+          >
+            {clothes.type}
+          </span>
+        </div>
+      )}
+
       {/* Layout: left = image + main info, right = details */}
       <div className="grid gap-8 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)]">
         {/* LEFT */}
@@ -247,10 +253,11 @@ export default function EditWardrobePage() {
               )}
             </button>
 
+            {/* Main info */}
             <div className="p-4">
               <div className="flex items-start justify-between gap-3">
-                {/* Name + color */}
-                <div className="flex-1 space-y-1">
+                {/* Name + color + category */}
+                <div className="space-y-2">
                   {isEditingMainInfo ? (
                     <>
                       {/* Editable name */}
@@ -258,8 +265,7 @@ export default function EditWardrobePage() {
                         type="text"
                         value={clothes.name}
                         onChange={(e) => updateField("name", e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 text-sm font-semibold
-                                  placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                        className="w-full rounded-xl border border-slate-200 text-sm font-semibold placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                         placeholder="Clothing name"
                       />
 
@@ -268,8 +274,7 @@ export default function EditWardrobePage() {
                         type="text"
                         value={clothes.color}
                         onChange={(e) => updateField("color", e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 text-sm
-                                  placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                        className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                         placeholder="Color"
                       />
                     </>
@@ -294,11 +299,10 @@ export default function EditWardrobePage() {
                       : "Edit name and color"
                   }
                 >
-                  {/* pencil icon (slightly lower) */}
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
-                    className="w-4 h-4 relative top-1.25"
+                    className="w-4 h-4 relative top-[1px]"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="1.8"

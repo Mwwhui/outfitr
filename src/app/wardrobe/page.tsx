@@ -5,6 +5,13 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Loader from "../components/Loader";
 
+interface Category {
+  id: string;
+  name: string;
+  color: string;
+  textColor: string;
+}
+
 type ClothingItem = {
   id: string;
   name: string;
@@ -19,6 +26,23 @@ export default function WardrobePage() {
 
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    // Fetch categories on mount
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch("/api/categories");
+        if (!res.ok) throw new Error("Failed to fetch categories");
+        const data = await res.json();
+        setCategories(data);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        setCategories([]);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     // not logged in, force to login first
@@ -40,15 +64,17 @@ export default function WardrobePage() {
     setLoading(false);
   };
 
+  const getCategoryColor = (categoryName: string) => {
+    return categories.find((c) => c.name === categoryName);
+  };
+
   if (loading) {
     return <Loader message={"Loading your wardrobe… ✨"} />;
   }
 
   return (
     <div className="min-h-screen p-6">
-      <h1 className="text-2xl text-black font-semibold mb-5 ">
-        👚 My Wardrobe
-      </h1>
+      <h1 className="text-2xl text-black font-semibold mb-5 ">My Wardrobe</h1>
 
       {/* if wardrobe empty */}
       {clothes.length === 0 && (
@@ -86,8 +112,16 @@ export default function WardrobePage() {
             )}
 
             <div className="p-3">
-              <p className="text-black font-medium">{item.name}</p>
-              <p className="text-sm text-gray-500">{item.type}</p>
+              {item.type && getCategoryColor(item.type) && (
+                <div
+                  className={`inline-block px-3 py-1 rounded-full text-sm font-semibold mb-2 ${
+                    getCategoryColor(item.type)?.color
+                  } ${getCategoryColor(item.type)?.textColor}`}
+                >
+                  {item.type}
+                </div>
+              )}
+              <p className="text-black font-medium block px-2">{item.name}</p>
             </div>
           </div>
         ))}
