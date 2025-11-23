@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Loader from "../components/Loader";
+import WardrobeFilters from "../components/WardrobeFilters";
 
 interface Category {
   id: string;
@@ -27,6 +28,11 @@ export default function WardrobePage() {
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [filters, setFilters] = useState({
+    category: "",
+    favoritesOnly: false,
+    search: "",
+  });
 
   useEffect(() => {
     // Fetch categories on mount
@@ -68,6 +74,20 @@ export default function WardrobePage() {
     return categories.find((c) => c.name === categoryName);
   };
 
+  const filteredClothes = useMemo(() => {
+    return clothes.filter((item) => {
+      if (filters.favoritesOnly && !item.favorite) return false;
+      if (filters.category && item.type !== filters.category) return false;
+      if (
+        filters.search &&
+        !item.name.toLowerCase().includes(filters.search.toLowerCase())
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [clothes, filters]);
+
   if (loading) {
     return <Loader message={"Loading your wardrobe… ✨"} />;
   }
@@ -76,8 +96,14 @@ export default function WardrobePage() {
     <div className="min-h-screen p-6">
       <h1 className="text-xl text-black font-semibold mb-5 ">My Wardrobe</h1>
 
+      <WardrobeFilters
+        categories={categories}
+        filters={filters}
+        onChange={setFilters}
+      />
+
       {/* if wardrobe empty */}
-      {clothes.length === 0 && (
+      {filteredClothes.length === 0 && (
         <div className="text-center text-black">
           Your wardrobe is empty 😢
           <br />
@@ -92,7 +118,7 @@ export default function WardrobePage() {
 
       {/* wardrobe grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-        {clothes.map((item) => (
+        {filteredClothes.map((item) => (
           <div
             key={item.id}
             className="bg-white rounded-xl overflow-hidden shadow hover:shadow-lg cursor-pointer transition-transform transform hover:scale-105"

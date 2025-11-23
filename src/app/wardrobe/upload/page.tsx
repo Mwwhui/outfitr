@@ -201,7 +201,7 @@ export default function UploadClothesPage() {
             {/* Clickable image upload / preview area */}
             <label
               htmlFor="imageUpload"
-              className="block w-full h-100 bg-slate-100 rounded-b-none overflow-hidden cursor-pointer 
+              className="w-full h-100 bg-slate-100 rounded-b-none overflow-hidden cursor-pointer 
                          border-b border-slate-200 hover:bg-slate-200 transition flex items-center justify-center"
             >
               {imagePreview ? (
