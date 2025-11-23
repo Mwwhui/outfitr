@@ -140,7 +140,7 @@ export default function WardrobePage() {
             <div className="p-3">
               {item.type && getCategoryColor(item.type) && (
                 <div
-                  className={`inline-block px-3 py-1 rounded-full text-sm font-semibold mb-2 ${
+                  className={`inline-block px-3 py-1 rounded-full text-sm font-semibold mb-1.75 ${
                     getCategoryColor(item.type)?.color
                   } ${getCategoryColor(item.type)?.textColor}`}
                 >
