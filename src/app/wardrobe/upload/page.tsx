@@ -21,6 +21,7 @@ const MATERIALS = [
   "Denim",
   "Leather",
   "Synthetic",
+  "Nylon",
 ];
 
 const inputBase =
