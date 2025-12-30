@@ -4,23 +4,32 @@ import { NextResponse } from "next/server";
 // GET /api/clothes
 export async function GET(req: Request) {
   const supabase = supabaseServer();
-
   const { searchParams } = new URL(req.url);
   const user_id = searchParams.get("user_id");
 
-  const query = supabase
-    .from("clothes")
-    .select("*")
-    .is("deleted_at", null) // ignore soft-deleted
-    .order("created_at", { ascending: false });
+  try {
+    let query = supabase
+      .from("clothes")
+      .select("*")
+      .is("deleted_at", null) // only non-deleted
+      .order("created_at", { ascending: false });
 
-  if (user_id) query.eq("user_id", user_id);
+    if (user_id) {
+      query = query.eq("user_id", user_id);
+    }
 
-  const { data, error } = await query;
+    const { data, error } = await query;
 
-  if (error) return NextResponse.json({ error }, { status: 500 });
+    if (error) {
+      console.error("Supabase error /api/clothes:", error);
+      return NextResponse.json({ error }, { status: 500 });
+    }
 
-  return NextResponse.json(data);
+    return NextResponse.json(data);
+  } catch (err) {
+    console.error("API /api/clothes crashed:", err);
+    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+  }
 }
 
 // POST /api/clothes

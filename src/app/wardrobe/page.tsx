@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Loader from "../components/Loader";
 import WardrobeFilters from "../components/WardrobeFilters";
 
@@ -24,6 +24,7 @@ type ClothingItem = {
 export default function WardrobePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
 
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +76,6 @@ export default function WardrobePage() {
   };
 
   const filteredClothes = useMemo(() => {
-    // 1) Filter
     const filtered = clothes.filter((item) => {
       if (filters.favoritesOnly && !item.favorite) return false;
       if (filters.category && item.type !== filters.category) return false;
@@ -88,13 +88,12 @@ export default function WardrobePage() {
       return true;
     });
 
-    // 2) Sort: favourites first, then others
+    // favourites first, then others
     return filtered.sort((a, b) => {
       const aFav = !!a.favorite;
       const bFav = !!b.favorite;
-
-      if (aFav === bFav) return 0; // keep relative order
-      return aFav ? -1 : 1; // favourites first
+      if (aFav === bFav) return 0;
+      return aFav ? -1 : 1;
     });
   }, [clothes, filters]);
 
@@ -104,17 +103,107 @@ export default function WardrobePage() {
 
   return (
     <div className="min-h-screen p-6">
-      <h1 className="text-xl text-black font-semibold mb-5 ">My Wardrobe</h1>
+      {/* Page title + tabs in ONE LINE */}
+      {/* Title + Tabs */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl text-black font-semibold">My Wardrobe</h1>
 
+        {/* Tabs wrapper - grey line */}
+        <div className="flex gap-6 border-b border-slate-200">
+          {/* Wardrobe Tab */}
+          <button
+            onClick={() => router.push("/wardrobe")}
+            className={`text-sm flex items-center gap-2 -mb-[1px] ${
+              pathname === "/wardrobe"
+                ? "border-b-2 border-black font-semibold text-black"
+                : "text-slate-500 hover:text-black"
+            }`}
+          >
+            {/* Closet Icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <rect x="4" y="3" width="16" height="18" rx="1.5" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+              <circle cx="9" cy="12" r="0.6" />
+              <circle cx="15" cy="12" r="0.6" />
+            </svg>
+            Wardrobe
+          </button>
+
+          {/* Planner Tab */}
+          <button
+            onClick={() => router.push("/planner")}
+            className={`text-sm flex items-center gap-2 -mb-[1px] ${
+              pathname === "/planner"
+                ? "border-b-2 border-black font-semibold text-black"
+                : "text-slate-500 hover:text-black"
+            }`}
+          >
+            {/* Pencil Note Icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <rect x="4" y="4" width="11" height="16" rx="1.4" />
+              <line x1="7" y1="8" x2="13" y2="8" />
+              <line x1="7" y1="11" x2="12" y2="11" />
+              <path d="M15.5 9.5l3.2-3.2a1.4 1.4 0 0 1 2 2l-3.2 3.2-2.4.4.4-2.4z" />
+            </svg>
+            Plan Outfit
+          </button>
+
+          {/* Calendar Tab */}
+          <button
+            onClick={() => router.push("/calendar")}
+            className={`text-sm flex items-center gap-2 -mb-[1px] ${
+              pathname === "/calendar"
+                ? "border-b-2 border-black font-semibold text-black"
+                : "text-slate-500 hover:text-black"
+            }`}
+          >
+            {/* Calendar Icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <rect x="3.5" y="5" width="17" height="15" rx="2" />
+              <line x1="3.5" y1="9" x2="20.5" y2="9" />
+              <line x1="9" y1="3" x2="9" y2="7" />
+              <line x1="15" y1="3" x2="15" y2="7" />
+              <circle cx="9" cy="13" r="0.7" />
+              <circle cx="15" cy="13" r="0.7" />
+              <circle cx="9" cy="17" r="0.7" />
+              <circle cx="15" cy="17" r="0.7" />
+            </svg>
+            Calendar
+          </button>
+        </div>
+      </div>
+
+      {/* Filters row */}
       <WardrobeFilters
         categories={categories}
         filters={filters}
         onChange={setFilters}
       />
 
-      {/* if wardrobe empty */}
+      {/* if wardrobe empty (after filters) */}
       {filteredClothes.length === 0 && (
-        <div className="text-center text-black">
+        <div className="text-center text-black mt-6">
           Your wardrobe is empty 😢
           <br />
           <button
@@ -127,7 +216,7 @@ export default function WardrobePage() {
       )}
 
       {/* wardrobe grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mt-4">
         {filteredClothes.map((item) => (
           <div
             key={item.id}
@@ -150,7 +239,7 @@ export default function WardrobePage() {
             <div className="p-3">
               {item.type && getCategoryColor(item.type) && (
                 <div
-                  className={`inline-block px-3 py-1 rounded-full text-sm font-semibold mb-1.75 ${
+                  className={`inline-block px-3 py-1 rounded-full text-sm font-semibold mb-1.25 ${
                     getCategoryColor(item.type)?.color
                   } ${getCategoryColor(item.type)?.textColor}`}
                 >
@@ -160,7 +249,7 @@ export default function WardrobePage() {
 
               {/* NAME + CLICKABLE FAVOURITE ICON */}
               <div className="flex items-center justify-between gap-2">
-                <p className="text-black font-medium px-2 truncate">
+                <p className="text-[14px] text-black px-2 truncate">
                   {item.name}
                 </p>
 
