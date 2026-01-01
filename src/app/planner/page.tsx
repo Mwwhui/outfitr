@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
+import Button from '../components/Button';
 
 // ─────────────────────────────
 // TYPES
@@ -51,10 +52,6 @@ const CATEGORY_ORDER: Record<string, number> = {
   Top: 7,
 };
 
-// ─────────────────────────────
-// MAIN PLANNER PAGE
-// ─────────────────────────────
-
 export default function PlannerPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -63,6 +60,10 @@ export default function PlannerPage() {
   const [loading, setLoading] = useState(true);
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [timeSlot, setTimeSlot] = useState<'day' | 'night'>('day');
 
   const [slots, setSlots] = useState<SlotsState>({
     hat: null,
@@ -71,6 +72,36 @@ export default function PlannerPage() {
     shoes: null,
     accessory: null,
   });
+
+  useEffect(() => {
+    async function loadOutfit() {
+      // wait until user session is ready
+      if (status !== 'authenticated') return;
+
+      const res = await fetch(
+        `/api/outfit_plans?from=${selectedDate}&to=${selectedDate}`
+      );
+      if (!res.ok) return;
+
+      const data = await res.json();
+
+      const found = (data || []).find((o: any) => o.time_slot === timeSlot);
+
+      if (found?.slots) {
+        setSlots(found.slots);
+      } else {
+        setSlots({
+          hat: null,
+          top: null,
+          bottom: null,
+          shoes: null,
+          accessory: null,
+        });
+      }
+    }
+
+    loadOutfit();
+  }, [selectedDate, timeSlot, status]);
 
   // Fetch wardrobe items
   useEffect(() => {
@@ -167,6 +198,27 @@ export default function PlannerPage() {
     return <Loader message="Loading planner..." />;
   }
 
+  async function handleSaveOutfit() {
+    const res = await fetch('/api/outfit_plans', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        date: selectedDate,
+        timeSlot,
+        slots,
+      }),
+    });
+
+    if (!res.ok) {
+      alert('Failed to save outfit');
+      return;
+    }
+
+    alert(timeSlot === 'day' ? 'Day outfit saved!' : 'Night outfit saved!');
+  }
+
   return (
     <div className="min-h-screen p-6">
       {/* HEADER + TABS */}
@@ -256,6 +308,53 @@ export default function PlannerPage() {
             </svg>
             Calendar
           </button>
+        </div>
+      </div>
+
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-end gap-4">
+        {/* Date picker */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+            Outfit Date
+          </label>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="border border-slate-200 rounded-xl px-4 py-2 text-sm bg-white text-black shadow-sm"
+          />
+        </div>
+
+        {/* Day/Night toggle */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+            Time Slot
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTimeSlot('day')}
+              className={`px-4 py-2 rounded-xl border text-sm transition ${
+                timeSlot === 'day'
+                  ? 'bg-black text-white border-black'
+                  : 'bg-white text-black border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              ☀️ Day
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTimeSlot('night')}
+              className={`px-4 py-2 rounded-xl border text-sm transition ${
+                timeSlot === 'night'
+                  ? 'bg-black text-white border-black'
+                  : 'bg-white text-black border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              🌙 Night
+            </button>
+          </div>
         </div>
       </div>
 
@@ -387,6 +486,11 @@ export default function PlannerPage() {
             </div>
           </section>
         </div>
+      </div>
+      <div className="mt-10 flex justify-end">
+        <Button size="md" onClick={handleSaveOutfit}>
+          {timeSlot === 'day' ? 'Save Day' : 'Save Night'}
+        </Button>
       </div>
     </div>
   );
