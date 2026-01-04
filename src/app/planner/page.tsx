@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
+import toast from 'react-hot-toast';
 
 // ─────────────────────────────
 // TYPES
@@ -199,24 +200,31 @@ export default function PlannerPage() {
   }
 
   async function handleSaveOutfit() {
-    const res = await fetch('/api/outfit_plans', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        date: selectedDate,
-        timeSlot,
-        slots,
-      }),
-    });
+    const toastId = toast.loading('Saving outfit...');
 
-    if (!res.ok) {
-      alert('Failed to save outfit');
-      return;
+    try {
+      const res = await fetch('/api/outfit_plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate,
+          timeSlot,
+          slots,
+        }),
+      });
+
+      if (!res.ok) {
+        toast.error('Failed to save outfit', { id: toastId });
+        return;
+      }
+
+      toast.success(
+        timeSlot === 'day' ? 'Day outfit saved!' : 'Night outfit saved!',
+        { id: toastId }
+      );
+    } catch {
+      toast.error('Network error', { id: toastId });
     }
-
-    alert(timeSlot === 'day' ? 'Day outfit saved!' : 'Night outfit saved!');
   }
 
   return (
