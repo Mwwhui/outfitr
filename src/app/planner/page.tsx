@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
@@ -57,6 +57,7 @@ export default function PlannerPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
@@ -66,43 +67,57 @@ export default function PlannerPage() {
   );
   const [timeSlot, setTimeSlot] = useState<'day' | 'night'>('day');
 
-  const [slots, setSlots] = useState<SlotsState>({
+  const EMPTY_SLOTS: SlotsState = {
     hat: null,
     top: null,
     bottom: null,
     shoes: null,
     accessory: null,
-  });
+  };
+
+  const [slots, setSlots] = useState<SlotsState>(EMPTY_SLOTS);
+  const [urlReady, setUrlReady] = useState(false);
 
   useEffect(() => {
+    const qpDate = searchParams.get('date');
+    const qpTimeSlot = searchParams.get('timeSlot');
+
+    if (qpDate) setSelectedDate(qpDate);
+    if (qpTimeSlot === 'day' || qpTimeSlot === 'night') setTimeSlot(qpTimeSlot);
+
+    setUrlReady(true);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!urlReady) return;
+    if (status !== 'authenticated') return;
+
+    const controller = new AbortController();
+
     async function loadOutfit() {
-      // wait until user session is ready
-      if (status !== 'authenticated') return;
+      setSlots(EMPTY_SLOTS);
 
-      const res = await fetch(
-        `/api/outfit_plans?from=${selectedDate}&to=${selectedDate}`
-      );
-      if (!res.ok) return;
+      try {
+        const res = await fetch(
+          `/api/outfit_plans?from=${selectedDate}&to=${selectedDate}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) return;
 
-      const data = await res.json();
+        const data = await res.json();
+        const found = (data || []).find((o: any) => o.time_slot === timeSlot);
 
-      const found = (data || []).find((o: any) => o.time_slot === timeSlot);
-
-      if (found?.slots) {
-        setSlots(found.slots);
-      } else {
-        setSlots({
-          hat: null,
-          top: null,
-          bottom: null,
-          shoes: null,
-          accessory: null,
-        });
+        if (!controller.signal.aborted) {
+          setSlots(found?.slots ?? EMPTY_SLOTS);
+        }
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') console.error(e);
       }
     }
 
     loadOutfit();
-  }, [selectedDate, timeSlot, status]);
+    return () => controller.abort();
+  }, [urlReady, selectedDate, timeSlot, status]);
 
   // Fetch wardrobe items
   useEffect(() => {
