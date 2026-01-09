@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
 import Loader from '../components/Loader';
+import GoogleCalendarConnectCard from '../components/GoogleCalendarConnectCard';
 
 type TimeSlot = 'day' | 'night';
 
@@ -32,7 +33,6 @@ function endOfMonth(d: Date) {
 
 // Monday-first calendar
 function mondayIndex(jsDay: number) {
-  // JS: 0 Sun ... 6 Sat  -> 0 Mon ... 6 Sun
   return (jsDay + 6) % 7;
 }
 
@@ -65,13 +65,24 @@ export default function CalendarPage() {
     toISODate(new Date())
   );
   const [panelOpen, setPanelOpen] = useState(true);
+  const [showGoogleEvents, setShowGoogleEvents] = useState(true);
+
+  const [googleConnected, setGoogleConnected] = useState(false);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    fetch('/api/integrations/google/status')
+      .then((r) => (r.ok ? r.json() : { connected: false }))
+      .then((j) => setGoogleConnected(Boolean(j.connected)))
+      .catch(() => setGoogleConnected(false));
+  }, [status]);
 
   // Redirect if not logged in
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/auth/login');
   }, [status, router]);
 
-  // Fetch plans for the current month range (and include full weeks in grid)
+  // Fetch plans for the current month range
   useEffect(() => {
     async function loadMonthPlans() {
       if (status !== 'authenticated') return;
@@ -110,7 +121,6 @@ export default function CalendarPage() {
     loadMonthPlans();
   }, [viewMonth, status]);
 
-  // Map: date -> {day?: row, night?: row}
   const planMap = useMemo(() => {
     const m = new Map<string, { day?: OutfitPlanRow; night?: OutfitPlanRow }>();
     for (const p of plans) {
@@ -161,7 +171,6 @@ export default function CalendarPage() {
 
   return (
     <div className="min-h-screen p-6">
-      {/* HEADER + TABS (same style as your Planner) */}
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl text-black font-semibold">Calendar</h1>
 
@@ -359,6 +368,12 @@ export default function CalendarPage() {
 
         {/* SIDE PANEL */}
         <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <GoogleCalendarConnectCard
+            connected={googleConnected}
+            enabled={showGoogleEvents}
+            onToggle={setShowGoogleEvents}
+          />
+
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-xs text-slate-500">Selected date</p>
