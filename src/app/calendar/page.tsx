@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
 import Loader from '../components/Loader';
 import GoogleCalendarConnectCard from '../components/GoogleCalendarConnectCard';
+import GoogleEventsPanel from '../components/GoogleEventsPanel';
 
 type TimeSlot = 'day' | 'night';
 
@@ -367,14 +368,16 @@ export default function CalendarPage() {
         </section>
 
         {/* SIDE PANEL */}
-        <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+          {/* Google Calendar connect + toggle */}
           <GoogleCalendarConnectCard
             connected={googleConnected}
             enabled={showGoogleEvents}
             onToggle={setShowGoogleEvents}
           />
 
-          <div className="flex items-center justify-between mb-3">
+          {/* Selected date header */}
+          <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-slate-500">Selected date</p>
               <p className="text-base font-semibold text-black">
@@ -469,21 +472,27 @@ export default function CalendarPage() {
                 )}
               </div>
 
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    router.push(
-                      `/planner?date=${encodeURIComponent(
-                        selectedDate
-                      )}&timeSlot=day`
-                    )
-                  }
-                  className="w-full rounded-xl bg-black text-white py-2 text-sm hover:bg-slate-800 transition"
-                >
-                  Open Planner for this date
-                </button>
-              </div>
+              {/* ✅ GOOGLE EVENTS PANEL */}
+              <GoogleEventsPanel
+                date={selectedDate}
+                enabled={showGoogleEvents}
+                connected={googleConnected}
+              />
+
+              {/* Planner CTA */}
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/planner?date=${encodeURIComponent(
+                      selectedDate
+                    )}&timeSlot=day`
+                  )
+                }
+                className="w-full rounded-xl bg-black text-white py-2 text-sm hover:bg-slate-800 transition"
+              >
+                Open Planner for this date
+              </button>
             </div>
           )}
         </aside>
