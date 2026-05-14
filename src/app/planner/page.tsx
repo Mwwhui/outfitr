@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
+import Button from '../components/Button';
+import toast from 'react-hot-toast';
 
 // ─────────────────────────────
 // TYPES
@@ -18,59 +20,95 @@ interface ClothingItem {
   favorite?: boolean;
 }
 
-type OutfitSlotKey = 'hat' | 'top' | 'bottom' | 'shoes' | 'accessory';
+type OutfitSlotKey = 'top' | 'bottom' | 'onepiece' | 'outerwear';
 
 interface SlotsState {
-  hat: ClothingItem | null;
   top: ClothingItem | null;
   bottom: ClothingItem | null;
-  shoes: ClothingItem | null;
-  accessory: ClothingItem | null;
+  onepiece: ClothingItem | null;
+  outerwear: ClothingItem | null;
 }
 
 // Slot labels
 const SLOT_LABELS: Record<OutfitSlotKey, string> = {
-  hat: 'Hat',
   top: 'Top',
   bottom: 'Bottoms',
-  shoes: 'Shoes',
-  accessory: 'Accessories & Bags',
+  outerwear: 'Outerwear',
+  onepiece: 'One-Piece',
 };
 
 // Category sorting priority (for left wardrobe)
 const CATEGORY_ORDER: Record<string, number> = {
-  Accessories: 1,
-  'Accessories & Bags': 1,
-  Bags: 2,
-  Swimwear: 3,
-  Footwear: 4,
-  Shoes: 4,
-  Bottoms: 5,
-  Outerwear: 6,
-  Tops: 7,
-  Top: 7,
+  Onepiece: 4,
+  Bottoms: 2,
+  Outerwear: 3,
+  Tops: 1,
 };
-
-// ─────────────────────────────
-// MAIN PLANNER PAGE
-// ─────────────────────────────
 
 export default function PlannerPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date().toISOString().slice(0, 10),
+  );
+  const [timeSlot, setTimeSlot] = useState<'day' | 'night'>('day');
 
-  const [slots, setSlots] = useState<SlotsState>({
-    hat: null,
+  const EMPTY_SLOTS: SlotsState = {
     top: null,
     bottom: null,
-    shoes: null,
-    accessory: null,
-  });
+    onepiece: null,
+    outerwear: null,
+  };
+
+  const [slots, setSlots] = useState<SlotsState>(EMPTY_SLOTS);
+  const [urlReady, setUrlReady] = useState(false);
+
+  useEffect(() => {
+    const qpDate = searchParams.get('date');
+    const qpTimeSlot = searchParams.get('timeSlot');
+
+    if (qpDate) setSelectedDate(qpDate);
+    if (qpTimeSlot === 'day' || qpTimeSlot === 'night') setTimeSlot(qpTimeSlot);
+
+    setUrlReady(true);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!urlReady) return;
+    if (status !== 'authenticated') return;
+
+    const controller = new AbortController();
+
+    async function loadOutfit() {
+      setSlots(EMPTY_SLOTS);
+
+      try {
+        const res = await fetch(
+          `/api/outfit_plans?from=${selectedDate}&to=${selectedDate}`,
+          { signal: controller.signal },
+        );
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const found = (data || []).find((o: any) => o.time_slot === timeSlot);
+
+        if (!controller.signal.aborted) {
+          setSlots(found?.slots ?? EMPTY_SLOTS);
+        }
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') console.error(e);
+      }
+    }
+
+    loadOutfit();
+    return () => controller.abort();
+  }, [urlReady, selectedDate, timeSlot, status]);
 
   // Fetch wardrobe items
   useEffect(() => {
@@ -117,7 +155,7 @@ export default function PlannerPage() {
     arr.sort(
       (a, b) =>
         (CATEGORY_ORDER[a] ?? 999) - (CATEGORY_ORDER[b] ?? 999) ||
-        a.localeCompare(b)
+        a.localeCompare(b),
     );
 
     return ['All', ...arr];
@@ -133,7 +171,7 @@ export default function PlannerPage() {
         : clothes.filter((c) => (c.type ?? '').trim() === selectedCategory);
 
     const orderForType = (t?: string | null) =>
-      t ? CATEGORY_ORDER[t] ?? 999 : 999;
+      t ? (CATEGORY_ORDER[t] ?? 999) : 999;
 
     return [...filtered].sort((a, b) => {
       const cat = orderForType(a.type) - orderForType(b.type);
@@ -165,6 +203,34 @@ export default function PlannerPage() {
 
   if (loading) {
     return <Loader message="Loading planner..." />;
+  }
+
+  async function handleSaveOutfit() {
+    const toastId = toast.loading('Saving outfit...');
+
+    try {
+      const res = await fetch('/api/outfit_plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate,
+          timeSlot,
+          slots,
+        }),
+      });
+
+      if (!res.ok) {
+        toast.error('Failed to save outfit', { id: toastId });
+        return;
+      }
+
+      toast.success(
+        timeSlot === 'day' ? 'Day outfit saved!' : 'Night outfit saved!',
+        { id: toastId },
+      );
+    } catch {
+      toast.error('Network error', { id: toastId });
+    }
   }
 
   return (
@@ -259,6 +325,53 @@ export default function PlannerPage() {
         </div>
       </div>
 
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-end gap-4">
+        {/* Date picker */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+            Outfit Date
+          </label>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="border border-slate-200 rounded-xl px-4 py-2 text-sm bg-white text-black shadow-sm"
+          />
+        </div>
+
+        {/* Day/Night toggle */}
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+            Time Slot
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTimeSlot('day')}
+              className={`px-4 py-2 rounded-xl border text-sm transition ${
+                timeSlot === 'day'
+                  ? 'bg-black text-white border-black'
+                  : 'bg-white text-black border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              ☀️ Day
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTimeSlot('night')}
+              className={`px-4 py-2 rounded-xl border text-sm transition ${
+                timeSlot === 'night'
+                  ? 'bg-black text-white border-black'
+                  : 'bg-white text-black border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              🌙 Night
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* MAIN LAYOUT: wardrobe left, slots right */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] gap-6">
         {/* LEFT: WARDROBE SIDEBAR */}
@@ -340,7 +453,7 @@ export default function PlannerPage() {
         {/* RIGHT: OUTFIT SLOTS – 2 columns, centered */}
         <div className="flex justify-center w-full">
           <section className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-[650px] w-full">
-            {/* Left column: Top / Bottoms / Shoes */}
+            {/* Left column: Top / Bottoms  */}
             <div className="space-y-6">
               <SlotDropRow
                 label={SLOT_LABELS.top}
@@ -357,36 +470,33 @@ export default function PlannerPage() {
                 onDrop={handleDrop}
                 onClear={handleClearSlot}
               />
-
-              <SlotDropRow
-                label={SLOT_LABELS.shoes}
-                slotKey="shoes"
-                item={slots.shoes}
-                onDrop={handleDrop}
-                onClear={handleClearSlot}
-              />
             </div>
 
-            {/* Right column: Hat / Accessories & Bags */}
+            {/* Right column: outerwear */}
             <div className="space-y-6">
               <SlotDropRow
-                label={SLOT_LABELS.hat}
-                slotKey="hat"
-                item={slots.hat}
+                label={SLOT_LABELS.outerwear}
+                slotKey="outerwear"
+                item={slots.outerwear}
                 onDrop={handleDrop}
                 onClear={handleClearSlot}
               />
 
               <SlotDropRow
-                label={SLOT_LABELS.accessory}
-                slotKey="accessory"
-                item={slots.accessory}
+                label={SLOT_LABELS.onepiece}
+                slotKey="onepiece"
+                item={slots.onepiece}
                 onDrop={handleDrop}
                 onClear={handleClearSlot}
               />
             </div>
           </section>
         </div>
+      </div>
+      <div className="mt-10 flex justify-end">
+        <Button size="md" onClick={handleSaveOutfit}>
+          {timeSlot === 'day' ? 'Save Day' : 'Save Night'}
+        </Button>
       </div>
     </div>
   );

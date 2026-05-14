@@ -1,24 +1,24 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import Loader from "../../components/Loader";
+import { useState } from 'react';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import Loader from '../../components/Loader';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    setErrorMsg("");
+    setErrorMsg('');
     setIsLoading(true);
     try {
-      const res = await signIn("credentials", {
+      const res = await signIn('credentials', {
         redirect: false,
         email,
         password,
@@ -27,10 +27,10 @@ export default function LoginPage() {
       if (res?.error) {
         setErrorMsg(res.error);
       } else {
-        router.push("/home");
+        router.push('/home');
       }
     } catch (err) {
-      setErrorMsg("An unexpected error occurred.");
+      setErrorMsg('An unexpected error occurred.');
     } finally {
       setIsLoading(false);
     }
@@ -40,7 +40,7 @@ export default function LoginPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <Loader message={"Signing in…"} />
+        <Loader message={'Signing in…'} />
       </div>
     );
   }
@@ -85,11 +85,33 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <div className="mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex-1 h-px bg-gray-300" />
+            <span className="text-xs text-gray-500">OR</span>
+            <div className="flex-1 h-px bg-gray-300" />
+          </div>
+
+          <button
+            onClick={() => signIn('google', { callbackUrl: '/home' })}
+            className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-lg py-2 hover:bg-gray-50 transition"
+          >
+            <img
+              src="https://developers.google.com/identity/images/g-logo.png"
+              alt="Google"
+              className="h-5 w-5"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              Continue with Google
+            </span>
+          </button>
+        </div>
+
         {/* Register redirect using router.push */}
         <div className="text-center mt-6">
           <p className="text-gray-600 mb-2">Don’t have an account?</p>
           <button
-            onClick={() => router.push("/auth/register")}
+            onClick={() => router.push('/auth/register')}
             className="text-blue-600 hover:underline"
           >
             Register here
