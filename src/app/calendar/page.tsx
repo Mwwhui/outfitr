@@ -58,12 +58,12 @@ export default function CalendarPage() {
   const pathname = usePathname();
 
   const [viewMonth, setViewMonth] = useState<Date>(() =>
-    startOfMonth(new Date())
+    startOfMonth(new Date()),
   );
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<OutfitPlanRow[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(() =>
-    toISODate(new Date())
+    toISODate(new Date()),
   );
   const [panelOpen, setPanelOpen] = useState(true);
   const [showGoogleEvents, setShowGoogleEvents] = useState(true);
@@ -161,8 +161,8 @@ export default function CalendarPage() {
   const goPlanner = (date: string, timeSlot: TimeSlot) => {
     router.push(
       `/planner?date=${encodeURIComponent(date)}&timeSlot=${encodeURIComponent(
-        timeSlot
-      )}`
+        timeSlot,
+      )}`,
     );
   };
 
@@ -384,14 +384,6 @@ export default function CalendarPage() {
                 {selectedDate}
               </p>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setPanelOpen((v) => !v)}
-              className="px-3 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
-            >
-              {panelOpen ? 'Hide' : 'Show'}
-            </button>
           </div>
 
           {panelOpen && (
@@ -418,12 +410,12 @@ export default function CalendarPage() {
                       Bottom: {safeSlotName(selectedPlans.day.slots?.bottom)}
                     </div>
                     <div>
-                      Shoes: {safeSlotName(selectedPlans.day.slots?.shoes)}
+                      Outerwear:{' '}
+                      {safeSlotName(selectedPlans.day.slots?.outerwear)}
                     </div>
-                    <div>Hat: {safeSlotName(selectedPlans.day.slots?.hat)}</div>
                     <div>
-                      Accessory:{' '}
-                      {safeSlotName(selectedPlans.day.slots?.accessory)}
+                      One-Piece:{' '}
+                      {safeSlotName(selectedPlans.day.slots?.onepiece)}
                     </div>
                   </div>
                 ) : (
@@ -455,14 +447,12 @@ export default function CalendarPage() {
                       Bottom: {safeSlotName(selectedPlans.night.slots?.bottom)}
                     </div>
                     <div>
-                      Shoes: {safeSlotName(selectedPlans.night.slots?.shoes)}
+                      Outerwear:{' '}
+                      {safeSlotName(selectedPlans.night.slots?.outerwear)}
                     </div>
                     <div>
-                      Hat: {safeSlotName(selectedPlans.night.slots?.hat)}
-                    </div>
-                    <div>
-                      Accessory:{' '}
-                      {safeSlotName(selectedPlans.night.slots?.accessory)}
+                      One-Piece:{' '}
+                      {safeSlotName(selectedPlans.night.slots?.onepiece)}
                     </div>
                   </div>
                 ) : (
@@ -472,7 +462,7 @@ export default function CalendarPage() {
                 )}
               </div>
 
-              {/* ✅ GOOGLE EVENTS PANEL */}
+              {/* GOOGLE EVENTS PANEL */}
               <GoogleEventsPanel
                 date={selectedDate}
                 enabled={showGoogleEvents}
@@ -485,8 +475,8 @@ export default function CalendarPage() {
                 onClick={() =>
                   router.push(
                     `/planner?date=${encodeURIComponent(
-                      selectedDate
-                    )}&timeSlot=day`
+                      selectedDate,
+                    )}&timeSlot=day`,
                   )
                 }
                 className="w-full rounded-xl bg-black text-white py-2 text-sm hover:bg-slate-800 transition"

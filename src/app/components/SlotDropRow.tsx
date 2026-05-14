@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import React from "react";
+import React from 'react';
 
 // ─────────────────────────────
 // TYPES
@@ -14,7 +14,7 @@ export interface ClothingItem {
   favorite?: boolean;
 }
 
-export type OutfitSlotKey = "hat" | "top" | "bottom" | "shoes" | "accessory";
+export type OutfitSlotKey = 'top' | 'bottom' | 'onepiece' | 'outerwear';
 
 interface SlotDropProps {
   label: string;
@@ -40,11 +40,11 @@ export default function SlotDropRow({
       className="w-full h-56 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-500 hover:border-black transition relative overflow-hidden"
       onDragOver={(e) => {
         e.preventDefault();
-        e.dataTransfer.dropEffect = "copy";
+        e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={(e) => {
         e.preventDefault();
-        const id = e.dataTransfer.getData("text/plain");
+        const id = e.dataTransfer.getData('text/plain');
         if (id) onDrop(slotKey, id);
       }}
     >
@@ -63,7 +63,7 @@ export default function SlotDropRow({
       {item && (
         <div className="relative w-full h-full">
           <img
-            src={item.image_url || ""}
+            src={item.image_url || ''}
             alt={item.name}
             className="w-full h-full object-cover rounded-2xl"
           />

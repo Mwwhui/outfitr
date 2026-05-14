@@ -20,37 +20,29 @@ interface ClothingItem {
   favorite?: boolean;
 }
 
-type OutfitSlotKey = 'hat' | 'top' | 'bottom' | 'shoes' | 'accessory';
+type OutfitSlotKey = 'top' | 'bottom' | 'onepiece' | 'outerwear';
 
 interface SlotsState {
-  hat: ClothingItem | null;
   top: ClothingItem | null;
   bottom: ClothingItem | null;
-  shoes: ClothingItem | null;
-  accessory: ClothingItem | null;
+  onepiece: ClothingItem | null;
+  outerwear: ClothingItem | null;
 }
 
 // Slot labels
 const SLOT_LABELS: Record<OutfitSlotKey, string> = {
-  hat: 'Hat',
   top: 'Top',
   bottom: 'Bottoms',
-  shoes: 'Shoes',
-  accessory: 'Accessories & Bags',
+  outerwear: 'Outerwear',
+  onepiece: 'One-Piece',
 };
 
 // Category sorting priority (for left wardrobe)
 const CATEGORY_ORDER: Record<string, number> = {
-  Accessories: 1,
-  'Accessories & Bags': 1,
-  Bags: 2,
-  Swimwear: 3,
-  Footwear: 4,
-  Shoes: 4,
-  Bottoms: 5,
-  Outerwear: 6,
-  Tops: 7,
-  Top: 7,
+  Onepiece: 4,
+  Bottoms: 2,
+  Outerwear: 3,
+  Tops: 1,
 };
 
 export default function PlannerPage() {
@@ -63,16 +55,15 @@ export default function PlannerPage() {
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
+    new Date().toISOString().slice(0, 10),
   );
   const [timeSlot, setTimeSlot] = useState<'day' | 'night'>('day');
 
   const EMPTY_SLOTS: SlotsState = {
-    hat: null,
     top: null,
     bottom: null,
-    shoes: null,
-    accessory: null,
+    onepiece: null,
+    outerwear: null,
   };
 
   const [slots, setSlots] = useState<SlotsState>(EMPTY_SLOTS);
@@ -100,7 +91,7 @@ export default function PlannerPage() {
       try {
         const res = await fetch(
           `/api/outfit_plans?from=${selectedDate}&to=${selectedDate}`,
-          { signal: controller.signal }
+          { signal: controller.signal },
         );
         if (!res.ok) return;
 
@@ -164,7 +155,7 @@ export default function PlannerPage() {
     arr.sort(
       (a, b) =>
         (CATEGORY_ORDER[a] ?? 999) - (CATEGORY_ORDER[b] ?? 999) ||
-        a.localeCompare(b)
+        a.localeCompare(b),
     );
 
     return ['All', ...arr];
@@ -180,7 +171,7 @@ export default function PlannerPage() {
         : clothes.filter((c) => (c.type ?? '').trim() === selectedCategory);
 
     const orderForType = (t?: string | null) =>
-      t ? CATEGORY_ORDER[t] ?? 999 : 999;
+      t ? (CATEGORY_ORDER[t] ?? 999) : 999;
 
     return [...filtered].sort((a, b) => {
       const cat = orderForType(a.type) - orderForType(b.type);
@@ -235,7 +226,7 @@ export default function PlannerPage() {
 
       toast.success(
         timeSlot === 'day' ? 'Day outfit saved!' : 'Night outfit saved!',
-        { id: toastId }
+        { id: toastId },
       );
     } catch {
       toast.error('Network error', { id: toastId });
@@ -462,7 +453,7 @@ export default function PlannerPage() {
         {/* RIGHT: OUTFIT SLOTS – 2 columns, centered */}
         <div className="flex justify-center w-full">
           <section className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-[650px] w-full">
-            {/* Left column: Top / Bottoms / Shoes */}
+            {/* Left column: Top / Bottoms  */}
             <div className="space-y-6">
               <SlotDropRow
                 label={SLOT_LABELS.top}
@@ -479,30 +470,22 @@ export default function PlannerPage() {
                 onDrop={handleDrop}
                 onClear={handleClearSlot}
               />
-
-              <SlotDropRow
-                label={SLOT_LABELS.shoes}
-                slotKey="shoes"
-                item={slots.shoes}
-                onDrop={handleDrop}
-                onClear={handleClearSlot}
-              />
             </div>
 
-            {/* Right column: Hat / Accessories & Bags */}
+            {/* Right column: outerwear */}
             <div className="space-y-6">
               <SlotDropRow
-                label={SLOT_LABELS.hat}
-                slotKey="hat"
-                item={slots.hat}
+                label={SLOT_LABELS.outerwear}
+                slotKey="outerwear"
+                item={slots.outerwear}
                 onDrop={handleDrop}
                 onClear={handleClearSlot}
               />
 
               <SlotDropRow
-                label={SLOT_LABELS.accessory}
-                slotKey="accessory"
-                item={slots.accessory}
+                label={SLOT_LABELS.onepiece}
+                slotKey="onepiece"
+                item={slots.onepiece}
                 onDrop={handleDrop}
                 onClear={handleClearSlot}
               />

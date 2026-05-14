@@ -97,21 +97,22 @@ export default function GoogleEventsPanel({ date, enabled, connected }: Props) {
         <div className="space-y-2">
           {events.map((ev) => (
             <div key={ev.id} className="text-xs">
-              <div className="font-medium text-slate-800">{ev.summary}</div>
-              <div className="text-slate-500">
-                {ev.allDay ? 'All day' : formatTimeRange(ev.start, ev.end)}
-                {ev.location ? ` • ${ev.location}` : ''}
-              </div>
-              {ev.htmlLink && (
+              {ev.htmlLink ? (
                 <a
                   href={ev.htmlLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-slate-500 hover:text-black underline"
+                  className="font-medium text-slate-800 hover:text-black hover:underline"
                 >
-                  Open
+                  {ev.summary}
                 </a>
+              ) : (
+                <div className="font-medium text-slate-800">{ev.summary}</div>
               )}
+              <div className="text-slate-500">
+                {ev.allDay ? 'All day' : formatTimeRange(ev.start, ev.end)}
+                {ev.location ? ` • ${ev.location}` : ''}
+              </div>
             </div>
           ))}
         </div>
