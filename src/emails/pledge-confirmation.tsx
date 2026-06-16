@@ -197,7 +197,7 @@ export default function PledgeConfirmation({
               margin: '0 0 24px',
             }}
           >
-            <strong style={{ color: '#0f172a' }}>What's next?</strong> The
+            <strong style={{ color: '#0f172a' }}>What&apos;s next?</strong> The
             partner will review your request and reach out. You can track this
             in your Outfitr dashboard.
           </Text>

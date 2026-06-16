@@ -3,7 +3,7 @@
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useEffect } from 'react';
-// @ts-expect-error: side-effect import for Leaflet CSS without type declarations
+import 'leaflet/dist/leaflet.css';
 import 'leaflet/dist/leaflet.css';
 
 const PIN_BASE =

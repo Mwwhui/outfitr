@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -112,6 +113,23 @@ export default function PreLovedPage() {
       .finally(() => setLoadingItems(false));
   }, [status, session]);
 
+  const handleConfirmPledge = useCallback(
+    async (itemIds: string[], partnerId: string, actionType: string) => {
+      const res = await fetch('/api/pledges', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partnerId, itemIds, actionType }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to submit pledge');
+        return;
+      }
+      toast.success('Pledge submitted! Check your email for confirmation.');
+    },
+    [],
+  );
+
   if (status === 'unauthenticated') {
     router.push('/auth/login');
     return null;
@@ -152,7 +170,7 @@ export default function PreLovedPage() {
     });
 
   return (
-    <div className="min-h-screen bg-[#fcf9f8]">
+    <div className="min-h-screen bg-[#f8fafc]">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
         <h2 className="text-3xl font-bold text-[#163422]">Pre-Loved</h2>
         <p className="text-[#424843] mt-1">
@@ -212,6 +230,7 @@ export default function PreLovedPage() {
         partner={selectedPartner}
         items={wardrobeItems}
         loading={loadingItems}
+        onConfirm={handleConfirmPledge}
       />
     </div>
   );

@@ -102,14 +102,12 @@ export default function WardrobePage() {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      {/* Page title + tabs in ONE LINE */}
-      {/* Title + Tabs */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl text-black font-semibold">My Wardrobe</h1>
+    <div className="min-h-screen bg-[#f8fafc]">
+      <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-[#163422]">My Wardrobe</h1>
 
-        {/* Tabs wrapper - grey line */}
-        <div className="flex gap-6 border-b border-slate-200">
+          <div className="flex gap-6 border-b border-slate-200">
           {/* Wardrobe Tab */}
           <button
             onClick={() => router.push("/wardrobe")}
@@ -193,7 +191,9 @@ export default function WardrobePage() {
           </button>
         </div>
       </div>
+    </div>
 
+    <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
       {/* Filters row */}
       <WardrobeFilters
         categories={categories}
@@ -319,6 +319,7 @@ export default function WardrobePage() {
       >
         <span className="leading-none">+</span>
       </button>
+    </div>
     </div>
   );
 }

@@ -171,11 +171,12 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl text-black font-semibold">Calendar</h1>
+    <div className="min-h-screen bg-[#f8fafc]">
+      <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-[#163422]">Calendar</h1>
 
-        <div className="flex gap-6 border-b border-slate-200">
+          <div className="flex gap-6 border-b border-slate-200">
           <button
             onClick={() => router.push('/wardrobe')}
             className={`text-sm flex items-center gap-2 -mb-[1px] ${
@@ -256,7 +257,9 @@ export default function CalendarPage() {
           </button>
         </div>
       </div>
+    </div>
 
+    <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)] gap-6">
         {/* CALENDAR CARD */}
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -487,6 +490,7 @@ export default function CalendarPage() {
           )}
         </aside>
       </div>
+    </div>
     </div>
   );
 }

@@ -234,13 +234,12 @@ export default function PlannerPage() {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      {/* HEADER + TABS */}
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl text-black font-semibold">Plan My Outfit</h1>
+    <div className="min-h-screen bg-[#f8fafc]">
+      <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-[#163422]">Plan My Outfit</h1>
 
-        {/* Tabs: Wardrobe / Plan Outfit / Calendar */}
-        <div className="flex gap-6 border-b border-slate-200">
+          <div className="flex gap-6 border-b border-slate-200">
           {/* Wardrobe Tab */}
           <button
             onClick={() => router.push('/wardrobe')}
@@ -324,7 +323,9 @@ export default function PlannerPage() {
           </button>
         </div>
       </div>
+    </div>
 
+    <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-end gap-4">
         {/* Date picker */}
         <div>
@@ -498,6 +499,7 @@ export default function PlannerPage() {
           {timeSlot === 'day' ? 'Save Day' : 'Save Night'}
         </Button>
       </div>
+    </div>
     </div>
   );
 }
