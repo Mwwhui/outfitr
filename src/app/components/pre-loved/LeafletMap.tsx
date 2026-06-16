@@ -39,9 +39,9 @@ const userIcon = L.divIcon({
   iconAnchor: [15, 15],
 });
 const partnerIcons: Record<string, L.Icon> = {
-  donate: coloredIcon('green'),
+  donate: coloredIcon('orange'),
   sell: coloredIcon('blue'),
-  recycle: coloredIcon('orange'),
+  recycle: coloredIcon('green'),
 };
 
 interface LeafletMapProps {
@@ -53,7 +53,14 @@ interface LeafletMapProps {
 function MapRecenter({ center }: { center: [number, number] }) {
   const map = useMap();
   useEffect(() => {
-    if (map) map.setView(center, 12);
+    const timer = setTimeout(() => {
+      try {
+        map.setView(center, 12);
+      } catch {
+        // map not ready yet
+      }
+    }, 50);
+    return () => clearTimeout(timer);
   }, [center, map]);
   return null;
 }

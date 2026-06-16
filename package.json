@@ -26,8 +26,10 @@
     "next-auth": "^4.24.13",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-email": "^6.6.0",
     "react-hot-toast": "^2.6.0",
-    "react-leaflet": "^5.0.0"
+    "react-leaflet": "^5.0.0",
+    "resend": "^6.12.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

@@ -13,9 +13,9 @@ export interface Partner {
 }
 
 const BADGE_COLORS: Record<string, string> = {
-  donate: 'bg-green-100 text-green-800',
+  donate: 'bg-amber-100 text-amber-800',
   sell: 'bg-blue-100 text-blue-800',
-  recycle: 'bg-amber-100 text-amber-800',
+  recycle: 'bg-green-100 text-green-800',
 };
 
 const BADGE_LABELS: Record<string, string> = {

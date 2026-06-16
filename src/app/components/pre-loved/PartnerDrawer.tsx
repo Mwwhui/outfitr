@@ -17,10 +17,12 @@ interface Props {
   partner: Partner | null;
   items: ClothesItem[];
   loading: boolean;
+  onConfirm: (itemIds: string[], partnerId: string, actionType: string) => Promise<void>;
 }
 
-export default function PartnerDrawer({ isOpen, onClose, partner, items, loading }: Props) {
+export default function PartnerDrawer({ isOpen, onClose, partner, items, loading, onConfirm }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const badgeLabels: Record<string, string> = {
     donate: 'Donate',
     sell: 'Sell / Trade',
@@ -52,7 +54,7 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
       >
         <div className="p-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-3xl lg:rounded-tl-3xl">
           <div>
-            <h3 className="text-xl font-bold text-[#163422]">Select Items</h3>
+            <h3 className="text-xl font-bold text-[#0f172a]">Select Items</h3>
             {partner && (
               <p className="text-xs text-gray-500 mt-0.5">For {partner.name}</p>
             )}
@@ -73,12 +75,11 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
           <div className="space-y-3">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                <div className="w-8 h-8 border-2 border-[#163422] border-t-transparent rounded-full animate-spin mb-3" />
+                <div className="w-8 h-8 border-2 border-[#0f172a] border-t-transparent rounded-full animate-spin mb-3" />
                 <p className="text-sm">Loading your wardrobe...</p>
               </div>
             ) : items.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
-                <div className="text-4xl mb-2">👕</div>
                 <p className="text-sm mb-1">Your wardrobe is empty</p>
                 <p className="text-xs">Add some items first to pledge them here.</p>
               </div>
@@ -86,7 +87,7 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
               items.map((item) => (
                 <label
                   key={item.id}
-                  className="flex gap-4 p-4 border border-gray-200 rounded-2xl cursor-pointer hover:border-[#163422] bg-white transition-colors has-[:checked]:border-[#163422] has-[:checked]:bg-green-50"
+                  className="flex gap-4 p-4 border border-gray-200 rounded-2xl cursor-pointer hover:border-[#0f172a] bg-white transition-colors has-[:checked]:border-[#0f172a] has-[:checked]:bg-gray-50"
                 >
                   <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0 flex items-center justify-center text-2xl overflow-hidden">
                     {item.image_url ? (
@@ -96,19 +97,19 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span>👕</span>
+                      <span className="text-gray-400 text-sm font-medium">No img</span>
                     )}
                   </div>
                   <div className="flex-1 flex flex-col justify-center min-w-0">
-                    <p className="font-semibold text-[#163422] text-sm truncate">
+                    <p className="font-semibold text-[#0f172a] text-sm truncate">
                       {item.name}
                     </p>
                     <p className="text-xs text-gray-400 mb-1 truncate">
                       {item.brand || '\u2014'} · {item.material || '\u2014'}
                     </p>
                     {item.unused ? (
-                      <span className="text-xs text-green-700 font-medium">
-                        🌱 Unused
+                      <span className="text-xs text-gray-500 font-medium">
+                        Unused
                       </span>
                     ) : null}
                   </div>
@@ -117,7 +118,7 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
                       type="checkbox"
                       checked={selectedIds.includes(item.id)}
                       onChange={() => toggleItem(item.id)}
-                      className="w-5 h-5 rounded border-gray-300 text-[#163422] focus:ring-[#163422] cursor-pointer"
+                      className="w-5 h-5 rounded border-gray-300 text-[#0f172a] focus:ring-[#0f172a] cursor-pointer"
                     />
                   </div>
                 </label>
@@ -128,20 +129,40 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
 
         <div className="p-6 border-t border-gray-100 bg-white">
           <button
-            disabled={selectedIds.length === 0}
+            disabled={selectedIds.length === 0 || submitting}
+            onClick={async () => {
+              if (!partner || submitting) return;
+              setSubmitting(true);
+              try {
+                await onConfirm(selectedIds, partner.id, partner.type);
+                setSelectedIds([]);
+                onClose();
+              } finally {
+                setSubmitting(false);
+              }
+            }}
             className={`w-full py-4 rounded-xl text-sm font-bold transition-colors ${
-              selectedIds.length === 0
+              selectedIds.length === 0 || submitting
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-[#163422] text-white hover:bg-[#2d4b37]'
+                : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
             }`}
           >
-            Confirm &amp;{' '}
-            {partner?.type === 'donate'
-              ? 'Donate'
-              : partner?.type === 'sell'
-                ? 'List for Sale'
-                : 'Schedule Pickup'}
-            {selectedIds.length > 0 && ` (${selectedIds.length})`}
+            {submitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Submitting...
+              </span>
+            ) : (
+              <>
+                Confirm &amp;{' '}
+                {partner?.type === 'donate'
+                  ? 'Donate'
+                  : partner?.type === 'sell'
+                    ? 'List for Sale'
+                    : 'Schedule Pickup'}
+                {selectedIds.length > 0 && ` (${selectedIds.length})`}
+              </>
+            )}
           </button>
           <p className="text-center text-xs text-gray-400 mt-3">
             You&apos;ll receive a confirmation &amp; QR code by email.
