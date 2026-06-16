@@ -2,10 +2,6 @@
 
 import React from 'react';
 
-// ─────────────────────────────
-// TYPES
-// ─────────────────────────────
-
 export interface ClothingItem {
   id: string;
   name: string;
@@ -24,10 +20,6 @@ interface SlotDropProps {
   onClear: (slot: OutfitSlotKey) => void;
 }
 
-// ─────────────────────────────
-// SLOT DROP COMPONENT
-// ─────────────────────────────
-
 export default function SlotDropRow({
   label,
   slotKey,
@@ -37,7 +29,7 @@ export default function SlotDropRow({
 }: SlotDropProps) {
   return (
     <div
-      className="w-full h-56 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-500 hover:border-black transition relative overflow-hidden"
+      className="w-full h-64 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-500 hover:border-slate-400 hover:bg-slate-50/40 transition relative overflow-hidden"
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
@@ -48,37 +40,32 @@ export default function SlotDropRow({
         if (id) onDrop(slotKey, id);
       }}
     >
-      {/* ─────────────── EMPTY SLOT ─────────────── */}
       {!item && (
-        <>
-          <div className="text-3xl mb-2">＋</div>
-          <p className="text-sm font-medium">{label}</p>
-          <p className="text-xs text-slate-400 mt-1">
-            Drag an item here from wardrobe
-          </p>
-        </>
+        <div className="flex flex-col items-center gap-1 select-none">
+          <div className="text-3xl text-slate-300 mb-1">＋</div>
+          <p className="text-sm font-medium text-slate-400">{label}</p>
+          <p className="text-xs text-slate-300">Drag from wardrobe</p>
+        </div>
       )}
 
-      {/* ─────────────── FILLED SLOT ─────────────── */}
       {item && (
-        <div className="relative w-full h-full">
+        <div className="relative w-full h-full group">
           <img
             src={item.image_url || ''}
             alt={item.name}
             className="w-full h-full object-cover rounded-2xl"
           />
 
-          {/* Clear (X) button */}
           <button
             onClick={() => onClear(slotKey)}
-            className="absolute top-2 right-2 bg-black/70 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm hover:bg-black"
+            className="absolute top-2 right-2 bg-black/70 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm hover:bg-black opacity-0 group-hover:opacity-100 transition"
           >
             ×
           </button>
 
-          {/* Label on hover only */}
-          <div className="absolute bottom-2 left-2 text-white bg-black/60 px-2 py-1 rounded text-xs opacity-0 hover:opacity-100 transition">
-            {label}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 rounded-b-2xl">
+            <p className="text-white text-xs font-medium truncate">{item.name}</p>
+            <p className="text-white/70 text-[10px] truncate">{label}</p>
           </div>
         </div>
       )}
