@@ -3,7 +3,7 @@
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useEffect } from 'react';
-// @ts-ignore: side-effect import for Leaflet CSS without type declarations
+// @ts-expect-error: side-effect import for Leaflet CSS without type declarations
 import 'leaflet/dist/leaflet.css';
 
 const customIcon = new L.Icon({
@@ -21,11 +21,10 @@ interface LeafletMapProps {
   openDrawer: (partner: any) => void;
 }
 
-// Automatically fly the map when the user's location is found
 function MapRecenter({ center }: { center: [number, number] }) {
   const map = useMap();
   useEffect(() => {
-    map.setView(center, 12);
+    if (map) map.setView(center, 12);
   }, [center, map]);
   return null;
 }

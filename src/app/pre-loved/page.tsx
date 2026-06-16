@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { createClient } from '@supabase/supabase-js';
-
 // Sub-components
 import ActionCategoryCards, {
   ActionCategory,
@@ -14,12 +12,7 @@ import DiyTutorials from '../components/pre-loved/DiyTutorials';
 import PartnerDirectory, {
   Partner,
 } from '../components/pre-loved/PartnerDirectory';
-import PartnerDrawer from '../components/pre-loved/PartnerDrawer';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import PartnerDrawer, { ClothesItem } from '../components/pre-loved/PartnerDrawer';
 
 const DynamicLeafletMap = dynamic(
   () => import('../components/pre-loved/LeafletMap'),
@@ -53,7 +46,7 @@ function getDistanceInMiles(
 }
 
 export default function PreLovedPage() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
 
   const [activeCategory, setActiveCategory] = useState<ActionCategory>(null);
@@ -68,6 +61,8 @@ export default function PreLovedPage() {
     null,
   );
   const [loadingLocation, setLoadingLocation] = useState(true);
+  const [wardrobeItems, setWardrobeItems] = useState<ClothesItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(true);
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -93,9 +88,10 @@ export default function PreLovedPage() {
   useEffect(() => {
     const fetchPartners = async () => {
       try {
-        const { data, error } = await supabase.from('partners').select('*');
-        if (error) throw error;
-        if (data) setPartners(data as Partner[]);
+        const res = await fetch('/api/partners');
+        if (!res.ok) throw new Error('Failed to fetch partners');
+        const data = await res.json();
+        setPartners(data as Partner[]);
       } catch (error) {
         console.error('Error fetching partners:', error);
       } finally {
@@ -104,6 +100,15 @@ export default function PreLovedPage() {
     };
     fetchPartners();
   }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user?.id) return;
+    fetch(`/api/clothes?user_id=${session.user.id}`)
+      .then(r => r.json())
+      .then(data => setWardrobeItems(Array.isArray(data) ? data : []))
+      .catch(err => console.error("Error fetching wardrobe items:", err))
+      .finally(() => setLoadingItems(false));
+  }, [status, session]);
 
   if (status === 'unauthenticated') {
     router.push('/auth/login');
@@ -195,6 +200,8 @@ export default function PreLovedPage() {
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         partner={selectedPartner}
+        items={wardrobeItems}
+        loading={loadingItems}
       />
     </div>
   );
