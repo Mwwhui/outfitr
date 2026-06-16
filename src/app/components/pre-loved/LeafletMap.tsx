@@ -6,7 +6,8 @@ import { useEffect } from 'react';
 // @ts-expect-error: side-effect import for Leaflet CSS without type declarations
 import 'leaflet/dist/leaflet.css';
 
-const PIN_BASE = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
+const PIN_BASE =
+  'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
 
 function coloredIcon(color: string) {
   return new L.Icon({

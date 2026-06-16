@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction, useState } from 'react';
 
 export interface Partner {
   id: string;
@@ -24,11 +24,17 @@ const BADGE_LABELS: Record<string, string> = {
   recycle: 'Recycle',
 };
 
+const DISTANCE_OPTIONS = [null, 5, 10, 25, 50] as const;
+
 interface Props {
   filteredPartners: Partner[];
   loadingPartners: boolean;
   search: string;
   setSearch: Dispatch<SetStateAction<string>>;
+  maxDistance: number | null;
+  setMaxDistance: Dispatch<SetStateAction<number | null>>;
+  sortBy: 'distance' | 'name';
+  setSortBy: Dispatch<SetStateAction<'distance' | 'name'>>;
   openDrawer: (partner: Partner) => void;
 }
 
@@ -37,8 +43,14 @@ export default function PartnerDirectory({
   loadingPartners,
   search,
   setSearch,
+  maxDistance,
+  setMaxDistance,
+  sortBy,
+  setSortBy,
   openDrawer,
 }: Props) {
+  const [showFilters, setShowFilters] = useState(false);
+
   return (
     <div className="lg:col-span-5 bg-white rounded-3xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
       <div className="p-5 border-b border-gray-100 sticky top-0 bg-white z-10">
@@ -48,11 +60,15 @@ export default function PartnerDirectory({
               Nearby Partners
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              Found {filteredPartners.length} locations ordered by proximity
+              Found {filteredPartners.length} locations{' '}
+              {sortBy === 'distance' ? 'nearest first' : 'A–Z'}
             </p>
           </div>
-          <button className="text-sm text-[#163422] font-medium flex items-center gap-1 hover:opacity-70 transition">
-            Filter ⚙️
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className="text-sm font-medium flex items-center gap-1 text-[#163422] hover:opacity-70 transition"
+          >
+            Filter {showFilters ? '▲' : '⚙️'}
           </button>
         </div>
         <div className="relative">
@@ -67,8 +83,52 @@ export default function PartnerDirectory({
             className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-9 pr-4 text-sm text-gray-800 focus:outline-none focus:border-[#163422] focus:ring-1 focus:ring-[#163422] transition cursor-text"
           />
         </div>
-      </div>
 
+        {showFilters && (
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Max Distance
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {DISTANCE_OPTIONS.map((d) => (
+                  <button
+                    key={d ?? 'any'}
+                    onClick={() => setMaxDistance(d)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      maxDistance === d
+                        ? 'bg-[#163422] text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {d === null ? 'Any' : `${d} km`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Sort By
+              </p>
+              <div className="flex gap-2">
+                {(['distance', 'name'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSortBy(s)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      sortBy === s
+                        ? 'bg-[#163422] text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {s === 'distance' ? 'Nearest' : 'A–Z'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {loadingPartners ? (
           <div className="text-center py-12 text-gray-400">

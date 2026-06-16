@@ -26,13 +26,13 @@ const DynamicLeafletMap = dynamic(
   },
 );
 
-function getDistanceInMiles(
+function getDistanceInKm(
   lat1: number,
   lon1: number,
   lat2: number,
   lon2: number,
 ) {
-  const R = 3958.8;
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -53,6 +53,8 @@ export default function PreLovedPage() {
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [maxDistance, setMaxDistance] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<'distance' | 'name'>('distance');
 
   // Data States
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -129,7 +131,7 @@ export default function PreLovedPage() {
     })
     .map((partner) => {
       if (userLoc) {
-        const rawMiles = getDistanceInMiles(
+        const rawKm = getDistanceInKm(
           userLoc.lat,
           userLoc.lng,
           partner.lat,
@@ -137,13 +139,17 @@ export default function PreLovedPage() {
         );
         return {
           ...partner,
-          rawDistance: rawMiles,
-          distance: `${rawMiles.toFixed(1)} mi`,
+          rawDistance: rawKm,
+          distance: `${rawKm.toFixed(1)} km`,
         };
       }
       return { ...partner, rawDistance: 9999, distance: 'Calculating...' };
     })
-    .sort((a, b) => (a.rawDistance || 9999) - (b.rawDistance || 9999));
+    .filter((p) => !maxDistance || p.rawDistance <= maxDistance)
+    .sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      return (a.rawDistance || 9999) - (b.rawDistance || 9999);
+    });
 
   return (
     <div className="min-h-screen bg-[#fcf9f8]">
@@ -187,6 +193,10 @@ export default function PreLovedPage() {
               loadingPartners={loadingPartners}
               search={search}
               setSearch={setSearch}
+              maxDistance={maxDistance}
+              setMaxDistance={setMaxDistance}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
               openDrawer={(p: Partner) => {
                 setSelectedPartner(p);
                 setDrawerOpen(true);
