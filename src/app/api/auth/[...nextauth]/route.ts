@@ -45,6 +45,8 @@ export const authOptions: NextAuthOptions = {
           id: data.id,
           email: data.email,
           name: `${data.first_name} ${data.last_name}`,
+          role: data.role || 'user',
+          partner_id: data.partner_id || null,
         };
       },
     }),
@@ -146,15 +148,19 @@ export const authOptions: NextAuthOptions = {
           : undefined;
       }
 
-      // ALSO: fetch DB user id so session.user.id exists
+      // ALSO: fetch DB user id, role, partner_id so session.user has them
       if (token.email) {
         const { data } = await supabase
           .from('users')
-          .select('id')
+          .select('id, role, partner_id')
           .eq('email', token.email)
           .maybeSingle();
 
-        if (data?.id) token.id = data.id;
+        if (data) {
+          token.id = data.id;
+          token.role = data.role || 'user';
+          token.partner_id = data.partner_id || null;
+        }
       }
 
       return token;
@@ -165,6 +171,8 @@ export const authOptions: NextAuthOptions = {
         id: token.id as string,
         email: token.email as string,
         name: token.name as string,
+        role: token.role as string,
+        partner_id: token.partner_id as string | null,
       };
 
       (session as any).googleAccessToken = token.googleAccessToken;

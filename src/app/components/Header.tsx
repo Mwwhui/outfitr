@@ -47,19 +47,30 @@ export default function Header() {
           Home
         </button>
 
-        <button
-          onClick={() => router.push("/wardrobe")}
-          className="hover:text-blue-600 transition"
-        >
-          Wardrobe
-        </button>
+        {session?.user?.role === 'partner' ? (
+          <button
+            onClick={() => router.push("/partner/dashboard")}
+            className="hover:text-blue-600 transition"
+          >
+            Requests
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={() => router.push("/wardrobe")}
+              className="hover:text-blue-600 transition"
+            >
+              Wardrobe
+            </button>
 
-        <button
-          onClick={() => router.push("/pre-loved")}
-          className="hover:text-blue-600 transition"
-        >
-          Pre-loved
-        </button>
+            <button
+              onClick={() => router.push("/pre-loved")}
+              className="hover:text-blue-600 transition"
+            >
+              Pre-loved
+            </button>
+          </>
+        )}
 
         <button
           onClick={() => router.push("/dashboard")}
