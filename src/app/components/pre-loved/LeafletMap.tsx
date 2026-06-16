@@ -6,14 +6,42 @@ import { useEffect } from 'react';
 // @ts-expect-error: side-effect import for Leaflet CSS without type declarations
 import 'leaflet/dist/leaflet.css';
 
-const customIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-  iconRetinaUrl:
-    'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
+const PIN_BASE = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';
+
+function coloredIcon(color: string) {
+  return new L.Icon({
+    iconUrl: `${PIN_BASE}marker-icon-${color}.png`,
+    iconRetinaUrl: `${PIN_BASE}marker-icon-2x-${color}.png`,
+    shadowUrl: `${PIN_BASE}marker-shadow.png`,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    shadowSize: [41, 41],
+    shadowAnchor: [13, 41],
+    popupAnchor: [0, -41],
+  });
+}
+
+const userIcon = L.divIcon({
+  className: '',
+  html: `<div style="
+    width:30px;height:30px;
+    background:white;
+    border:2.5px solid #2563eb;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,0.3);
+    font-size:18px;
+  ">👤</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
 });
+const partnerIcons: Record<string, L.Icon> = {
+  donate: coloredIcon('green'),
+  sell: coloredIcon('blue'),
+  recycle: coloredIcon('orange'),
+};
 
 interface LeafletMapProps {
   userLoc: { lat: number; lng: number } | null;
@@ -51,17 +79,15 @@ export default function LeafletMap({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      {/* Blue user location dot */}
       {userLoc && (
-        <Marker position={[userLoc.lat, userLoc.lng]} icon={customIcon} />
+        <Marker position={[userLoc.lat, userLoc.lng]} icon={userIcon} />
       )}
 
-      {/* Partner */}
       {filteredPartners.map((partner) => (
         <Marker
           key={partner.id}
           position={[partner.lat, partner.lng]}
-          icon={customIcon}
+          icon={partnerIcons[partner.type]}
           eventHandlers={{
             click: () => openDrawer(partner),
           }}
