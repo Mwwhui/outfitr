@@ -24,7 +24,7 @@ export default function Home() {
 
           <a
             href="/about"
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow hover:bg-blue-700 transition duration-200"
+            className="bg-black text-white px-6 py-3 rounded-lg shadow hover:bg-slate-800 transition duration-200"
           >
             Go to About Page
           </a>

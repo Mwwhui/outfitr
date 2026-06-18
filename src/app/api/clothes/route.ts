@@ -11,7 +11,8 @@ export async function GET(req: Request) {
     let query = supabase
       .from("clothes")
       .select("*")
-      .is("deleted_at", null) // only non-deleted
+      .is("deleted_at", null)
+      .eq("status", "available")
       .order("created_at", { ascending: false });
 
     if (user_id) {
