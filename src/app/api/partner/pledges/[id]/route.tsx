@@ -11,6 +11,114 @@ import PledgeFulfilled from '@/emails/pledge-fulfilled';
 
 const supabase = supabaseServer();
 
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (session.user.role !== 'partner' || !session.user.partner_id) {
+      return NextResponse.json(
+        { error: 'Access denied. Partner account required.' },
+        { status: 403 },
+      );
+    }
+
+    const { id } = await params;
+    const url = new URL(req.url);
+    const token = url.searchParams.get('token');
+
+    if (!token) {
+      return NextResponse.json({ error: 'Token required' }, { status: 400 });
+    }
+
+    const { data: pledge, error: pledgeError } = await supabase
+      .from('pledges')
+      .select(
+        'id, user_id, item_ids, action_type, status, qr_token, created_at, fulfilled_at',
+      )
+      .eq('id', id)
+      .eq('partner_id', session.user.partner_id)
+      .single();
+
+    if (pledgeError || !pledge) {
+      return NextResponse.json(
+        { error: 'Pledge not found' },
+        { status: 404 },
+      );
+    }
+
+    if (token !== pledge.qr_token) {
+      return NextResponse.json(
+        { error: 'Invalid verification token' },
+        { status: 400 },
+      );
+    }
+
+    const [userResult, partnerResult, itemsResult] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id, email, first_name, last_name')
+        .eq('id', pledge.user_id)
+        .single(),
+      supabase
+        .from('partners')
+        .select('id, name')
+        .eq('id', session.user.partner_id)
+        .maybeSingle(),
+      supabase
+        .from('clothes')
+        .select('id, name, brand, image_url, status')
+        .in('id', pledge.item_ids || []),
+    ]);
+
+    if (userResult.error || !userResult.data) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (partnerResult.error || !partnerResult.data) {
+      return NextResponse.json(
+        { error: 'Partner not found' },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      pledge: {
+        id: pledge.id,
+        status: pledge.status,
+        action_type: pledge.action_type,
+        created_at: pledge.created_at,
+        fulfilled_at: pledge.fulfilled_at,
+        user: {
+          first_name: userResult.data.first_name,
+          last_name: userResult.data.last_name,
+          email: userResult.data.email,
+        },
+        items: (itemsResult.data || []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          brand: item.brand,
+          image_url: item.image_url,
+          status: item.status,
+        })),
+        partner_name: partnerResult.data.name,
+      },
+    });
+  } catch (err) {
+    console.error('GET /api/partner/pledges/[id] error:', err);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 },
+    );
+  }
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

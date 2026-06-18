@@ -147,11 +147,22 @@ export default function PartnerDashboard() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
-      <div className="px-6 pt-8 pb-4 max-w-4xl mx-auto">
-        <h2 className="text-3xl font-bold text-[#163422]">Partner Dashboard</h2>
-        <p className="text-[#424843] mt-1">
-          Review and manage incoming requests.
-        </p>
+      <div className="px-6 pt-8 pb-4 max-w-4xl mx-auto flex items-start justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-[#163422]">Partner Dashboard</h2>
+          <p className="text-[#424843] mt-1">
+            Review and manage incoming requests.
+          </p>
+        </div>
+        <button
+          onClick={() => router.push('/partner/scan')}
+          className="bg-[#163422] text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition flex items-center gap-2 shrink-0 mt-1"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9V7a2 2 0 012-2h2M3 15v2a2 2 0 002 2h2M21 9V7a2 2 0 00-2-2h-2M21 15v2a2 2 0 01-2 2h-2M9 3h6M9 21h6M9 9h6v6H9z" />
+          </svg>
+          Scan QR
+        </button>
       </div>
 
       <div className="px-6 pb-16 max-w-4xl mx-auto space-y-6">
