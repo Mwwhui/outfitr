@@ -143,7 +143,7 @@ export default function PartnerDirectory({
           filteredPartners.map((partner) => (
             <div
               key={partner.id}
-              className="bg-[#f8fafc] rounded-2xl p-4 border border-gray-200 hover:border-[#163422] transition-colors group"
+              className="bg-[#f8fafc] rounded-2xl p-4 border border-gray-200 hover:border-[#0f172a] transition-colors group"
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-2">
@@ -165,7 +165,7 @@ export default function PartnerDirectory({
               </p>
               <button
                 onClick={() => openDrawer(partner)}
-                className="w-full py-2 bg-gray-100 text-[#163422] text-sm font-semibold rounded-lg group-hover:bg-[#163422] group-hover:text-white transition-colors"
+                className="w-full py-2 bg-gray-100 text-[#0f172a] text-sm font-semibold rounded-lg group-hover:bg-[#0f172a] group-hover:text-white transition-colors"
               >
                 Select Partner
               </button>

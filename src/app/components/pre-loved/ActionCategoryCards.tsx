@@ -92,11 +92,13 @@ export default function ActionCategoryCards({
               onClick={() => toggleCategory(cat.key)}
               className={`group relative rounded-3xl p-6 text-left border transition-all duration-300 hover:-translate-y-1 overflow-hidden h-44 focus:outline-none ${
                 isActive
-                  ? 'bg-[#163422] border-[#163422] shadow-lg'
+                  ? 'bg-[#0f172a] border-[#0f172a] shadow-lg'
                   : 'bg-white border-gray-200 hover:shadow-md'
               }`}
             >
-              <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+              <div className={`absolute top-0 right-0 p-3 transition-opacity pointer-events-none ${
+                    isActive ? 'opacity-30' : 'opacity-10 group-hover:opacity-20'
+                  }`}>
                 {ICONS[cat.key].bg}
               </div>
               <div className="relative z-10 flex flex-col h-full justify-between">

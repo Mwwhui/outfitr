@@ -446,7 +446,7 @@ export default function UploadClothesPage() {
             <button
               type="submit"
               disabled={isUploading}
-              className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+              className="px-6 py-3 rounded-lg bg-black text-white hover:bg-slate-800 disabled:opacity-60"
             >
               {isUploading ? "Uploading..." : "Save clothing"}
             </button>
