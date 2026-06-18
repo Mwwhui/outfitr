@@ -29,7 +29,7 @@ export async function GET(req: Request) {
       .eq('partner_id', session.user.partner_id)
       .order('created_at', { ascending: false });
 
-    if (statusFilter && ['pending', 'accepted', 'rejected'].includes(statusFilter)) {
+    if (statusFilter && ['pending', 'accepted', 'rejected', 'fulfilled'].includes(statusFilter)) {
       query = query.eq('status', statusFilter);
     }
 

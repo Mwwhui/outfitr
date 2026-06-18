@@ -6,12 +6,13 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import PledgeCard, { Pledge } from '../../components/partner/PledgeCard';
 
-type Tab = 'all' | 'pending' | 'accepted' | 'rejected';
+type Tab = 'all' | 'pending' | 'accepted' | 'rejected' | 'fulfilled';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'pending', label: 'Pending' },
   { key: 'accepted', label: 'Accepted' },
+  { key: 'fulfilled', label: 'Fulfilled' },
   { key: 'rejected', label: 'Rejected' },
 ];
 
@@ -77,6 +78,31 @@ export default function PartnerDashboard() {
         fetchPledges();
       } catch (err) {
         console.error('Error accepting pledge:', err);
+        toast.error('Something went wrong');
+      }
+    },
+    [fetchPledges],
+  );
+
+  const handleFulfill = useCallback(
+    async (id: string, token: string) => {
+      try {
+        const res = await fetch(`/api/partner/pledges/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'fulfill', token }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          toast.error(err.error || 'Failed to fulfill');
+          return;
+        }
+
+        toast.success('Pledge fulfilled! User notified.');
+        fetchPledges();
+      } catch (err) {
+        console.error('Error fulfilling pledge:', err);
         toast.error('Something went wrong');
       }
     },
@@ -168,6 +194,7 @@ export default function PartnerDashboard() {
                 pledge={pledge}
                 onAccept={handleAccept}
                 onReject={handleReject}
+                onFulfill={handleFulfill}
               />
             ))}
           </div>

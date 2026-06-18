@@ -18,7 +18,7 @@ export interface PledgeItem {
 
 export interface Pledge {
   id: string;
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'rejected' | 'fulfilled';
   action_type: string;
   rejection_reason: string | null;
   qr_token: string | null;
@@ -31,6 +31,7 @@ const STATUS_STYLES: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800',
   accepted: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
+  fulfilled: 'bg-blue-100 text-blue-800',
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -49,9 +50,10 @@ interface Props {
   pledge: Pledge;
   onAccept: (id: string) => void;
   onReject: (id: string, reason: string) => void;
+  onFulfill?: (id: string, token: string) => void;
 }
 
-export default function PledgeCard({ pledge, onAccept, onReject }: Props) {
+export default function PledgeCard({ pledge, onAccept, onReject, onFulfill }: Props) {
   const [showReject, setShowReject] = useState(false);
   const actionLabel = ACTION_LABELS[pledge.action_type] || pledge.action_type;
 
@@ -135,6 +137,17 @@ export default function PledgeCard({ pledge, onAccept, onReject }: Props) {
             className="flex-1 py-2.5 bg-red-100 text-red-700 text-sm font-semibold rounded-xl hover:bg-red-200 transition"
           >
             Reject
+          </button>
+        </div>
+      )}
+
+      {pledge.status === 'accepted' && onFulfill && (
+        <div className="pt-3 border-t border-gray-100">
+          <button
+            onClick={() => onFulfill(pledge.id, pledge.qr_token || '')}
+            className="w-full py-2.5 bg-blue-100 text-blue-800 text-sm font-semibold rounded-xl hover:bg-blue-200 transition"
+          >
+            Mark Fulfilled
           </button>
         </div>
       )}

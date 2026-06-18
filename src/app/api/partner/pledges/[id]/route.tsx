@@ -7,6 +7,7 @@ import { resend } from '@/lib/resend';
 import QRCode from 'qrcode';
 import PledgeAccepted from '@/emails/pledge-accepted';
 import PledgeRejected from '@/emails/pledge-rejected';
+import PledgeFulfilled from '@/emails/pledge-fulfilled';
 
 const supabase = supabaseServer();
 
@@ -31,21 +32,22 @@ export async function PATCH(
     const { id } = await params;
 
     const body = await req.json();
-    const { action, rejection_reason } = body as {
+    const { action, rejection_reason, token } = body as {
       action: string;
       rejection_reason?: string;
+      token?: string;
     };
 
-    if (!action || !['accept', 'reject'].includes(action)) {
+    if (!action || !['accept', 'reject', 'fulfill'].includes(action)) {
       return NextResponse.json(
-        { error: 'action must be "accept" or "reject"' },
+        { error: 'action must be "accept", "reject", or "fulfill"' },
         { status: 400 },
       );
     }
 
     const { data: pledge, error: pledgeError } = await supabase
       .from('pledges')
-      .select('id, user_id, item_ids, action_type, status, created_at')
+      .select('id, user_id, item_ids, action_type, status, qr_token, created_at')
       .eq('id', id)
       .eq('partner_id', session.user.partner_id)
       .single();
@@ -57,7 +59,7 @@ export async function PATCH(
       );
     }
 
-    if (pledge.status !== 'pending') {
+    if (action !== 'fulfill' && pledge.status !== 'pending') {
       return NextResponse.json(
         { error: 'Pledge has already been processed' },
         { status: 400 },
@@ -155,6 +157,70 @@ export async function PATCH(
       }
 
       return NextResponse.json({ success: true, status: 'accepted' });
+    }
+
+    if (action === 'fulfill') {
+      if (pledge.status !== 'accepted') {
+        return NextResponse.json(
+          { error: 'Only accepted pledges can be fulfilled' },
+          { status: 400 },
+        );
+      }
+
+      if (!token || token !== pledge.qr_token) {
+        return NextResponse.json(
+          { error: 'Invalid verification token' },
+          { status: 400 },
+        );
+      }
+
+      const { error: updateError } = await supabase
+        .from('pledges')
+        .update({
+          status: 'fulfilled',
+          fulfilled_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (updateError) {
+        console.error('Supabase update error:', updateError);
+        return NextResponse.json(
+          { error: 'Failed to fulfill pledge' },
+          { status: 500 },
+        );
+      }
+
+      const { error: itemsError } = await supabase
+        .from('clothes')
+        .update({ status: pledge.action_type })
+        .in('id', pledge.item_ids || []);
+
+      if (itemsError) {
+        console.error('Supabase items update error:', itemsError);
+      }
+
+      const emailHtml = await render(
+        <PledgeFulfilled
+          userName={userName}
+          partnerName={partnerData.name}
+          partnerType={pledge.action_type as 'donate' | 'sell' | 'recycle'}
+          items={items}
+          pledgeId={id}
+        />,
+      );
+
+      const { error: emailError } = await resend.emails.send({
+        from: 'Outfitr <onboarding@resend.dev>',
+        to: userData.email,
+        subject: `Your ${pledge.action_type} has been confirmed!`,
+        html: emailHtml,
+      });
+
+      if (emailError) {
+        console.error('Resend email error /api/partner/pledges/[id]:', emailError);
+      }
+
+      return NextResponse.json({ success: true, status: 'fulfilled' });
     }
 
     if (action === 'reject') {
