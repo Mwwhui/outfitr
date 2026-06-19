@@ -16,7 +16,7 @@ import {
   POLL_BACKOFF_EMPTY,
   POLL_MAX,
   NO_DETECTION_TIMEOUT,
-  dominantColorFromFile,
+  dominantColorFromCanvas,
   detectSeason,
   isWellPositioned,
   drawBoundingBoxes,
@@ -38,6 +38,7 @@ export interface CameraScannerReturn {
   readiness: string | null;
   stablePct: number;
   saving: boolean;
+  savingPhase: 'removing-bg' | 'uploading' | null;
   capturing: boolean;
   cameraError: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -59,6 +60,7 @@ export function useCameraScanner(): CameraScannerReturn {
   const [overlayBoxes, setOverlayBoxes] = useState<OverlayBox[] | null>(null);
   const [editItems, setEditItems] = useState<EditItem[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingPhase, setSavingPhase] = useState<'removing-bg' | 'uploading' | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [countdownDisplay, setCountdownDisplay] = useState<number | null>(null);
   const [readiness, setReadiness] = useState<string | null>(null);
@@ -406,6 +408,7 @@ export function useCameraScanner(): CameraScannerReturn {
     setOverlayBoxes(null);
     setEditItems(null);
     setSaving(false);
+    setSavingPhase(null);
     setCountdownDisplay(null);
     countdownRef.current = 0;
     pendingCanvasRef.current = null;
@@ -514,40 +517,39 @@ export function useCameraScanner(): CameraScannerReturn {
       }
     }
 
-    setCapturedFrame(fullFrameBlob);
-    setEditItems(initialItems);
-    setCapturing(false);
-
-    const updates = await Promise.all(scaledItems.map(async (item, idx) => {
-      const color = await dominantColorFromFile(fullFrameBlob, item.box);
+    // Color/season analysis from canvas (no image re-load needed)
+    const filledItems: EditItem[] = scaledItems.map((item, idx) => {
+      const color = dominantColorFromCanvas(canvas, item.box);
       const seasonGuess = detectSeason(item.yolo_type, item.type);
       const desc = item.yolo_type || item.type || '';
       const itemName = [color, desc]
         .filter((s): s is string => !!s)
         .map(title)
         .join(' ');
-      return { idx, name: itemName, color: color || '', season: seasonGuess || '' };
-    }));
-    // Deduplicate final names as well
+      return {
+        ...initialItems[idx],
+        name: itemName,
+        color: color || '',
+        season: seasonGuess || '',
+      };
+    });
+
+    // Deduplicate final names
     const finalFreq = new Map<string, number>();
-    for (const u of updates) finalFreq.set(u.name, (finalFreq.get(u.name) || 0) + 1);
+    for (const item of filledItems) finalFreq.set(item.name, (finalFreq.get(item.name) || 0) + 1);
     const finalCounter = new Map<string, number>();
-    for (const u of updates) {
-      const raw = u.name;
+    for (const item of filledItems) {
+      const raw = item.name;
       const c = finalCounter.get(raw) || 0;
       finalCounter.set(raw, c + 1);
       if (finalFreq.get(raw)! > 1) {
-        u.name = `${raw} ${c + 1}`;
+        item.name = `${raw} ${c + 1}`;
       }
     }
-    setEditItems((prev) =>
-      prev
-        ? prev.map((e) => {
-            const u = updates.find((u) => u.idx === e.id);
-            return u ? { ...e, name: u.name, color: u.color, season: u.season } : e;
-          })
-        : null,
-    );
+
+    setCapturedFrame(fullFrameBlob);
+    setEditItems(filledItems);
+    setCapturing(false);
   }
 
   function handleRetake() {
@@ -636,6 +638,7 @@ export function useCameraScanner(): CameraScannerReturn {
     readiness,
     stablePct,
     saving,
+    savingPhase,
     capturing,
     cameraError,
     videoRef,

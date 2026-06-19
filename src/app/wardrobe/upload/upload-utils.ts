@@ -35,17 +35,17 @@ export const SIZES = ["XS", "S", "M", "L", "XL"];
 export const MATERIALS = ["Cotton", "Linen", "Silk", "Wool", "Denim", "Leather", "Synthetic", "Nylon"];
 
 export const BOX_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899"];
-export const COUNTDOWN_SECONDS = 5;
+export const COUNTDOWN_SECONDS = 3;
 
 export const CONFIDENCE_FLOOR = 0.3;
 export const CONFIDENCE_HIGH = 0.5;
-export const STABLE_STREAK_TARGET = 5;
+export const STABLE_STREAK_TARGET = 3;
 export const STABLE_DIFF_THRESHOLD = 0.15;
 export const BRIGHTNESS_MIN = 40;
 export const FRAME_MAX_DIM = 640;
 export const OVERSCAN_RATIO = 0.7;
 export const POSITION_MARGIN = 0.2;
-export const POLL_BASE = 1000;
+export const POLL_BASE = 500;
 export const POLL_BACKOFF_EMPTY = 2000;
 export const POLL_MAX = 15000;
 export const NO_DETECTION_TIMEOUT = 30000;
@@ -104,17 +104,21 @@ export function detectSeason(yoloType?: string, type?: string): string {
   return "";
 }
 
-const MAX_IMAGE_DIM = 1200;
+export const MAX_IMAGE_DIM = 1200;
 const JPEG_QUALITY = 0.8;
 
-export function compressImage(file: File): Promise<File> {
+export function compressImage(file: Blob): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
+    const fileName = (file instanceof File ? file.name : 'image.jpg');
     img.onload = () => {
       URL.revokeObjectURL(url);
       let { width, height } = img;
-      if (width <= MAX_IMAGE_DIM && height <= MAX_IMAGE_DIM) { resolve(file); return; }
+      if (width <= MAX_IMAGE_DIM && height <= MAX_IMAGE_DIM) {
+        resolve(new File([file], fileName, { type: 'image/jpeg' }));
+        return;
+      }
       if (width > height) {
         height = Math.round(height * (MAX_IMAGE_DIM / width));
         width = MAX_IMAGE_DIM;
@@ -122,20 +126,20 @@ export function compressImage(file: File): Promise<File> {
         width = Math.round(width * (MAX_IMAGE_DIM / height));
         height = MAX_IMAGE_DIM;
       }
-      const canvas = document.createElement("canvas");
+      const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
-      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
       canvas.toBlob(
         (blob) => {
-          if (blob) resolve(new File([blob], file.name, { type: "image/jpeg" }));
-          else reject(new Error("Compression failed"));
+          if (blob) resolve(new File([blob], fileName, { type: 'image/jpeg' }));
+          else reject(new Error('Compression failed'));
         },
-        "image/jpeg",
+        'image/jpeg',
         JPEG_QUALITY,
       );
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
     img.src = url;
   });
 }
@@ -144,42 +148,102 @@ export async function dominantColorFromFile(
   blob: Blob,
   box?: [number, number, number, number],
 ): Promise<string | null> {
-  const url = URL.createObjectURL(blob);
-  const img = new Image();
-  return new Promise((resolve) => {
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const size = 32;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d")!;
-      if (box) {
-        const [x1, y1, x2, y2] = box;
-        ctx.drawImage(img, x1, y1, x2 - x1, y2 - y1, 0, 0, size, size);
-      } else {
-        const crop = 0.6;
-        const sx = (img.width * (1 - crop)) / 2;
-        const sy = (img.height * (1 - crop)) / 2;
-        ctx.drawImage(img, sx, sy, img.width * crop, img.height * crop, 0, 0, size, size);
-      }
-      const data = ctx.getImageData(0, 0, size, size).data;
-      const votes: Record<string, number> = {};
-      for (let i = 0; i < data.length; i += 4) {
-        const { h, s, v } = rgbToHsv(data[i], data[i + 1], data[i + 2]);
-        const name = hsvColorName(h, s, v);
-        votes[name] = (votes[name] || 0) + 1;
-      }
-      let best = "";
-      let max = 0;
-      for (const [name, count] of Object.entries(votes)) {
-        if (count > max) { max = count; best = name; }
-      }
-      resolve(best || null);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+  try {
+    const img = await blobToImage(blob);
+    return dominantColorFromImage(img, box);
+  } catch {
+    return null;
+  }
+}
+
+export function dominantColorFromImage(
+  img: HTMLImageElement,
+  box?: [number, number, number, number],
+): string | null {
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  if (box) {
+    const [x1, y1, x2, y2] = box;
+    ctx.drawImage(img, x1, y1, x2 - x1, y2 - y1, 0, 0, size, size);
+  } else {
+    const crop = 0.6;
+    const sx = (img.width * (1 - crop)) / 2;
+    const sy = (img.height * (1 - crop)) / 2;
+    ctx.drawImage(img, sx, sy, img.width * crop, img.height * crop, 0, 0, size, size);
+  }
+  const data = ctx.getImageData(0, 0, size, size).data;
+  const votes: Record<string, number> = {};
+  for (let i = 0; i < data.length; i += 4) {
+    const { h, s, v } = rgbToHsv(data[i], data[i + 1], data[i + 2]);
+    const name = hsvColorName(h, s, v);
+    votes[name] = (votes[name] || 0) + 1;
+  }
+  let best = "";
+  let max = 0;
+  for (const [name, count] of Object.entries(votes)) {
+    if (count > max) { max = count; best = name; }
+  }
+  return best || null;
+}
+
+export function dominantColorFromCanvas(
+  canvas: HTMLCanvasElement,
+  box?: [number, number, number, number],
+): string | null {
+  const size = 32;
+  const tmp = document.createElement("canvas");
+  tmp.width = size;
+  tmp.height = size;
+  const ctx = tmp.getContext("2d")!;
+  if (box) {
+    const [x1, y1, x2, y2] = box;
+    ctx.drawImage(canvas, x1, y1, x2 - x1, y2 - y1, 0, 0, size, size);
+  } else {
+    const crop = 0.6;
+    const sx = (canvas.width * (1 - crop)) / 2;
+    const sy = (canvas.height * (1 - crop)) / 2;
+    ctx.drawImage(canvas, sx, sy, canvas.width * crop, canvas.height * crop, 0, 0, size, size);
+  }
+  const data = ctx.getImageData(0, 0, size, size).data;
+  const votes: Record<string, number> = {};
+  for (let i = 0; i < data.length; i += 4) {
+    const { h, s, v } = rgbToHsv(data[i], data[i + 1], data[i + 2]);
+    const name = hsvColorName(h, s, v);
+    votes[name] = (votes[name] || 0) + 1;
+  }
+  let best = "";
+  let max = 0;
+  for (const [name, count] of Object.entries(votes)) {
+    if (count > max) { max = count; best = name; }
+  }
+  return best || null;
+}
+
+export function blobToImage(blob: Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")); };
     img.src = url;
   });
+}
+
+export async function removeImageBackground(blob: Blob): Promise<Blob> {
+  const { removeBackground } = await import("@imgly/background-removal");
+  const resultBlob = await removeBackground(blob);
+  const img = await blobToImage(resultBlob);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+  return canvasToBlob(canvas, 0.92);
 }
 
 export function scaleDetections(

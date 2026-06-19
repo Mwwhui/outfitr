@@ -434,6 +434,7 @@ export default function UploadClothesPage() {
         editItems={cam.editItems}
         categories={categories}
         saving={cam.saving}
+        savingPhase={cam.savingPhase}
         editCanvasRef={cam.editCanvasRef}
         onStopCamera={cam.stopCamera}
         onRetake={cam.handleRetake}

@@ -8,6 +8,7 @@ interface Props {
   editItems: EditItem[] | null;
   categories: Category[];
   saving: boolean;
+  savingPhase: 'removing-bg' | 'uploading' | null;
   editCanvasRef: RefObject<HTMLCanvasElement | null>;
   onStopCamera: () => void;
   onRetake: () => void;
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export default function EditItemsModal({
-  capturedFrame, editItems, categories, saving,
+  capturedFrame, editItems, categories, saving, savingPhase,
   editCanvasRef, onStopCamera, onRetake, onSave, onEditItemsChange,
 }: Props) {
   if (!capturedFrame || !editItems) return null;
@@ -95,8 +96,12 @@ export default function EditItemsModal({
           </button>
           <button type="button" onClick={onSave}
             disabled={includedCount === 0 || saving}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-black text-white text-sm hover:bg-slate-800 disabled:opacity-40">
-            {saving ? "Saving..." : `Save ${includedCount} item${includedCount !== 1 ? "s" : ""}`}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-black text-white text-sm hover:bg-slate-800 disabled:opacity-40 flex items-center justify-center gap-2">
+            {saving ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{savingPhase === 'removing-bg' ? 'Removing background...' : 'Uploading items...'}</>
+            ) : (
+              `Save ${includedCount} item${includedCount !== 1 ? 's' : ''}`
+            )}
           </button>
         </div>
       </div>
