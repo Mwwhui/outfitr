@@ -1,227 +1,45 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useReducer } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import {
+  Category, SEASONS, SIZES, MATERIALS,
+  inputBase, compressImage, dominantColorFromFile, detectSeason,
+} from "./upload-utils";
+import { useCameraScanner } from "./useCameraScanner";
+import CameraViewfinder from "./CameraViewfinder";
+import EditItemsModal from "./EditItemsModal";
 
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-  textColor: string;
+interface FormFields {
+  name: string; type: string; color: string; season: string | "";
+  size: string | ""; brand: string; price: string; material: string | "";
+  purchaseDate: string; location: string | "";
+  description: string; notes: string;
 }
 
-const SEASONS = ["All", "Spring", "Summer", "Autumn", "Winter"];
-const SIZES = ["XS", "S", "M", "L", "XL"];
-const MATERIALS = [
-  "Cotton",
-  "Linen",
-  "Silk",
-  "Wool",
-  "Denim",
-  "Leather",
-  "Synthetic",
-  "Nylon",
-];
+const initialForm: FormFields = {
+  name: "", type: "", color: "", season: "",
+  size: "", brand: "", price: "", material: "",
+  purchaseDate: new Date().toISOString().split("T")[0],
+  location: "", description: "", notes: "",
+};
 
-function rgbToHsv(r: number, g: number, b: number) {
-  r /= 255; g /= 255; b /= 255;
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-  const d = mx - mn;
-  let h = 0;
-  if (d) {
-    if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-    else if (mx === g) h = ((b - r) / d + 2) / 6;
-    else h = ((r - g) / d + 4) / 6;
-  }
-  return { h: h * 360, s: (mx === 0 ? 0 : d / mx) * 100, v: mx * 100 };
+function formReducer(state: FormFields, next: Partial<FormFields>): FormFields {
+  return { ...state, ...next };
 }
 
-function hsvColorName(h: number, s: number, v: number): string {
-  if (s < 10) {
-    if (v < 18) return "Black";
-    if (v > 88) return "White";
-    return "Grey";
-  }
-  if (v < 12) return "Black";
-  if (h > 20 && h < 70 && s < 30 && v > 75) return v > 92 ? "Cream" : "Beige";
-  if (h < 60 && v < 65) return "Brown";
-  if (h < 60 && v < 80 && s > 25 && s < 70) return "Brown";
-  if (h > 200 && h < 290 && v < 30) return "Navy";
-  if (h > 210 && h < 260 && v > 30 && v < 65 && s > 30 && s < 65) return "Denim";
-  if (h > 200 && h < 290 && s < 25) return "Grey";
-  if ((h < 15 || h >= 340) && v > 65 && s < 50) return "Pink";
-  if (h > 300 && h < 345) return v > 35 ? "Pink" : "Purple";
-  if (h < 15 || h >= 345) return "Red";
-  if (h < 45) return "Orange";
-  if (h < 70) return "Yellow";
-  if (h < 170) return "Green";
-  if (h < 260) return "Blue";
-  if (h < 300) return "Purple";
-  return "Pink";
-}
-
-function detectSeason(yoloType?: string, type?: string): string {
-  const t = (yoloType || "").toLowerCase();
-  if (/outwear|coat$|parka|puffer|sweater|hoodie|jumper|pullover|cardigan/.test(t)) return "Winter";
-  if (/short sleeve|tank|shorts|swim|bikini|sundress/.test(t)) return "Summer";
-  if (/jacket|blazer|trench/.test(t)) return "Autumn";
-  if (/long sleeve|vest/.test(t)) return "Spring";
-  if (/jeans|pants|trousers|skirt|denim/.test(t)) return "All";
-  if (type === "Bottoms" || type === "Tops") return "All";
-  if (type === "Outerwear") return "Winter";
-  if (type === "One-Piece") return "Summer";
-  return "";
-}
-
-const MAX_IMAGE_DIM = 1200;
-const JPEG_QUALITY = 0.8;
-
-function compressImage(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      if (width <= MAX_IMAGE_DIM && height <= MAX_IMAGE_DIM) {
-        resolve(file);
-        return;
-      }
-      if (width > height) {
-        height = Math.round(height * (MAX_IMAGE_DIM / width));
-        width = MAX_IMAGE_DIM;
-      } else {
-        width = Math.round(width * (MAX_IMAGE_DIM / height));
-        height = MAX_IMAGE_DIM;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          if (blob) resolve(new File([blob], file.name, { type: "image/jpeg" }));
-          else reject(new Error("Compression failed"));
-        },
-        "image/jpeg",
-        JPEG_QUALITY,
-      );
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")); };
-    img.src = url;
-  });
-}
-
-async function dominantColorFromFile(
-  file: File,
-  box?: [number, number, number, number],
-): Promise<string | null> {
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  return new Promise((resolve) => {
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const size = 32;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d")!;
-      if (box) {
-        const [x1, y1, x2, y2] = box;
-        ctx.drawImage(img, x1, y1, x2 - x1, y2 - y1, 0, 0, size, size);
-      } else {
-        const crop = 0.6;
-        const sx = (img.width * (1 - crop)) / 2;
-        const sy = (img.height * (1 - crop)) / 2;
-        ctx.drawImage(img, sx, sy, img.width * crop, img.height * crop, 0, 0, size, size);
-      }
-      const data = ctx.getImageData(0, 0, size, size).data;
-      const votes: Record<string, number> = {};
-      for (let i = 0; i < data.length; i += 4) {
-        const { h, s, v } = rgbToHsv(data[i], data[i + 1], data[i + 2]);
-        const name = hsvColorName(h, s, v);
-        votes[name] = (votes[name] || 0) + 1;
-      }
-      let best = "";
-      let max = 0;
-      for (const [name, count] of Object.entries(votes)) {
-        if (count > max) { max = count; best = name; }
-      }
-      resolve(best || null);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-    img.src = url;
-  });
-}
-
-const inputBase =
-  "w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 " +
-  "focus:ring-2 focus:ring-slate-500/70 px-3 py-2";
-
-export default function UploadClothesPage() {
-  const router = useRouter();
-  const { data: session } = useSession();
-
-  const [name, setName] = useState("");
-  const [type, setType] = useState("");
-  const [color, setColor] = useState("");
-  const [season, setSeason] = useState<string | "">("");
-  const [size, setSize] = useState<string | "">("");
-  const [brand, setBrand] = useState("");
+function useSuggestions(userId: string | undefined) {
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
-  const [customBrand, setCustomBrand] = useState(false);
-  const [price, setPrice] = useState("");
-  const [material, setMaterial] = useState<string | "">("");
-  const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
-  const [customMaterial, setCustomMaterial] = useState(false);
-  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split("T")[0]);
-  const [location, setLocation] = useState("");
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
-  const [customLocation, setCustomLocation] = useState(false);
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
+  const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [detecting, setDetecting] = useState(false);
-  const [detectResult, setDetectResult] = useState<{
-    type: string;
-    confidence: number;
-    color: string | null;
-  } | null>(null);
-
-  const [isUploading, setIsUploading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(true);
-
-  // Fetch categories on mount
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch("/api/categories");
-        if (!res.ok) throw new Error("Failed to fetch categories");
-        const data = await res.json();
-        setCategories(data);
-      } catch (error) {
-        console.error("Error fetching categories:", error);
-        setCategories([]);
-      } finally {
-        setLoadingCategories(false);
-      }
-    };
-    fetchCategories();
-  }, []);
-
-  // Fetch brand suggestions from wardrobe
-  useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!userId) return;
     Promise.all([
-      fetch(`/api/brands?user_id=${session.user.id}`).then((r) => r.json()),
-      fetch(`/api/locations?user_id=${session.user.id}`).then((r) => r.json()),
-      fetch(`/api/materials?user_id=${session.user.id}`).then((r) => r.json()),
+      fetch(`/api/brands?user_id=${userId}`).then(r => r.json()),
+      fetch(`/api/locations?user_id=${userId}`).then(r => r.json()),
+      fetch(`/api/materials?user_id=${userId}`).then(r => r.json()),
     ])
       .then(([brandsData, locationsData, materialsData]) => {
         setBrandSuggestions(brandsData.brands || []);
@@ -229,9 +47,44 @@ export default function UploadClothesPage() {
         setMaterialSuggestions(materialsData.materials || []);
       })
       .catch(() => {});
-  }, [session]);
+  }, [userId]);
 
-  // Auto-detect clothing type (YOLO) and color (client-side on YOLO crop)
+  return { brandSuggestions, locationSuggestions, materialSuggestions };
+}
+
+export default function UploadClothesPage() {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const [fields, setField] = useReducer(formReducer, initialForm);
+
+  const [customBrand, setCustomBrand] = useState(false);
+  const [customMaterial, setCustomMaterial] = useState(false);
+  const [customLocation, setCustomLocation] = useState(false);
+
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const [detectResult, setDetectResult] = useState<{
+    type: string; confidence: number; color: string | null;
+  } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [formError, setFormError] = useState("");
+
+  const { brandSuggestions, locationSuggestions, materialSuggestions } =
+    useSuggestions(session?.user?.id);
+
+  const cam = useCameraScanner();
+
+  // Fetch categories on mount
+  useEffect(() => {
+    fetch("/api/categories")
+      .then(r => r.json())
+      .then(setCategories)
+      .catch(() => setCategories([]));
+  }, []);
+
+  // Auto-detect for file upload
   useEffect(() => {
     if (!imageFile) return;
     let dismissTimer: ReturnType<typeof setTimeout>;
@@ -249,15 +102,15 @@ export default function UploadClothesPage() {
         const item = data.items?.[0];
         const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
         const title = (s: string) => s.split(" ").map(cap).join(" ");
-        if (item?.type) setType(item.type);
+        if (item?.type) setField({ type: item.type });
         const box = item?.box as [number, number, number, number] | undefined;
         const dominantColor = await dominantColorFromFile(imageFile, box);
-        if (dominantColor) setColor(dominantColor);
+        if (dominantColor) setField({ color: dominantColor });
         const desc = item?.yolo_type || item?.type;
         const label = [dominantColor, desc].filter(Boolean).map(title).join(" ");
-        if (label) setName(label);
+        if (label) setField({ name: label });
         const seasonGuess = detectSeason(item?.yolo_type, item?.type);
-        if (seasonGuess) setSeason(seasonGuess);
+        if (seasonGuess) setField({ season: seasonGuess });
         if (desc) {
           setDetectResult({
             type: title(desc),
@@ -276,107 +129,73 @@ export default function UploadClothesPage() {
     return () => clearTimeout(dismissTimer);
   }, [imageFile]);
 
-  // Clean up blob URLs when file changes
+  // Clean up blob URLs
   useEffect(() => {
-    return () => {
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
-    };
+    return () => { if (imagePreview) URL.revokeObjectURL(imagePreview); };
   }, [imagePreview]);
 
   const handleImageChange = (file: File | null) => {
     setImageFile(file);
-
     if (imagePreview) URL.revokeObjectURL(imagePreview);
-
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setImagePreview(url);
-    } else {
-      setImagePreview(null);
-    }
+    setImagePreview(file ? URL.createObjectURL(file) : null);
   };
+
+  const errorMsg = cam.cameraError || formError;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!session?.user?.id) {
-      setErrorMsg("You must be logged in.");
-      return;
-    }
-    if (!imageFile) {
-      setErrorMsg("Please select an image.");
-      return;
-    }
-    if (!name.trim()) {
-      setErrorMsg("Please enter a name.");
-      return;
-    }
+    if (!session?.user?.id) { setFormError("You must be logged in."); return; }
+    if (!imageFile) { setFormError("Please select an image."); return; }
+    if (!fields.name.trim()) { setFormError("Please enter a name."); return; }
 
     setIsUploading(true);
-    setErrorMsg("");
+    setFormError("");
 
     try {
-      // 0. Compress image before upload
       const compressed = await compressImage(imageFile);
-      // 1. Upload image
       const formData = new FormData();
       formData.append("file", compressed);
 
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
       const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        throw new Error(uploadData.error || "Upload failed");
-      }
-
+      if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
       const imageUrl = uploadData.url;
 
-      // 2. Save clothing data
       const saveRes = await fetch("/api/clothes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: session.user.id,
-          name,
-          type,
-          color,
-          season: season || null,
-          size: size || null,
-          brand: brand || null,
-          price: price === "" ? null : Number(price),
-          material: material || null,
-          favorite: false,
-          image_url: imageUrl,
-          description: description || null,
-          purchase_date: purchaseDate || null,
-          location: location || null,
-          notes: notes || null,
+          name: fields.name, type: fields.type, color: fields.color,
+          season: fields.season || null,
+          size: fields.size || null, brand: fields.brand || null,
+          price: fields.price === "" ? null : Number(fields.price),
+          material: fields.material || null, favorite: false,
+          image_url: imageUrl, description: fields.description || null,
+          purchase_date: fields.purchaseDate || null,
+          location: fields.location || null, notes: fields.notes || null,
         }),
       });
-
       if (!saveRes.ok) {
         const err = await saveRes.json();
         throw new Error(err.error || "Failed to save clothing");
       }
-
       router.push("/wardrobe");
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Something went wrong");
+      setFormError(err.message || "Something went wrong");
     } finally {
       setIsUploading(false);
     }
   };
 
+  const upd = (key: keyof FormFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setField({ [key]: e.target.value });
+
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
-      <button
-        onClick={() => router.back()}
-        className="text-sm text-gray-500 hover:text-gray-700 mb-4"
-      >
+      <button onClick={() => router.back()}
+        className="text-sm text-gray-500 hover:text-gray-700 mb-4">
         ← Back
       </button>
 
@@ -388,36 +207,25 @@ export default function UploadClothesPage() {
         </p>
       )}
 
-      {/* Layout: left = image + main info, right = details */}
-      <form
-        onSubmit={handleSubmit}
-        className="grid gap-8 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)]"
-      >
-        {/* LEFT */}
+      <form onSubmit={handleSubmit}
+        className="grid gap-8 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)]">
         <div className="space-y-4 h-full">
-          {/* hidden file input */}
-          <input
-            id="imageUpload"
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => handleImageChange(e.target.files?.[0] || null)}
-          />
+          <input id="imageUpload" type="file" accept="image/*" className="hidden"
+            onChange={(e) => handleImageChange(e.target.files?.[0] || null)} />
+
+          <button type="button" onClick={cam.startCamera}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm hover:bg-slate-50 w-full">
+            📷 Take Photo
+          </button>
 
           <div className="relative rounded-3xl overflow-hidden shadow-sm bg-white">
-            {/* Clickable image upload / preview area */}
-            <label
-              htmlFor="imageUpload"
-              className="w-full h-100 bg-slate-100 rounded-b-none overflow-hidden cursor-pointer 
-                         border-b border-slate-200 hover:bg-slate-200 transition flex items-center justify-center"
-            >
+            <label htmlFor="imageUpload"
+              className="w-full h-100 bg-slate-100 rounded-b-none overflow-hidden cursor-pointer
+                border-b border-slate-200 hover:bg-slate-200 transition flex items-center justify-center">
               {imagePreview ? (
                 <div className="relative w-full h-full">
-                  <img
-                    src={imagePreview}
-                    alt={name || "Clothing preview"}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={imagePreview} alt={fields.name || "Clothing preview"}
+                    className="w-full h-full object-cover" />
                   {detecting && (
                     <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-white/90 text-xs text-slate-600 px-2.5 py-1.5 rounded-full z-10 shadow-sm backdrop-blur-sm">
                       <span className="relative flex w-1.5 h-1.5">
@@ -433,16 +241,10 @@ export default function UploadClothesPage() {
                       <span className="font-medium">{detectResult.type}</span>
                       <span className={`font-mono tabular-nums ${
                         detectResult.confidence >= 0.8 ? 'text-emerald-600' :
-                        detectResult.confidence >= 0.6 ? 'text-amber-600' :
-                        'text-red-500'
-                      }`}>
-                        {Math.round(detectResult.confidence * 100)}%
-                      </span>
+                        detectResult.confidence >= 0.6 ? 'text-amber-600' : 'text-red-500'
+                      }`}>{Math.round(detectResult.confidence * 100)}%</span>
                       {detectResult.color && (
-                        <>
-                          <span className="text-slate-300">|</span>
-                          <span>{detectResult.color}</span>
-                        </>
+                        <><span className="text-slate-300">|</span><span>{detectResult.color}</span></>
                       )}
                     </div>
                   )}
@@ -455,19 +257,9 @@ export default function UploadClothesPage() {
                 </div>
               ) : (
                 <div className="text-center text-slate-400">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-10 h-10 mx-auto mb-2 opacity-60"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 4v16m8-8H4"
-                    />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 mx-auto mb-2 opacity-60"
+                    fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                   <p className="text-sm font-medium">Click to upload image</p>
                   <p className="text-xs">JPG, PNG, up to 10MB</p>
@@ -477,318 +269,177 @@ export default function UploadClothesPage() {
             </label>
 
             <div className="p-4 space-y-3">
-              {/* Name */}
               <div>
-                <label className="block text-xs text-slate-600 mb-1">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={inputBase}
-                  placeholder="e.g. White T-Shirt"
-                  required
-                />
+                <label className="block text-xs text-slate-600 mb-1">Name</label>
+                <input type="text" value={fields.name} onChange={upd("name")}
+                  className={inputBase} placeholder="e.g. White T-Shirt" required />
               </div>
-
-              {/* Type + Color */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-visible">
                 <div>
-                  <label className="block text-xs text-slate-600 mb-1">
-                    Type
-                  </label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                    className={`${inputBase} relative z-10 appearance-auto`}
-                    required
-                  >
+                  <label className="block text-xs text-slate-600 mb-1">Type</label>
+                  <select value={fields.type} onChange={upd("type")}
+                    className={`${inputBase} relative z-10 appearance-auto`} required>
                     <option value="">Select type...</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.name}>
-                        {cat.name}
-                      </option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.name}>{cat.name}</option>
                     ))}
                   </select>
                 </div>
-
                 <div>
-                  <label className="block text-xs text-slate-600 mb-1">
-                    Color
-                  </label>
-                  <input
-                    type="text"
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
-                    className={inputBase}
-                    placeholder="e.g. Black"
-                  />
+                  <label className="block text-xs text-slate-600 mb-1">Color</label>
+                  <input type="text" value={fields.color} onChange={upd("color")}
+                    className={inputBase} placeholder="e.g. Black" />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT – Details */}
         <div className="bg-white rounded-3xl p-6 shadow-md space-y-6">
           <div>
             <h2 className="text-lg font-semibold">Details</h2>
-            <p className="text-sm text-gray-500">
-              Add more information so you can filter and find this piece later.
-            </p>
+            <p className="text-sm text-gray-500">Add more information so you can filter and find this piece later.</p>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Season */}
             <div>
-              <label className="block text-xs text-slate-600 mb-1">
-                Season
-              </label>
-              <select
-                value={season}
-                onChange={(e) => setSeason(e.target.value)}
-                className={inputBase}
-              >
+              <label className="block text-xs text-slate-600 mb-1">Season</label>
+              <select value={fields.season} onChange={upd("season")} className={inputBase}>
                 <option value="">Select season...</option>
-                {SEASONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
+                {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-
-            {/* Size */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">Size</label>
-              <select
-                value={size}
-                onChange={(e) => setSize(e.target.value)}
-                className={inputBase}
-              >
+              <select value={fields.size} onChange={upd("size")} className={inputBase}>
                 <option value="">Select size...</option>
-                {SIZES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
+                {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-
-            {/* Brand */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">Brand</label>
               {customBrand ? (
                 <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    className={inputBase}
-                    placeholder="Type brand name..."
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { setBrand(""); setCustomBrand(false); }}
-                    className="text-xs text-slate-500 hover:text-slate-700"
-                  >
-                    ← Pick from saved brands
-                  </button>
+                  <input type="text" value={fields.brand} onChange={upd("brand")}
+                    className={inputBase} placeholder="Type brand name..." autoFocus />
+                  <button type="button" onClick={() => { setField({ brand: "" }); setCustomBrand(false); }}
+                    className="text-xs text-slate-500 hover:text-slate-700">← Pick from saved brands</button>
                 </div>
               ) : (
-                <select
-                  value={brand}
-                  onChange={(e) => {
-                    if (e.target.value === "__custom__") {
-                      setCustomBrand(true);
-                      setBrand("");
-                    } else {
-                      setBrand(e.target.value);
-                    }
-                  }}
-                  className={inputBase}
-                >
+                <select value={fields.brand} onChange={(e) => {
+                  if (e.target.value === "__custom__") { setCustomBrand(true); setField({ brand: "" }); }
+                  else setField({ brand: e.target.value });
+                }} className={inputBase}>
                   <option value="">Select brand...</option>
-                  {brandSuggestions.map((b) => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
+                  {brandSuggestions.map(b => <option key={b} value={b}>{b}</option>)}
                   <option value="__custom__">+ Add new brand</option>
                 </select>
               )}
             </div>
-
-            {/* Price */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">Price</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className={inputBase}
-                placeholder="0.00"
-              />
+              <input type="number" min={0} step="0.01" value={fields.price}
+                onChange={upd("price")} className={inputBase} placeholder="0.00" />
             </div>
-
-            {/* Material */}
             <div>
-              <label className="block text-xs text-slate-600 mb-1">
-                Material
-              </label>
+              <label className="block text-xs text-slate-600 mb-1">Material</label>
               {customMaterial ? (
                 <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={material}
-                    onChange={(e) => setMaterial(e.target.value)}
-                    className={inputBase}
-                    placeholder="Type material name..."
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { setMaterial(""); setCustomMaterial(false); }}
-                    className="text-xs text-slate-500 hover:text-slate-700"
-                  >
-                    ← Pick from saved materials
-                  </button>
+                  <input type="text" value={fields.material} onChange={upd("material")}
+                    className={inputBase} placeholder="Type material name..." autoFocus />
+                  <button type="button" onClick={() => { setField({ material: "" }); setCustomMaterial(false); }}
+                    className="text-xs text-slate-500 hover:text-slate-700">← Pick from saved materials</button>
                 </div>
               ) : (
-                <select
-                  value={material}
-                  onChange={(e) => {
-                    if (e.target.value === "__custom__") {
-                      setCustomMaterial(true);
-                      setMaterial("");
-                    } else {
-                      setMaterial(e.target.value);
-                    }
-                  }}
-                  className={inputBase}
-                >
+                <select value={fields.material} onChange={(e) => {
+                  if (e.target.value === "__custom__") { setCustomMaterial(true); setField({ material: "" }); }
+                  else setField({ material: e.target.value });
+                }} className={inputBase}>
                   <option value="">Select material...</option>
-                  {MATERIALS.map((m) => (
+                  {MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}
+                  {materialSuggestions.filter(m => !MATERIALS.includes(m)).map(m => (
                     <option key={m} value={m}>{m}</option>
                   ))}
-                  {materialSuggestions
-                    .filter((m) => !MATERIALS.includes(m))
-                    .map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
                   <option value="__custom__">+ Add new material</option>
                 </select>
               )}
             </div>
-
-            {/* Purchase date */}
             <div>
-              <label className="block text-xs text-slate-600 mb-1">
-                Purchase date
-              </label>
-              <input
-                type="date"
-                value={purchaseDate}
-                onChange={(e) => setPurchaseDate(e.target.value)}
-                className={inputBase}
-              />
+              <label className="block text-xs text-slate-600 mb-1">Purchase date</label>
+              <input type="date" value={fields.purchaseDate}
+                onChange={upd("purchaseDate")} className={inputBase} />
             </div>
-
-            {/* Location */}
             <div className="md:col-span-2">
-              <label className="block text-xs text-slate-600 mb-1">
-                Location
-              </label>
+              <label className="block text-xs text-slate-600 mb-1">Location</label>
               {customLocation ? (
                 <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className={inputBase}
-                    placeholder="e.g. Wardrobe A, Drawer 2"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { setLocation(""); setCustomLocation(false); }}
-                    className="text-xs text-slate-500 hover:text-slate-700"
-                  >
-                    ← Pick from saved locations
-                  </button>
+                  <input type="text" value={fields.location} onChange={upd("location")}
+                    className={inputBase} placeholder="e.g. Wardrobe A, Drawer 2" autoFocus />
+                  <button type="button" onClick={() => { setField({ location: "" }); setCustomLocation(false); }}
+                    className="text-xs text-slate-500 hover:text-slate-700">← Pick from saved locations</button>
                 </div>
               ) : (
-                <select
-                  value={location}
-                  onChange={(e) => {
-                    if (e.target.value === "__custom__") {
-                      setCustomLocation(true);
-                      setLocation("");
-                    } else {
-                      setLocation(e.target.value);
-                    }
-                  }}
-                  className={inputBase}
-                >
+                <select value={fields.location} onChange={(e) => {
+                  if (e.target.value === "__custom__") { setCustomLocation(true); setField({ location: "" }); }
+                  else setField({ location: e.target.value });
+                }} className={inputBase}>
                   <option value="">Select location...</option>
-                  {locationSuggestions.map((l) => (
-                    <option key={l} value={l}>{l}</option>
-                  ))}
+                  {locationSuggestions.map(l => <option key={l} value={l}>{l}</option>)}
                   <option value="__custom__">+ Add new location</option>
                 </select>
               )}
             </div>
           </div>
-
-          {/* Divider */}
           <hr className="border-slate-200" />
-
-          {/* Description */}
           <div>
-            <label className="block text-xs text-slate-600 mb-1">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className={`${inputBase} min-h-[80px]`}
-              placeholder="Extra details about this piece..."
-            />
+            <label className="block text-xs text-slate-600 mb-1">Description</label>
+            <textarea value={fields.description} onChange={upd("description")}
+              className={`${inputBase} min-h-[80px]`} placeholder="Extra details about this piece..." />
           </div>
-
-          {/* Notes */}
           <div>
             <label className="block text-xs text-slate-600 mb-1">Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className={`${inputBase} min-h-[80px]`}
-              placeholder="Care instructions, outfit ideas, where you wore it..."
-            />
+            <textarea value={fields.notes} onChange={upd("notes")}
+              className={`${inputBase} min-h-[80px]`} placeholder="Care instructions, outfit ideas, where you wore it..." />
           </div>
-
-          {/* ACTIONS */}
           <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-end">
-            <button
-              type="button"
-              onClick={() => router.push("/wardrobe")}
-              className="px-6 py-3 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
-            >
+            <button type="button" onClick={() => router.push("/wardrobe")}
+              className="px-6 py-3 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">
               Cancel
             </button>
-
-            <button
-              type="submit"
-              disabled={isUploading}
-              className="px-6 py-3 rounded-lg bg-black text-white hover:bg-slate-800 disabled:opacity-60"
-            >
+            <button type="submit" disabled={isUploading}
+              className="px-6 py-3 rounded-lg bg-black text-white hover:bg-slate-800 disabled:opacity-60">
               {isUploading ? "Uploading..." : "Save clothing"}
             </button>
           </div>
         </div>
       </form>
+
+      <CameraViewfinder
+        cameraMode={cam.cameraMode}
+        capturedFrame={cam.capturedFrame}
+        scanning={cam.scanning}
+        flash={cam.flash}
+        readiness={cam.readiness}
+        stablePct={cam.stablePct}
+        countdownDisplay={cam.countdownDisplay}
+        overlayBoxes={cam.overlayBoxes}
+        capturing={cam.capturing}
+        videoRef={cam.videoRef}
+        canvasOverlayRef={cam.canvasOverlayRef}
+        onStopCamera={cam.stopCamera}
+        onCapture={cam.handleCapture}
+      />
+
+      <EditItemsModal
+        capturedFrame={cam.capturedFrame}
+        editItems={cam.editItems}
+        categories={categories}
+        saving={cam.saving}
+        editCanvasRef={cam.editCanvasRef}
+        onStopCamera={cam.stopCamera}
+        onRetake={cam.handleRetake}
+        onSave={() => session?.user?.id && cam.handleSave(session.user.id)}
+        onEditItemsChange={cam.setEditItems}
+      />
     </div>
   );
 }
