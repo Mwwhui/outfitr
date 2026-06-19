@@ -25,7 +25,7 @@ export async function GET(req: Request) {
 
     let query = supabase
       .from('pledges')
-      .select('id, user_id, item_ids, action_type, status, rejection_reason, qr_token, created_at')
+      .select('id, user_id, item_ids, action_type, status, rejection_reason, qr_token, created_at, fulfilled_at')
       .eq('partner_id', session.user.partner_id)
       .order('created_at', { ascending: false });
 
@@ -93,6 +93,7 @@ export async function GET(req: Request) {
       rejection_reason: pledge.rejection_reason,
       qr_token: pledge.qr_token,
       created_at: pledge.created_at,
+      fulfilled_at: pledge.fulfilled_at,
       user: userMap.get(pledge.user_id) || null,
       items: (pledge.item_ids || [])
         .map((id: string) => itemMap.get(id))
