@@ -1,77 +1,206 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useState, useEffect, useReducer, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import {
+  Category,
+  SEASONS,
+  SIZES,
+  MATERIALS,
+  inputBase,
+  compressImage,
+  detectSeason,
+} from './upload-utils';
+import { useCameraScanner } from './useCameraScanner';
+import CameraViewfinder from './CameraViewfinder';
+import EditItemsModal from './EditItemsModal';
 
-interface Category {
-  id: string;
+interface FormFields {
   name: string;
+  type: string;
   color: string;
-  textColor: string;
+  season: string | '';
+  size: string | '';
+  brand: string;
+  price: string;
+  material: string | '';
+  purchaseDate: string;
+  location: string | '';
+  description: string;
+  notes: string;
 }
 
-const SEASONS = ["All", "Spring", "Summer", "Autumn", "Winter"];
-const SIZES = ["XS", "S", "M", "L", "XL"];
-const MATERIALS = [
-  "Cotton",
-  "Linen",
-  "Silk",
-  "Wool",
-  "Denim",
-  "Leather",
-  "Synthetic",
-  "Nylon",
-];
+const initialForm: FormFields = {
+  name: '',
+  type: '',
+  color: '',
+  season: '',
+  size: '',
+  brand: '',
+  price: '',
+  material: '',
+  purchaseDate: new Date().toISOString().split('T')[0],
+  location: '',
+  description: '',
+  notes: '',
+};
 
-const inputBase =
-  "w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 " +
-  "focus:ring-2 focus:ring-slate-500/70 px-3 py-2";
+function formReducer(state: FormFields, next: Partial<FormFields>): FormFields {
+  return { ...state, ...next };
+}
+
+function useSuggestions(userId: string | undefined) {
+  const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
+  const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!userId) return;
+    Promise.all([
+      fetch(`/api/brands?user_id=${userId}`).then((r) => r.json()),
+      fetch(`/api/locations?user_id=${userId}`).then((r) => r.json()),
+      fetch(`/api/materials?user_id=${userId}`).then((r) => r.json()),
+    ])
+      .then(([brandsData, locationsData, materialsData]) => {
+        setBrandSuggestions(brandsData.brands || []);
+        setLocationSuggestions(locationsData.locations || []);
+        setMaterialSuggestions(materialsData.materials || []);
+      })
+      .catch(() => {});
+  }, [userId]);
+
+  return { brandSuggestions, locationSuggestions, materialSuggestions };
+}
 
 export default function UploadClothesPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const [fields, setField] = useReducer(formReducer, initialForm);
 
-  const [name, setName] = useState("");
-  const [type, setType] = useState("");
-  const [color, setColor] = useState("");
-  const [season, setSeason] = useState<string | "">("");
-  const [size, setSize] = useState<string | "">("");
-  const [brand, setBrand] = useState("");
-  const [price, setPrice] = useState("");
-  const [material, setMaterial] = useState<string | "">("");
-  const [purchaseDate, setPurchaseDate] = useState("");
-  const [location, setLocation] = useState("");
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
+  const [customBrand, setCustomBrand] = useState(false);
+  const [customMaterial, setCustomMaterial] = useState(false);
+  const [customLocation, setCustomLocation] = useState(false);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-
+  const [detecting, setDetecting] = useState(false);
+  const [detectResult, setDetectResult] = useState<{
+    type: string;
+    confidence: number;
+    color: string | null;
+  } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [formError, setFormError] = useState('');
+
+  const { brandSuggestions, locationSuggestions, materialSuggestions } =
+    useSuggestions(session?.user?.id);
+
+  const cam = useCameraScanner();
+  const fileKeyRef = useRef('');
 
   // Fetch categories on mount
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch("/api/categories");
-        if (!res.ok) throw new Error("Failed to fetch categories");
-        const data = await res.json();
-        setCategories(data);
-      } catch (error) {
-        console.error("Error fetching categories:", error);
-        setCategories([]);
-      } finally {
-        setLoadingCategories(false);
-      }
-    };
-    fetchCategories();
+    fetch('/api/categories')
+      .then((r) => r.json())
+      .then(setCategories)
+      .catch(() => setCategories([]));
   }, []);
 
-  // Clean up blob URLs when file changes
+  // Auto-detect for file upload
+  useEffect(() => {
+    if (!imageFile) return;
+    const key = `${imageFile.name}|${imageFile.size}|${imageFile.lastModified}`;
+    if (key === fileKeyRef.current) return;
+    fileKeyRef.current = key;
+    let active = true;
+    const abortController = new AbortController();
+
+    const detect = async () => {
+      setDetecting(true);
+      setDetectResult(null);
+      try {
+        const fd = new FormData();
+        fd.append('file', imageFile);
+
+        // 1. /auto-detect → reliable category (type) + color
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`,
+          { method: 'POST', body: fd, signal: abortController.signal },
+        );
+        const data = await res.json();
+        if (!active) return;
+
+        // 2. /detect → specific yolo_type for a more specific name
+        let yoloType = '';
+        try {
+          const fd2 = new FormData();
+          fd2.append('file', imageFile);
+          const detRes = await fetch(
+            `${process.env.NEXT_PUBLIC_YOLO_API_URL}/detect`,
+            { method: 'POST', body: fd2, signal: abortController.signal },
+          );
+          const detData = await detRes.json();
+          if (active) {
+            yoloType = detData.items?.[0]?.yolo_type || '';
+          }
+        } catch {
+          /* /detect is supplementary — ignore failure */
+        }
+
+        const cap = (s: string) =>
+          s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const title = (s: string) => s.split(' ').map(cap).join(' ');
+
+        const detectedType = data.type || '';
+        const detectedColor = data.color || '';
+        const confidence = data.confidence || 0;
+        const specificName = yoloType || detectedType;
+        const desc = title(specificName);
+
+        if (detectedType) {
+          setField({ type: detectedType });
+          const seasonGuess = detectSeason(specificName, detectedType);
+          if (seasonGuess) setField({ season: seasonGuess });
+        }
+
+        if (detectedColor) {
+          setField({ color: detectedColor });
+        }
+
+        const label = [detectedColor, specificName]
+          .filter(Boolean)
+          .map(title)
+          .join(' ');
+        if (label) setField({ name: label });
+
+        if (desc) {
+          setDetectResult({
+            type: desc,
+            confidence,
+            color: detectedColor || null,
+          });
+          setTimeout(() => {
+            if (active) setDetectResult(null);
+          }, 4000);
+        }
+      } catch (e: any) {
+        if (e.name !== 'AbortError') {
+          console.error('Auto-detect failed:', e);
+        }
+      } finally {
+        if (active) setDetecting(false);
+      }
+    };
+    detect();
+    return () => {
+      active = false;
+      abortController.abort();
+    };
+  }, [imageFile]);
+
+  // Clean up blob URLs
   useEffect(() => {
     return () => {
       if (imagePreview) URL.revokeObjectURL(imagePreview);
@@ -80,90 +209,85 @@ export default function UploadClothesPage() {
 
   const handleImageChange = (file: File | null) => {
     setImageFile(file);
-
     if (imagePreview) URL.revokeObjectURL(imagePreview);
-
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setImagePreview(url);
-    } else {
-      setImagePreview(null);
-    }
+    setImagePreview(file ? URL.createObjectURL(file) : null);
   };
+
+  const errorMsg = cam.cameraError || formError;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!session?.user?.id) {
-      setErrorMsg("You must be logged in.");
+      setFormError('You must be logged in.');
       return;
     }
     if (!imageFile) {
-      setErrorMsg("Please select an image.");
+      setFormError('Please select an image.');
       return;
     }
-    if (!name.trim()) {
-      setErrorMsg("Please enter a name.");
+    if (!fields.name.trim()) {
+      setFormError('Please enter a name.');
       return;
     }
 
     setIsUploading(true);
-    setErrorMsg("");
+    setFormError('');
 
     try {
-      // 1. Upload image
+      const compressed = await compressImage(imageFile);
       const formData = new FormData();
-      formData.append("file", imageFile);
+      formData.append('file', compressed);
 
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
         body: formData,
       });
-
       const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        throw new Error(uploadData.error || "Upload failed");
-      }
-
+      if (!uploadRes.ok) throw new Error(uploadData.error || 'Upload failed');
       const imageUrl = uploadData.url;
 
-      // 2. Save clothing data
-      const saveRes = await fetch("/api/clothes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const saveRes = await fetch('/api/clothes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: session.user.id,
-          name,
-          type,
-          color,
-          season: season || null,
-          size: size || null,
-          brand: brand || null,
-          price: price === "" ? null : Number(price),
-          material: material || null,
+          name: fields.name,
+          type: fields.type,
+          color: fields.color,
+          season: fields.season || null,
+          size: fields.size || null,
+          brand: fields.brand || null,
+          price: fields.price === '' ? null : Number(fields.price),
+          material: fields.material || null,
           favorite: false,
           image_url: imageUrl,
-          categories: null,
-          description: description || null,
-          purchase_date: purchaseDate || null,
-          location: location || null,
-          notes: notes || null,
+          description: fields.description || null,
+          purchase_date: fields.purchaseDate || null,
+          location: fields.location || null,
+          notes: fields.notes || null,
         }),
       });
-
       if (!saveRes.ok) {
         const err = await saveRes.json();
-        throw new Error(err.error || "Failed to save clothing");
+        throw new Error(err.error || 'Failed to save clothing');
       }
-
-      router.push("/wardrobe");
+      router.push('/wardrobe');
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Something went wrong");
+      setFormError(err.message || 'Something went wrong');
     } finally {
       setIsUploading(false);
     }
   };
+
+  const upd =
+    (key: keyof FormFields) =>
+    (
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >,
+    ) =>
+      setField({ [key]: e.target.value });
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
@@ -182,14 +306,11 @@ export default function UploadClothesPage() {
         </p>
       )}
 
-      {/* Layout: left = image + main info, right = details */}
       <form
         onSubmit={handleSubmit}
         className="grid gap-8 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)]"
       >
-        {/* LEFT */}
         <div className="space-y-4 h-full">
-          {/* hidden file input */}
           <input
             id="imageUpload"
             type="file"
@@ -198,19 +319,71 @@ export default function UploadClothesPage() {
             onChange={(e) => handleImageChange(e.target.files?.[0] || null)}
           />
 
+          <button
+            type="button"
+            onClick={cam.startCamera}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm hover:bg-slate-50 w-full"
+          >
+            📷 Take Photo
+          </button>
+
           <div className="relative rounded-3xl overflow-hidden shadow-sm bg-white">
-            {/* Clickable image upload / preview area */}
             <label
               htmlFor="imageUpload"
-              className="w-full h-100 bg-slate-100 rounded-b-none overflow-hidden cursor-pointer 
-                         border-b border-slate-200 hover:bg-slate-200 transition flex items-center justify-center"
+              className="w-full h-100 bg-slate-100 rounded-b-none overflow-hidden cursor-pointer
+                border-b border-slate-200 hover:bg-slate-200 transition flex items-center justify-center"
             >
               {imagePreview ? (
-                <img
-                  src={imagePreview}
-                  alt={name || "Clothing preview"}
-                  className="w-full h-full object-cover"
-                />
+                <div className="relative w-full h-full">
+                  <img
+                    src={imagePreview}
+                    alt={fields.name || 'Clothing preview'}
+                    className="w-full h-full object-cover"
+                  />
+                  {detecting && (
+                    <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-white/90 text-xs text-slate-600 px-2.5 py-1.5 rounded-full z-10 shadow-sm backdrop-blur-sm">
+                      <span className="relative flex w-1.5 h-1.5">
+                        <span className="absolute inline-flex w-full h-full rounded-full bg-slate-400 opacity-75 animate-ping" />
+                        <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-slate-500" />
+                      </span>
+                      <span className="tracking-wider font-medium">
+                        Detecting
+                      </span>
+                    </div>
+                  )}
+                  {detectResult && (
+                    <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-white/90 text-xs text-slate-600 px-2.5 py-1.5 rounded-full z-10 shadow-sm backdrop-blur-sm animate-in fade-in slide-in-from-top-1 duration-300">
+                      <span className="text-amber-500 text-[10px]">✦</span>
+                      <span className="font-medium">{detectResult.type}</span>
+                      <span
+                        className={`font-mono tabular-nums ${
+                          detectResult.confidence >= 0.8
+                            ? 'text-emerald-600'
+                            : detectResult.confidence >= 0.6
+                              ? 'text-amber-600'
+                              : 'text-red-500'
+                        }`}
+                      >
+                        {Math.round(detectResult.confidence * 100)}%
+                      </span>
+                      {detectResult.color && (
+                        <>
+                          <span className="text-slate-300">|</span>
+                          <span>{detectResult.color}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {detectResult && (
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 pt-1 px-1 animate-in fade-in duration-300">
+                      <span className="text-amber-400">✦</span>
+                      <span>
+                        AI detected at{' '}
+                        {Math.round(detectResult.confidence * 100)}% confidence
+                      </span>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="text-center text-slate-400">
                   <svg
@@ -229,35 +402,35 @@ export default function UploadClothesPage() {
                   </svg>
                   <p className="text-sm font-medium">Click to upload image</p>
                   <p className="text-xs">JPG, PNG, up to 10MB</p>
+                  <p className="text-[10px] text-slate-300 mt-1">
+                    ✦ AI will detect type & color
+                  </p>
                 </div>
               )}
             </label>
 
             <div className="p-4 space-y-3">
-              {/* Name */}
               <div>
                 <label className="block text-xs text-slate-600 mb-1">
                   Name
                 </label>
                 <input
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={fields.name}
+                  onChange={upd('name')}
                   className={inputBase}
                   placeholder="e.g. White T-Shirt"
                   required
                 />
               </div>
-
-              {/* Type + Color */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-visible">
                 <div>
                   <label className="block text-xs text-slate-600 mb-1">
                     Type
                   </label>
                   <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
+                    value={fields.type}
+                    onChange={upd('type')}
                     className={`${inputBase} relative z-10 appearance-auto`}
                     required
                   >
@@ -269,15 +442,14 @@ export default function UploadClothesPage() {
                     ))}
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs text-slate-600 mb-1">
                     Color
                   </label>
                   <input
                     type="text"
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
+                    value={fields.color}
+                    onChange={upd('color')}
                     className={inputBase}
                     placeholder="e.g. Black"
                   />
@@ -287,7 +459,6 @@ export default function UploadClothesPage() {
           </div>
         </div>
 
-        {/* RIGHT – Details */}
         <div className="bg-white rounded-3xl p-6 shadow-md space-y-6">
           <div>
             <h2 className="text-lg font-semibold">Details</h2>
@@ -295,16 +466,14 @@ export default function UploadClothesPage() {
               Add more information so you can filter and find this piece later.
             </p>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Season */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">
                 Season
               </label>
               <select
-                value={season}
-                onChange={(e) => setSeason(e.target.value)}
+                value={fields.season}
+                onChange={upd('season')}
                 className={inputBase}
               >
                 <option value="">Select season...</option>
@@ -315,13 +484,11 @@ export default function UploadClothesPage() {
                 ))}
               </select>
             </div>
-
-            {/* Size */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">Size</label>
               <select
-                value={size}
-                onChange={(e) => setSize(e.target.value)}
+                value={fields.size}
+                onChange={upd('size')}
                 className={inputBase}
               >
                 <option value="">Select size...</option>
@@ -332,127 +499,241 @@ export default function UploadClothesPage() {
                 ))}
               </select>
             </div>
-
-            {/* Brand */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">Brand</label>
-              <input
-                type="text"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                className={inputBase}
-                placeholder="e.g. Uniqlo"
-              />
+              {customBrand ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={fields.brand}
+                    onChange={upd('brand')}
+                    className={inputBase}
+                    placeholder="Type brand name..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setField({ brand: '' });
+                      setCustomBrand(false);
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-700"
+                  >
+                    ← Pick from saved brands
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={fields.brand}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setCustomBrand(true);
+                      setField({ brand: '' });
+                    } else setField({ brand: e.target.value });
+                  }}
+                  className={inputBase}
+                >
+                  <option value="">Select brand...</option>
+                  {brandSuggestions.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                  <option value="__custom__">+ Add new brand</option>
+                </select>
+              )}
             </div>
-
-            {/* Price */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">Price</label>
               <input
                 type="number"
                 min={0}
                 step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                value={fields.price}
+                onChange={upd('price')}
                 className={inputBase}
                 placeholder="0.00"
               />
             </div>
-
-            {/* Material */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">
                 Material
               </label>
-              <select
-                value={material}
-                onChange={(e) => setMaterial(e.target.value)}
-                className={inputBase}
-              >
-                <option value="">Select material...</option>
-                {MATERIALS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+              {customMaterial ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={fields.material}
+                    onChange={upd('material')}
+                    className={inputBase}
+                    placeholder="Type material name..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setField({ material: '' });
+                      setCustomMaterial(false);
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-700"
+                  >
+                    ← Pick from saved materials
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={fields.material}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setCustomMaterial(true);
+                      setField({ material: '' });
+                    } else setField({ material: e.target.value });
+                  }}
+                  className={inputBase}
+                >
+                  <option value="">Select material...</option>
+                  {MATERIALS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  {materialSuggestions
+                    .filter((m) => !MATERIALS.includes(m))
+                    .map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  <option value="__custom__">+ Add new material</option>
+                </select>
+              )}
             </div>
-
-            {/* Purchase date */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">
                 Purchase date
               </label>
               <input
                 type="date"
-                value={purchaseDate}
-                onChange={(e) => setPurchaseDate(e.target.value)}
+                value={fields.purchaseDate}
+                onChange={upd('purchaseDate')}
                 className={inputBase}
               />
             </div>
-
-            {/* Location */}
             <div className="md:col-span-2">
               <label className="block text-xs text-slate-600 mb-1">
                 Location
               </label>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className={inputBase}
-                placeholder="e.g. Wardrobe A, Drawer 2"
-              />
+              {customLocation ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={fields.location}
+                    onChange={upd('location')}
+                    className={inputBase}
+                    placeholder="e.g. Wardrobe A, Drawer 2"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setField({ location: '' });
+                      setCustomLocation(false);
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-700"
+                  >
+                    ← Pick from saved locations
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={fields.location}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setCustomLocation(true);
+                      setField({ location: '' });
+                    } else setField({ location: e.target.value });
+                  }}
+                  className={inputBase}
+                >
+                  <option value="">Select location...</option>
+                  {locationSuggestions.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                  <option value="__custom__">+ Add new location</option>
+                </select>
+              )}
             </div>
           </div>
-
-          {/* Divider */}
           <hr className="border-slate-200" />
-
-          {/* Description */}
           <div>
             <label className="block text-xs text-slate-600 mb-1">
               Description
             </label>
             <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              value={fields.description}
+              onChange={upd('description')}
               className={`${inputBase} min-h-[80px]`}
               placeholder="Extra details about this piece..."
             />
           </div>
-
-          {/* Notes */}
           <div>
             <label className="block text-xs text-slate-600 mb-1">Notes</label>
             <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              value={fields.notes}
+              onChange={upd('notes')}
               className={`${inputBase} min-h-[80px]`}
               placeholder="Care instructions, outfit ideas, where you wore it..."
             />
           </div>
-
-          {/* ACTIONS */}
           <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-end">
             <button
               type="button"
-              onClick={() => router.push("/wardrobe")}
+              onClick={() => router.push('/wardrobe')}
               className="px-6 py-3 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
-
             <button
               type="submit"
               disabled={isUploading}
               className="px-6 py-3 rounded-lg bg-black text-white hover:bg-slate-800 disabled:opacity-60"
             >
-              {isUploading ? "Uploading..." : "Save clothing"}
+              {isUploading ? 'Uploading...' : 'Save clothing'}
             </button>
           </div>
         </div>
       </form>
+
+      <CameraViewfinder
+        cameraMode={cam.cameraMode}
+        capturedFrame={cam.capturedFrame}
+        scanning={cam.scanning}
+        flash={cam.flash}
+        readiness={cam.readiness}
+        stablePct={cam.stablePct}
+        countdownDisplay={cam.countdownDisplay}
+        itemCount={cam.itemCount}
+        capturing={cam.capturing}
+        videoRef={cam.videoRef}
+        canvasOverlayRef={cam.canvasOverlayRef}
+        onStopCamera={cam.stopCamera}
+        onCapture={cam.handleCapture}
+      />
+
+      <EditItemsModal
+        capturedFrame={cam.capturedFrame}
+        editItems={cam.editItems}
+        categories={categories}
+        saving={cam.saving}
+        savingPhase={cam.savingPhase}
+        editCanvasRef={cam.editCanvasRef}
+        onStopCamera={cam.stopCamera}
+        onRetake={cam.handleRetake}
+        onSave={() => session?.user?.id && cam.handleSave(session.user.id)}
+        onEditItemsChange={cam.setEditItems}
+      />
     </div>
   );
 }

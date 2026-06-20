@@ -58,11 +58,20 @@ export async function POST(req: Request) {
       worn_at: date,
     }));
 
-    // Insert wear logs - ignore duplicates (same item worn same day)
-    await supabase.from('wear_logs').upsert(wearLogRows, {
-      onConflict: 'user_id,cloth_id,worn_at',
-      ignoreDuplicates: true,
-    });
+    const { error: wearLogError } = await supabase
+      .from('wear_logs')
+      .upsert(wearLogRows, {
+        onConflict: 'user_id,cloth_id,worn_at',
+        ignoreDuplicates: true,
+      });
+
+    if (wearLogError) {
+      console.error('Failed to insert wear logs:', wearLogError);
+    } else {
+      const origin = new URL(req.url).origin;
+      fetch(`${origin}/api/clothes/score-unused`, { method: 'POST' })
+        .catch((err: Error) => console.error('score-unused trigger failed:', err));
+    }
   }
 
   return NextResponse.json({ success: true });

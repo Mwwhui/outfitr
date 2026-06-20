@@ -23,6 +23,7 @@ export interface Pledge {
   rejection_reason: string | null;
   qr_token: string | null;
   created_at: string;
+  fulfilled_at?: string | null;
   user: PledgeUser | null;
   items: PledgeItem[];
 }
@@ -72,9 +73,16 @@ export default function PledgeCard({ pledge, onAccept, onReject, onFulfill }: Pr
             {pledge.status}
           </span>
         </div>
-        <span className="text-xs text-gray-400">
-          {new Date(pledge.created_at).toLocaleDateString()}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">
+            {new Date(pledge.created_at).toLocaleDateString()}
+          </span>
+          {pledge.status === 'fulfilled' && pledge.fulfilled_at && (
+            <span className="text-xs text-blue-500 font-medium">
+              ✓ {new Date(pledge.fulfilled_at).toLocaleDateString()}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mb-3">

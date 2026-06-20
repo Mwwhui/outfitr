@@ -16,6 +16,7 @@
     "@fullcalendar/daygrid": "^6.1.20",
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/react": "^6.1.20",
+    "@imgly/background-removal": "^1.7.0",
     "@supabase/supabase-js": "^2.78.0",
     "@vis.gl/react-google-maps": "^1.8.3",
     "@yudiel/react-qr-scanner": "^2.6.0",
@@ -31,6 +32,7 @@
     "react-email": "^6.6.0",
     "react-hot-toast": "^2.6.0",
     "react-leaflet": "^5.0.0",
+    "recharts": "^3.8.1",
     "resend": "^6.12.4"
   },
   "devDependencies": {
