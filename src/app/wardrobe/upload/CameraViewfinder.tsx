@@ -1,7 +1,7 @@
 "use client";
 
 import { RefObject } from "react";
-import { OverlayBox, COUNTDOWN_SECONDS } from "./upload-utils";
+import { COUNTDOWN_SECONDS } from "./upload-utils";
 
 interface Props {
   cameraMode: boolean;
@@ -11,7 +11,7 @@ interface Props {
   readiness: string | null;
   stablePct: number;
   countdownDisplay: number | null;
-  overlayBoxes: OverlayBox[] | null;
+  itemCount: number;
   capturing: boolean;
   videoRef: RefObject<HTMLVideoElement | null>;
   canvasOverlayRef: RefObject<HTMLCanvasElement | null>;
@@ -21,7 +21,7 @@ interface Props {
 
 export default function CameraViewfinder({
   cameraMode, capturedFrame, scanning, flash, readiness, stablePct,
-  countdownDisplay, overlayBoxes, capturing,
+  countdownDisplay, itemCount, capturing,
   videoRef, canvasOverlayRef, onStopCamera, onCapture,
 }: Props) {
   if (!cameraMode) return null;
@@ -35,6 +35,12 @@ export default function CameraViewfinder({
           className="w-full h-full object-contain" />
         <canvas ref={canvasOverlayRef}
           className="absolute inset-0 w-full h-full pointer-events-none" />
+
+        {scanning && !countdownDisplay && itemCount === 0 && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-black/50 text-white text-[11px] px-4 py-2 rounded-full whitespace-nowrap">
+            Point camera at clothing
+          </div>
+        )}
 
         {scanning && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
@@ -57,9 +63,9 @@ export default function CameraViewfinder({
           </div>
         )}
 
-        {overlayBoxes && overlayBoxes.length > 0 && (
+        {itemCount > 0 && (
           <div className="absolute top-3 right-3 bg-black/50 text-white text-[10px] px-2 py-1 rounded-full">
-            {overlayBoxes.length} item{overlayBoxes.length !== 1 ? "s" : ""}
+            {itemCount} item{itemCount !== 1 ? "s" : ""}
           </div>
         )}
 

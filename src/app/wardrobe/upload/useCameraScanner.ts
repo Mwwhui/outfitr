@@ -31,7 +31,7 @@ export interface CameraScannerReturn {
   cameraMode: boolean;
   scanning: boolean;
   capturedFrame: Blob | null;
-  overlayBoxes: OverlayBox[] | null;
+  itemCount: number;
   editItems: EditItem[] | null;
   countdownDisplay: number | null;
   flash: boolean;
@@ -57,8 +57,8 @@ export function useCameraScanner(): CameraScannerReturn {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [scanning, setScanning] = useState(false);
   const [capturedFrame, setCapturedFrame] = useState<Blob | null>(null);
-  const [overlayBoxes, setOverlayBoxes] = useState<OverlayBox[] | null>(null);
   const [editItems, setEditItems] = useState<EditItem[] | null>(null);
+  const [itemCount, setItemCount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [savingPhase, setSavingPhase] = useState<'removing-bg' | 'uploading' | null>(null);
   const [capturing, setCapturing] = useState(false);
@@ -87,6 +87,9 @@ export function useCameraScanner(): CameraScannerReturn {
     null,
   );
   const prevOverlayKeyRef = useRef<string>('');
+  const targetBoxesRef = useRef<OverlayBox[] | null>(null);
+  const smoothBoxesRef = useRef<OverlayBox[] | null>(null);
+  const prevItemCountRef = useRef(0);
 
   const [stablePct, setStablePct] = useState(0);
 
@@ -119,23 +122,58 @@ export function useCameraScanner(): CameraScannerReturn {
     videoRef.current.play().catch(() => {});
   }, [cameraStream]);
 
-  // Bounding box overlay on live video
+  // Bounding box overlay with smooth rAF interpolation
   useEffect(() => {
     const canvas = canvasOverlayRef.current;
     const video = videoRef.current;
-    if (!canvas || !video || !cameraMode || !overlayBoxes?.length) {
+    if (!canvas || !video || !cameraMode) {
       if (canvas)
         canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
-    const ctx = canvas.getContext('2d')!;
-    canvas.width = video.clientWidth;
-    canvas.height = video.clientHeight;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const sx = canvas.width / (video.videoWidth || 1);
-    const sy = canvas.height / (video.videoHeight || 1);
-    drawBoundingBoxes(ctx, overlayBoxes, sx, sy);
-  }, [overlayBoxes, cameraMode]);
+    const LERP_SPEED = 0.15;
+    let animFrame: number;
+    const render = () => {
+      const target = targetBoxesRef.current;
+      if (!target?.length) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        smoothBoxesRef.current = null;
+      } else {
+        const current = smoothBoxesRef.current;
+        if (!current || current.length !== target.length) {
+          smoothBoxesRef.current = target.map(t => ({ ...t }));
+        } else {
+          smoothBoxesRef.current = current.map((cb, i) => {
+            const tb = target[i];
+            if (!tb) return cb;
+            return {
+              box: [
+                cb.box[0] + (tb.box[0] - cb.box[0]) * LERP_SPEED,
+                cb.box[1] + (tb.box[1] - cb.box[1]) * LERP_SPEED,
+                cb.box[2] + (tb.box[2] - cb.box[2]) * LERP_SPEED,
+                cb.box[3] + (tb.box[3] - cb.box[3]) * LERP_SPEED,
+              ] as [number, number, number, number],
+              label: tb.label,
+            };
+          });
+        }
+        const ctx = canvas.getContext('2d')!;
+        canvas.width = video.clientWidth;
+        canvas.height = video.clientHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const boxes = smoothBoxesRef.current;
+        if (boxes?.length) {
+          const sx = canvas.width / (video.videoWidth || 1);
+          const sy = canvas.height / (video.videoHeight || 1);
+          drawBoundingBoxes(ctx, boxes, sx, sy);
+        }
+      }
+      animFrame = requestAnimationFrame(render);
+    };
+    animFrame = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animFrame);
+  }, [cameraMode]);
 
   // Draw captured image + bounding boxes on edit modal canvas
   useEffect(() => {
@@ -217,6 +255,10 @@ export function useCameraScanner(): CameraScannerReturn {
 
     const poll = async () => {
       if (!active) return;
+      if (countdownRef.current > 0) {
+        schedule(POLL_BASE);
+        return;
+      }
       const video = videoRef.current!;
       if (video.readyState < 2) {
         schedule(POLL_BASE);
@@ -271,7 +313,11 @@ export function useCameraScanner(): CameraScannerReturn {
         const key = JSON.stringify(newBoxes);
         if (key !== prevOverlayKeyRef.current) {
           prevOverlayKeyRef.current = key;
-          setOverlayBoxes(newBoxes);
+          targetBoxesRef.current = newBoxes;
+          if (newBoxes.length !== prevItemCountRef.current) {
+            prevItemCountRef.current = newBoxes.length;
+            setItemCount(newBoxes.length);
+          }
         }
         lastFrameRef.current = fullCanvas;
         lastDetectionsRef.current = scaledItems;
@@ -279,7 +325,12 @@ export function useCameraScanner(): CameraScannerReturn {
         resolveReadiness(scaledItems, fullCanvas);
         schedule(POLL_BASE);
       } else if (active) {
-        setOverlayBoxes(null);
+        targetBoxesRef.current = null;
+        smoothBoxesRef.current = null;
+        if (prevItemCountRef.current !== 0) {
+          prevItemCountRef.current = 0;
+          setItemCount(0);
+        }
         resetCountdownState();
         noItemCycles++;
         schedule(noItemCycles > 3 ? POLL_BACKOFF_EMPTY : POLL_BASE);
@@ -405,7 +456,6 @@ export function useCameraScanner(): CameraScannerReturn {
 
   const resetState = () => {
     setCapturedFrame(null);
-    setOverlayBoxes(null);
     setEditItems(null);
     setSaving(false);
     setSavingPhase(null);
@@ -418,6 +468,8 @@ export function useCameraScanner(): CameraScannerReturn {
     prevFrameRef.current = null;
     pollAttemptRef.current = 0;
     prevOverlayKeyRef.current = '';
+    targetBoxesRef.current = null;
+    smoothBoxesRef.current = null;
   };
 
   const startCamera = useCallback(async () => {
@@ -631,7 +683,7 @@ export function useCameraScanner(): CameraScannerReturn {
     cameraMode,
     scanning,
     capturedFrame,
-    overlayBoxes,
+    itemCount,
     editItems,
     countdownDisplay,
     flash,

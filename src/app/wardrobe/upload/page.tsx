@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useReducer } from "react";
+import { useState, useEffect, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Category, SEASONS, SIZES, MATERIALS,
-  inputBase, compressImage, dominantColorFromFile, detectSeason,
+  inputBase, compressImage, detectSeason,
 } from "./upload-utils";
 import { useCameraScanner } from "./useCameraScanner";
 import CameraViewfinder from "./CameraViewfinder";
@@ -75,6 +75,7 @@ export default function UploadClothesPage() {
     useSuggestions(session?.user?.id);
 
   const cam = useCameraScanner();
+  const fileKeyRef = useRef("");
 
   // Fetch categories on mount
   useEffect(() => {
@@ -87,7 +88,12 @@ export default function UploadClothesPage() {
   // Auto-detect for file upload
   useEffect(() => {
     if (!imageFile) return;
-    let dismissTimer: ReturnType<typeof setTimeout>;
+    const key = `${imageFile.name}|${imageFile.size}|${imageFile.lastModified}`;
+    if (key === fileKeyRef.current) return;
+    fileKeyRef.current = key;
+    let active = true;
+    const abortController = new AbortController();
+
     const detect = async () => {
       setDetecting(true);
       setDetectResult(null);
@@ -95,38 +101,56 @@ export default function UploadClothesPage() {
         const fd = new FormData();
         fd.append("file", imageFile);
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_YOLO_API_URL}/detect`,
-          { method: "POST", body: fd },
+          `${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`,
+          { method: "POST", body: fd, signal: abortController.signal },
         );
         const data = await res.json();
-        const item = data.items?.[0];
+        if (!active) return;
+
         const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
         const title = (s: string) => s.split(" ").map(cap).join(" ");
-        if (item?.type) setField({ type: item.type });
-        const box = item?.box as [number, number, number, number] | undefined;
-        const dominantColor = await dominantColorFromFile(imageFile, box);
-        if (dominantColor) setField({ color: dominantColor });
-        const desc = item?.yolo_type || item?.type;
-        const label = [dominantColor, desc].filter(Boolean).map(title).join(" ");
+
+        const detectedType = data.type || "";
+        const detectedColor = data.color || "";
+        const confidence = data.confidence || 0;
+        const desc = title(detectedType);
+
+        if (detectedType) {
+          setField({ type: detectedType });
+          const seasonGuess = detectSeason(detectedType);
+          if (seasonGuess) setField({ season: seasonGuess });
+        }
+
+        if (detectedColor) {
+          setField({ color: detectedColor });
+        }
+
+        const label = [detectedColor, detectedType].filter(Boolean).map(title).join(" ");
         if (label) setField({ name: label });
-        const seasonGuess = detectSeason(item?.yolo_type, item?.type);
-        if (seasonGuess) setField({ season: seasonGuess });
+
         if (desc) {
           setDetectResult({
-            type: title(desc),
-            confidence: item.confidence,
-            color: dominantColor,
+            type: desc,
+            confidence,
+            color: detectedColor || null,
           });
-          dismissTimer = setTimeout(() => setDetectResult(null), 4000);
+          setTimeout(() => {
+            if (active) setDetectResult(null);
+          }, 4000);
         }
-      } catch (e) {
-        console.error("Auto-detect failed:", e);
+      } catch (e: any) {
+        if (e.name !== "AbortError") {
+          console.error("Auto-detect failed:", e);
+        }
       } finally {
-        setDetecting(false);
+        if (active) setDetecting(false);
       }
     };
     detect();
-    return () => clearTimeout(dismissTimer);
+    return () => {
+      active = false;
+      abortController.abort();
+    };
   }, [imageFile]);
 
   // Clean up blob URLs
@@ -421,7 +445,7 @@ export default function UploadClothesPage() {
         readiness={cam.readiness}
         stablePct={cam.stablePct}
         countdownDisplay={cam.countdownDisplay}
-        overlayBoxes={cam.overlayBoxes}
+        itemCount={cam.itemCount}
         capturing={cam.capturing}
         videoRef={cam.videoRef}
         canvasOverlayRef={cam.canvasOverlayRef}
