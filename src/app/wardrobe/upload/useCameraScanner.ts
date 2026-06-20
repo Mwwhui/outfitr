@@ -539,6 +539,21 @@ export function useCameraScanner(): CameraScannerReturn {
 
     const fullFrameBlob = await canvasToBlob(canvas, 0.85);
 
+    // Supplement with /auto-detect for reliable category + color
+    let autoType = "";
+    let autoColor = "";
+    try {
+      const fd = new FormData();
+      fd.append("file", new File([fullFrameBlob], "capture.jpg", { type: "image/jpeg" }));
+      const autoRes = await fetch(
+        `${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`,
+        { method: "POST", body: fd },
+      );
+      const autoData = await autoRes.json();
+      autoType = autoData.type || "";
+      autoColor = autoData.color || "";
+    } catch { /* /auto-detect is supplementary — ignore failure */ }
+
     const cap = (s: string) =>
       s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
     const title = (s: string) => s.split(' ').map(cap).join(' ');
@@ -546,7 +561,7 @@ export function useCameraScanner(): CameraScannerReturn {
     const initialItems: EditItem[] = scaledItems.map((item, idx) => ({
       id: idx,
       name: item.yolo_type || item.type || '',
-      type: item.type || item.yolo_type || '',
+      type: autoType || item.type || item.yolo_type || '',
       color: '',
       season: '',
       confidence: item.confidence,
@@ -571,9 +586,11 @@ export function useCameraScanner(): CameraScannerReturn {
 
     // Color/season analysis from canvas (no image re-load needed)
     const filledItems: EditItem[] = scaledItems.map((item, idx) => {
-      const color = dominantColorFromCanvas(canvas, item.box);
-      const seasonGuess = detectSeason(item.yolo_type, item.type);
-      const desc = item.yolo_type || item.type || '';
+      const perItemColor = dominantColorFromCanvas(canvas, item.box);
+      const color = autoColor || perItemColor;
+      const type = initialItems[idx].type;
+      const seasonGuess = detectSeason(item.yolo_type, type);
+      const desc = item.yolo_type || type || '';
       const itemName = [color, desc]
         .filter((s): s is string => !!s)
         .map(title)
@@ -581,6 +598,7 @@ export function useCameraScanner(): CameraScannerReturn {
       return {
         ...initialItems[idx],
         name: itemName,
+        type,
         color: color || '',
         season: seasonGuess || '',
       };
