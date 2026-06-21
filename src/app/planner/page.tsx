@@ -625,16 +625,16 @@ export default function PlannerPage() {
           <div className="flex justify-end gap-2">
             <button
               onClick={() => setShowSuggestions(true)}
-              className="text-sm px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#0f172a] to-[#163422]
+              className="shimmer-btn text-sm px-5 py-2.5 rounded-xl bg-gradient-to-r from-zinc-800 via-zinc-900 to-black
                          text-white font-semibold shadow-md hover:shadow-lg
                          hover:scale-105 active:scale-95
                          transition-all duration-200 ease-out
                          flex items-center gap-1.5"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="w-4 h-4 relative z-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
-              Suggest
+              <span className="relative z-10">Suggest</span>
             </button>
             <Button size="md" onClick={handleSaveOutfit}>
               {timeSlot === 'day' ? 'Save Day' : 'Save Night'}
