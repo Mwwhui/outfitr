@@ -27,7 +27,47 @@ export async function POST(req: Request) {
     );
   }
 
-  // upsert: Insert if it doesn’t exist, update if it does
+  // Fetch existing plan for this date+timeSlot to detect replaced items
+  const { data: existingPlan } = await supabase
+    .from('outfit_plans')
+    .select('slots')
+    .eq('user_id', userId)
+    .eq('date', date)
+    .eq('time_slot', timeSlot)
+    .maybeSingle();
+
+  const oldItemIds: string[] = [];
+  if (existingPlan?.slots) {
+    const ids: string[] = Object.values(existingPlan.slots)
+      .filter(
+        (item): item is { id: string } =>
+          item !== null && typeof item === 'object' && 'id' in item,
+      )
+      .map((item) => item.id);
+    oldItemIds.push(...ids);
+  }
+
+  // Delete wear_logs for items no longer in the outfit (replaced items)
+  if (oldItemIds.length > 0) {
+    const newItemIds: string[] = Object.values(slots)
+      .filter(
+        (item): item is { id: string } =>
+          item !== null && typeof item === 'object' && 'id' in item,
+      )
+      .map((item) => item.id);
+
+    const removedIds = oldItemIds.filter((id) => !newItemIds.includes(id));
+    if (removedIds.length > 0) {
+      await supabase
+        .from('wear_logs')
+        .delete()
+        .eq('user_id', userId)
+        .eq('worn_at', date)
+        .in('cloth_id', removedIds);
+    }
+  }
+
+  // Upsert the outfit plan
   const { error } = await supabase.from('outfit_plans').upsert(
     {
       user_id: userId,
@@ -52,6 +92,7 @@ export async function POST(req: Request) {
     .map((item) => item.id);
 
   if (wornItemIds.length > 0) {
+    // Insert wear_logs for new items
     const wearLogRows = wornItemIds.map((clothId) => ({
       user_id: userId,
       cloth_id: clothId,
@@ -68,9 +109,24 @@ export async function POST(req: Request) {
     if (wearLogError) {
       console.error('Failed to insert wear logs:', wearLogError);
     } else {
+      // 6. Increment wear_count directly (atomic, not fire-and-forget)
+      const { error: wearCountError } = await supabase.rpc(
+        'increment_clothes_wear_counts',
+        {
+          p_user_id: userId,
+          p_cloth_ids: wornItemIds,
+        },
+      );
+
+      if (wearCountError) {
+        console.error('Failed to increment wear counts:', wearCountError);
+      }
+
+      // Trigger score-unused in background for unused_score recalculation
       const origin = new URL(req.url).origin;
-      fetch(`${origin}/api/clothes/score-unused`, { method: 'POST' })
-        .catch((err: Error) => console.error('score-unused trigger failed:', err));
+      fetch(`${origin}/api/clothes/score-unused`, { method: 'POST' }).catch(
+        (err: Error) => console.error('score-unused trigger failed:', err),
+      );
     }
   }
 
