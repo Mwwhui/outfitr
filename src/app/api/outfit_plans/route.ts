@@ -18,7 +18,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { date, timeSlot, slots, name } = await req.json();
+  let body: { date: string; timeSlot: string; slots: unknown; name?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid or empty request body' },
+      { status: 400 },
+    );
+  }
+  const { date, timeSlot, slots, name } = body;
 
   if (!date || !timeSlot || !slots) {
     return NextResponse.json(

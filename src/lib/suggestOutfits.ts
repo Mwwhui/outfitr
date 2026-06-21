@@ -99,8 +99,8 @@ const OCCASION_DEFS: Record<
     avoid: ['blazer', 'dress_shirt', 'dress', 'loafers', 'coat', 'chinos', 'heels', 'shirt', 'boots', 'generic_outerwear', 'generic_onepiece'],
   },
   date: {
-    slots: ['top', 'bottom'],
-    preferred: ['dress_shirt', 'polo', 'dress', 'blazer', 'jeans', 'sweater', 'loafers', 'heels', 'shirt', 'jacket'],
+    slots: ['top', 'bottom', 'outerwear'],
+    preferred: ['dress_shirt', 'polo', 'dress', 'blazer', 'jeans', 'sweater', 'loafers', 'heels', 'shirt', 'jacket', 'generic_outerwear'],
     avoid: ['hoodie', 'shorts', 'sneakers', 'tshirt', 'sandals', 'tank', 'leggings', 'generic_bottom'],
   },
 };
@@ -445,14 +445,10 @@ function expandWithOnepiece(
     return combos.map((c) => ({ items: c, onepieceMode: false }));
   }
 
-  const expanded: { items: ClothingItem[]; onepieceMode: boolean }[] = [];
-  for (const combo of combos) {
-    expanded.push({ items: combo, onepieceMode: false });
-    const hasParts = combo.some((i) => i.type === 'Tops') && combo.some((i) => i.type === 'Bottoms');
-    if (hasParts) {
-      expanded.push({ items: combo, onepieceMode: true });
-    }
-  }
+  const expanded: { items: ClothingItem[]; onepieceMode: boolean }[] = combos.map((combo) => ({
+    items: combo,
+    onepieceMode: false,
+  }));
   for (const op of onepieces) {
     expanded.push({ items: [op], onepieceMode: true });
   }

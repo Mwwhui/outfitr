@@ -17,11 +17,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { weather, occasion, seedItemIds } = await req.json() as {
-    weather: WeatherData | null;
-    occasion: OccasionKey;
-    seedItemIds: string[];
-  };
+  let body: { weather: WeatherData | null; occasion: OccasionKey; seedItemIds: string[] };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid or empty request body' },
+      { status: 400 },
+    );
+  }
+  const { weather, occasion, seedItemIds } = body;
 
   const { data: clothes, error: clothesError } = await supabase
     .from('clothes')
@@ -31,7 +36,10 @@ export async function POST(req: Request) {
     .eq('status', 'available');
 
   if (clothesError || !clothes) {
-    return NextResponse.json({ error: 'Failed to fetch clothes' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch clothes' },
+      { status: 500 },
+    );
   }
 
   // Compute pair frequencies from wear_logs, grouped by (date, time_slot)
@@ -60,7 +68,13 @@ export async function POST(req: Request) {
     }
   }
 
-  const result = suggestOutfits(clothes, weather, occasion, pairFreq, seedItemIds ?? []);
+  const result = suggestOutfits(
+    clothes,
+    weather,
+    occasion,
+    pairFreq,
+    seedItemIds ?? [],
+  );
 
   return NextResponse.json(result);
 }
