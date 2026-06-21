@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import Loader from '../components/Loader';
 import OutfitSuggestionCard from '../components/OutfitSuggestionCard';
-import type { ClothingItem, SuggestedOutfit } from '@/lib/suggestOutfits';
+import type { ClothingItem, SuggestedOutfit, WeatherData } from '@/lib/suggestOutfits';
 
 type OccasionKey = 'casual' | 'business' | 'formal' | 'sport' | 'date';
 
@@ -117,7 +117,7 @@ export default function OutfitSuggestPage() {
   const searchParams = useSearchParams();
 
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
-  const [weather, setWeather] = useState<{ temperature: number; weathercode: number } | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
   const [occasion, setOccasion] = useState<OccasionKey>('casual');
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [loadingLocation, setLoadingLocation] = useState(true);
@@ -162,7 +162,7 @@ export default function OutfitSuggestPage() {
     if (!userLoc) return;
     setLoadingWeather(true);
 
-    const cached = getCachedWeather<{ temperature: number; weathercode: number }>(
+    const cached = getCachedWeather<WeatherData>(
       userLoc.lat,
       userLoc.lng,
     );
@@ -173,14 +173,19 @@ export default function OutfitSuggestPage() {
     }
 
     fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${userLoc.lat}&longitude=${userLoc.lng}&current_weather=true`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${userLoc.lat}&longitude=${userLoc.lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m`,
     )
       .then((r) => r.json())
       .then((data) => {
-        if (data?.current_weather) {
-          const w = {
-            temperature: data.current_weather.temperature,
-            weathercode: data.current_weather.weathercode ?? 0,
+        if (data?.current) {
+          const c = data.current;
+          const w: WeatherData = {
+            temperature: c.temperature_2m,
+            weathercode: c.weather_code ?? 0,
+            description: WMO_LABELS[c.weather_code] ?? 'Unknown',
+            humidity: c.relative_humidity_2m,
+            feelsLike: c.apparent_temperature,
+            windSpeed: c.wind_speed_10m,
           };
           setWeather(w);
           setCachedWeather(userLoc.lat, userLoc.lng, w);
@@ -300,7 +305,7 @@ export default function OutfitSuggestPage() {
               Getting weather...
             </div>
           ) : weather ? (
-            <>
+            <span className="group relative flex items-center gap-3 cursor-pointer">
               <span className="text-2xl">{weatherEmoji}</span>
               <div>
                 <p className="text-lg font-semibold text-slate-800">
@@ -308,7 +313,16 @@ export default function OutfitSuggestPage() {
                 </p>
                 <p className="text-xs text-slate-500">{weatherCondition}</p>
               </div>
-            </>
+              <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
+                <p className="font-medium">{weather.description}</p>
+                <p className="text-slate-300">{Math.round(weather.temperature)}°C{weather.feelsLike != null ? ` · Feels ${Math.round(weather.feelsLike)}°C` : ''}</p>
+                <p className="text-slate-300">
+                  {weather.humidity != null ? `Humidity ${weather.humidity}%` : ''}
+                  {weather.humidity != null && weather.windSpeed != null ? ' · ' : ''}
+                  {weather.windSpeed != null ? `Wind ${Math.round(weather.windSpeed)} km/h` : ''}
+                </p>
+              </div>
+            </span>
           ) : (
             <p className="text-sm text-slate-400">Weather unavailable</p>
           )}

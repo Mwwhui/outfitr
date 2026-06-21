@@ -71,6 +71,24 @@ export default function PlannerPage() {
   const [panelWeatherLoading, setPanelWeatherLoading] = useState(false);
   const weatherCache = useRef<Record<string, { data: WeatherData; ts: number }>>({});
 
+  const WMO_LABELS: Record<number, string> = {
+    0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast',
+    45: 'Foggy', 48: 'Foggy',
+    51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle',
+    61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+    71: 'Light snow', 73: 'Snow', 75: 'Heavy snow',
+    95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm',
+  };
+
+  const weatherEmoji = (code: number) => {
+    if (code === 0) return '☀️';
+    if (code <= 3) return '⛅';
+    if (code <= 48) return '🌫️';
+    if (code <= 65) return '🌧️';
+    if (code <= 75) return '❄️';
+    return '⛈️';
+  };
+
   useEffect(() => {
     const qpDate = searchParams.get('date');
     const qpTimeSlot = searchParams.get('timeSlot');
@@ -219,11 +237,19 @@ export default function PlannerPage() {
       }
     } catch { /* ignore */ }
 
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=3.0061&longitude=101.6169&current_weather=true')
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=3.0061&longitude=101.6169&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m')
       .then(r => r.json())
       .then(data => {
-        if (data?.current_weather) {
-          const w: WeatherData = { temperature: data.current_weather.temperature, weathercode: data.current_weather.weathercode ?? 0 };
+        if (data?.current) {
+          const c = data.current;
+          const w: WeatherData = {
+            temperature: c.temperature_2m,
+            weathercode: c.weather_code ?? 0,
+            description: WMO_LABELS[c.weather_code] ?? 'Unknown',
+            humidity: c.relative_humidity_2m,
+            feelsLike: c.apparent_temperature,
+            windSpeed: c.wind_speed_10m,
+          };
           setPanelWeather(w);
           weatherCache.current[cachedKey] = { data: w, ts: Date.now() };
         }
@@ -659,8 +685,17 @@ export default function PlannerPage() {
                   {panelWeatherLoading ? (
                     <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-transparent rounded-full" />
                   ) : panelWeather ? (
-                    <span className="text-sm font-medium text-slate-600">
-                      {panelWeather.weathercode === 0 ? '☀️' : panelWeather.weathercode <= 3 ? '⛅' : '🌧️'} {Math.round(panelWeather.temperature)}°C
+                    <span className="group relative text-sm font-medium text-slate-600 cursor-pointer">
+                      {weatherEmoji(panelWeather.weathercode)} {Math.round(panelWeather.temperature)}°C
+                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
+                        <p className="font-medium">{panelWeather.description}</p>
+                        <p className="text-slate-300">{Math.round(panelWeather.temperature)}°C{panelWeather.feelsLike != null ? ` · Feels ${Math.round(panelWeather.feelsLike)}°C` : ''}</p>
+                        <p className="text-slate-300">
+                          {panelWeather.humidity != null ? `Humidity ${panelWeather.humidity}%` : ''}
+                          {panelWeather.humidity != null && panelWeather.windSpeed != null ? ' · ' : ''}
+                          {panelWeather.windSpeed != null ? `Wind ${Math.round(panelWeather.windSpeed)} km/h` : ''}
+                        </p>
+                      </div>
                     </span>
                   ) : null}
                 </div>

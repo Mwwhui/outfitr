@@ -29,6 +29,10 @@ export interface SuggestedOutfit {
 export interface WeatherData {
   temperature: number;
   weathercode: number;
+  description?: string;
+  humidity?: number;
+  windSpeed?: number;
+  feelsLike?: number;
 }
 
 export type OccasionKey = 'casual' | 'business' | 'formal' | 'sport' | 'date';
