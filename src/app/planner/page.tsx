@@ -222,12 +222,15 @@ export default function PlannerPage() {
     }));
   };
 
-  // Weather fetch when panel opens
+  // Weather fetch when panel opens — forecast for selected date
   useEffect(() => {
     if (!showSuggestions) return;
     setPanelWeatherLoading(true);
 
-    const cachedKey = 'planner_weather';
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isToday = selectedDate === todayStr;
+
+    const cachedKey = `planner_weather_${selectedDate}`;
     try {
       const cached = weatherCache.current[cachedKey];
       if (cached && Date.now() - cached.ts < 30 * 60 * 1000) {
@@ -237,12 +240,23 @@ export default function PlannerPage() {
       }
     } catch { /* ignore */ }
 
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=3.0061&longitude=101.6169&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m')
+    const controller = new AbortController();
+
+    const base = 'https://api.open-meteo.com/v1/forecast?latitude=3.0061&longitude=101.6169';
+
+    const url = isToday
+      ? `${base}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m`
+      : `${base}&daily=temperature_2m_max,temperature_2m_min,weather_code,apparent_temperature_max,wind_speed_10m_max,relative_humidity_2m_mean&start_date=${selectedDate}&end_date=${selectedDate}`;
+
+    fetch(url, { signal: controller.signal })
       .then(r => r.json())
       .then(data => {
-        if (data?.current) {
+        if (controller.signal.aborted) return;
+        let w: WeatherData | null = null;
+
+        if (isToday && data?.current) {
           const c = data.current;
-          const w: WeatherData = {
+          w = {
             temperature: c.temperature_2m,
             weathercode: c.weather_code ?? 0,
             description: WMO_LABELS[c.weather_code] ?? 'Unknown',
@@ -250,13 +264,38 @@ export default function PlannerPage() {
             feelsLike: c.apparent_temperature,
             windSpeed: c.wind_speed_10m,
           };
+        } else if (!isToday && data?.daily?.time?.length > 0) {
+          const d = data.daily;
+          const i = d.time.indexOf(selectedDate);
+          if (i !== -1) {
+            w = {
+              temperature: Math.round((d.temperature_2m_max[i] + d.temperature_2m_min[i]) / 2),
+              weathercode: d.weather_code[i] ?? 0,
+              description: WMO_LABELS[d.weather_code[i]] ?? 'Unknown',
+              humidity: d.relative_humidity_2m_mean?.[i],
+              feelsLike: d.apparent_temperature_max?.[i],
+              windSpeed: d.wind_speed_10m_max?.[i],
+            };
+          }
+        }
+
+        if (w) {
           setPanelWeather(w);
           weatherCache.current[cachedKey] = { data: w, ts: Date.now() };
+        } else if (!isToday) {
+          setPanelWeather(null);
         }
-        setPanelWeatherLoading(false);
+        if (!controller.signal.aborted) setPanelWeatherLoading(false);
       })
-      .catch(() => setPanelWeatherLoading(false));
-  }, [showSuggestions]);
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          if (!isToday) setPanelWeather(null);
+          setPanelWeatherLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [showSuggestions, selectedDate]);
 
   // Compute suggestions via API when panel opens or occasion/weather/mode changes
   useEffect(() => {
