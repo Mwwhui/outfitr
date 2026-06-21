@@ -36,35 +36,33 @@ export async function POST(req: Request) {
     .eq('time_slot', timeSlot)
     .maybeSingle();
 
-  const oldItemIds: string[] = [];
+  const oldIds = new Set<string>();
   if (existingPlan?.slots) {
-    const ids: string[] = Object.values(existingPlan.slots)
-      .filter(
-        (item): item is { id: string } =>
-          item !== null && typeof item === 'object' && 'id' in item,
-      )
-      .map((item) => item.id);
-    oldItemIds.push(...ids);
+    for (const item of Object.values(existingPlan.slots)) {
+      if (item && typeof item === 'object' && 'id' in item) {
+        oldIds.add((item as { id: string }).id);
+      }
+    }
   }
 
-  // Delete wear_logs for items no longer in the outfit (replaced items)
-  if (oldItemIds.length > 0) {
-    const newItemIds: string[] = Object.values(slots)
-      .filter(
-        (item): item is { id: string } =>
-          item !== null && typeof item === 'object' && 'id' in item,
-      )
-      .map((item) => item.id);
-
-    const removedIds = oldItemIds.filter((id) => !newItemIds.includes(id));
-    if (removedIds.length > 0) {
-      await supabase
-        .from('wear_logs')
-        .delete()
-        .eq('user_id', userId)
-        .eq('worn_at', date)
-        .in('cloth_id', removedIds);
+  // Extract new item IDs
+  const newIds = new Set<string>();
+  for (const item of Object.values(slots)) {
+    if (item && typeof item === 'object' && 'id' in item) {
+      newIds.add((item as { id: string }).id);
     }
+  }
+
+  // Delete wear_logs for items removed from the outfit
+  const removedIds = [...oldIds].filter((id) => !newIds.has(id));
+  if (removedIds.length > 0) {
+    await supabase
+      .from('wear_logs')
+      .delete()
+      .eq('user_id', userId)
+      .eq('worn_at', date)
+      .eq('time_slot', timeSlot)
+      .in('cloth_id', removedIds);
   }
 
   // Upsert the outfit plan
@@ -83,46 +81,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error }, { status: 500 });
   }
 
-  // Extract worn item IDs from slots
-  const wornItemIds: string[] = Object.values(slots)
-    .filter(
-      (item): item is { id: string } =>
-        item !== null && typeof item === 'object' && 'id' in item,
-    )
-    .map((item) => item.id);
+  const newItemIds = [...newIds];
 
-  if (wornItemIds.length > 0) {
-    // Insert wear_logs for new items
-    const wearLogRows = wornItemIds.map((clothId) => ({
+  if (newItemIds.length > 0) {
+    // Insert wear_logs for new items (with time_slot for accurate pair grouping)
+    const wearLogRows = newItemIds.map((clothId) => ({
       user_id: userId,
       cloth_id: clothId,
       worn_at: date,
+      time_slot: timeSlot,
     }));
 
     const { error: wearLogError } = await supabase
       .from('wear_logs')
       .upsert(wearLogRows, {
-        onConflict: 'user_id,cloth_id,worn_at',
+        onConflict: 'user_id,cloth_id,worn_at,time_slot',
         ignoreDuplicates: true,
       });
 
     if (wearLogError) {
       console.error('Failed to insert wear logs:', wearLogError);
     } else {
-      // 6. Increment wear_count directly (atomic, not fire-and-forget)
-      const { error: wearCountError } = await supabase.rpc(
-        'increment_clothes_wear_counts',
-        {
-          p_user_id: userId,
-          p_cloth_ids: wornItemIds,
-        },
-      );
-
-      if (wearCountError) {
-        console.error('Failed to increment wear counts:', wearCountError);
+      // Only increment wear_count for items that are genuinely NEW logs
+      // (items that were already logged for this date+slot are skipped)
+      const trulyNewIds = newItemIds.filter((id) => !oldIds.has(id));
+      if (trulyNewIds.length > 0) {
+        const { error: wearCountError } = await supabase.rpc(
+          'increment_clothes_wear_counts',
+          { p_user_id: userId, p_cloth_ids: trulyNewIds },
+        );
+        if (wearCountError) {
+          console.error('Failed to increment wear counts:', wearCountError);
+        }
       }
 
-      // Trigger score-unused in background for unused_score recalculation
       const origin = new URL(req.url).origin;
       fetch(`${origin}/api/clothes/score-unused`, { method: 'POST' }).catch(
         (err: Error) => console.error('score-unused trigger failed:', err),

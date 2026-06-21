@@ -34,21 +34,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to fetch clothes' }, { status: 500 });
   }
 
-  // Compute pair frequencies from wear_logs (single source of truth)
+  // Compute pair frequencies from wear_logs, grouped by (date, time_slot)
   const { data: wearLogRows, error: logsError } = await supabase
     .from('wear_logs')
-    .select('cloth_id, worn_at')
+    .select('cloth_id, worn_at, time_slot')
     .eq('user_id', userId);
 
   const pairFreq: Record<string, number> = {};
   if (!logsError && wearLogRows) {
-    const byDate = new Map<string, string[]>();
+    const bySlot = new Map<string, string[]>();
     for (const log of wearLogRows) {
-      const arr = byDate.get(log.worn_at) ?? [];
+      const slotKey = `${log.worn_at}|${log.time_slot ?? 'day'}`;
+      const arr = bySlot.get(slotKey) ?? [];
       arr.push(log.cloth_id);
-      byDate.set(log.worn_at, arr);
+      bySlot.set(slotKey, arr);
     }
-    for (const ids of byDate.values()) {
+    for (const ids of bySlot.values()) {
       const sorted = [...ids].sort();
       for (let i = 0; i < sorted.length; i++) {
         for (let j = i + 1; j < sorted.length; j++) {
