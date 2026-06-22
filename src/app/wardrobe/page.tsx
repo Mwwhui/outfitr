@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Loader from "../components/Loader";
 import WardrobeFilters from "../components/WardrobeFilters";
 
@@ -21,10 +21,19 @@ type ClothingItem = {
   favorite?: boolean;
 };
 
+interface ClusterGroup {
+  id: number;
+  label: string;
+  color: string;
+  size: number;
+  items: { id: string; name: string; type: string; image_url: string | null; wear_count: number; price: number }[];
+}
+
 export default function WardrobePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [clothes, setClothes] = useState<ClothingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +43,8 @@ export default function WardrobePage() {
     favoritesOnly: false,
     search: "",
   });
+  const [selectedCluster, setSelectedCluster] = useState<number | null>(null);
+  const [clusterData, setClusterData] = useState<{ clusters: ClusterGroup[] } | null>(null);
 
   useEffect(() => {
     // Fetch categories on mount
@@ -60,8 +71,22 @@ export default function WardrobePage() {
 
     if (status === "authenticated") {
       fetchClothes();
+      fetch('/api/wardrobe/clusters')
+        .then(async r => {
+          const json = await r.json();
+          console.log('Clusters API:', r.status, json);
+          if (json && Array.isArray(json.clusters)) setClusterData(json);
+        })
+        .catch(err => console.error('Clusters fetch failed:', err));
     }
   }, [status]);
+
+  useEffect(() => {
+    const clusterParam = searchParams.get('cluster');
+    if (clusterParam !== null) {
+      setSelectedCluster(Number(clusterParam));
+    }
+  }, [searchParams]);
 
   const fetchClothes = async () => {
     const res = await fetch(`/api/clothes?user_id=${session?.user?.id}`);
@@ -76,7 +101,7 @@ export default function WardrobePage() {
   };
 
   const filteredClothes = useMemo(() => {
-    const filtered = clothes.filter((item) => {
+    let filtered = clothes.filter((item) => {
       if (filters.favoritesOnly && !item.favorite) return false;
       if (filters.category && item.type !== filters.category) return false;
       if (
@@ -88,6 +113,14 @@ export default function WardrobePage() {
       return true;
     });
 
+    if (selectedCluster !== null && clusterData) {
+      const cluster = clusterData.clusters.find(c => c.id === selectedCluster);
+      if (cluster) {
+        const ids = new Set(cluster.items.map(i => i.id));
+        filtered = filtered.filter(item => ids.has(item.id));
+      }
+    }
+
     // favourites first, then others
     return filtered.sort((a, b) => {
       const aFav = !!a.favorite;
@@ -95,11 +128,12 @@ export default function WardrobePage() {
       if (aFav === bFav) return 0;
       return aFav ? -1 : 1;
     });
-  }, [clothes, filters]);
+  }, [clothes, filters, selectedCluster, clusterData]);
 
   if (loading) {
     return <Loader message={"Loading your wardrobe… ✨"} />;
   }
+  console.log('Wardrobe render:', { clothes: clothes.length, clusterData, selectedCluster, loading });
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
@@ -200,6 +234,48 @@ export default function WardrobePage() {
         filters={filters}
         onChange={setFilters}
       />
+
+      {/* Cluster pill row */}
+      {clusterData?.clusters && clusterData.clusters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setSelectedCluster(null)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+              selectedCluster === null
+                ? 'bg-[#0f172a] text-white'
+                : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'
+            }`}
+          >
+            All ({clothes.length})
+          </button>
+          {clusterData.clusters.map((cluster) => {
+            const isActive = selectedCluster === cluster.id;
+            return (
+              <button
+                key={cluster.id}
+                onClick={() =>
+                  setSelectedCluster(isActive ? null : cluster.id)
+                }
+                style={{
+                  backgroundColor: isActive ? cluster.color : undefined,
+                  borderColor: cluster.color,
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                  isActive
+                    ? 'text-white'
+                    : 'bg-white border text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span
+                  style={{ backgroundColor: cluster.color }}
+                  className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle"
+                />
+                {cluster.label} ({cluster.size})
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* if wardrobe empty (after filters) */}
       {filteredClothes.length === 0 && (
