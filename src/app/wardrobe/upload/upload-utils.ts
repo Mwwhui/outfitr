@@ -167,7 +167,13 @@ export function dominantColorFromImage(
   const ctx = canvas.getContext("2d")!;
   if (box) {
     const [x1, y1, x2, y2] = box;
-    ctx.drawImage(img, x1, y1, x2 - x1, y2 - y1, 0, 0, size, size);
+    const w = x2 - x1;
+    const h = y2 - y1;
+    const safeX = x1 + w * 0.25;
+    const safeY = y1 + h * 0.25;
+    const safeW = w * 0.5;
+    const safeH = h * 0.5;
+    ctx.drawImage(img, safeX, safeY, safeW, safeH, 0, 0, size, size);
   } else {
     const crop = 0.6;
     const sx = (img.width * (1 - crop)) / 2;
@@ -200,7 +206,13 @@ export function dominantColorFromCanvas(
   const ctx = tmp.getContext("2d")!;
   if (box) {
     const [x1, y1, x2, y2] = box;
-    ctx.drawImage(canvas, x1, y1, x2 - x1, y2 - y1, 0, 0, size, size);
+    const w = x2 - x1;
+    const h = y2 - y1;
+    const safeX = x1 + w * 0.25;
+    const safeY = y1 + h * 0.25;
+    const safeW = w * 0.5;
+    const safeH = h * 0.5;
+    ctx.drawImage(canvas, safeX, safeY, safeW, safeH, 0, 0, size, size);
   } else {
     const crop = 0.6;
     const sx = (canvas.width * (1 - crop)) / 2;
@@ -283,11 +295,10 @@ export function smoothBoxes(
 
 export function checkBrightnessFromThumb(data: ImageData): boolean {
   let sum = 0;
-  const len = Math.min(data.data.length, 8 * 8 * 4); // first 8×8 pixels
-  for (let i = 0; i < len; i += 4) {
+  for (let i = 0; i < data.data.length; i += 4) {
     sum += (data.data[i] + data.data[i + 1] + data.data[i + 2]) / 3;
   }
-  const pixelCount = len / 4;
+  const pixelCount = data.data.length / 4;
   return sum / pixelCount >= BRIGHTNESS_MIN;
 }
 

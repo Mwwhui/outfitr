@@ -60,7 +60,9 @@ export function useCameraScanner(): CameraScannerReturn {
   const [editItems, setEditItems] = useState<EditItem[] | null>(null);
   const [itemCount, setItemCount] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [savingPhase, setSavingPhase] = useState<'removing-bg' | 'uploading' | null>(null);
+  const [savingPhase, setSavingPhase] = useState<
+    'removing-bg' | 'uploading' | null
+  >(null);
   const [capturing, setCapturing] = useState(false);
   const [countdownDisplay, setCountdownDisplay] = useState<number | null>(null);
   const [readiness, setReadiness] = useState<string | null>(null);
@@ -142,7 +144,7 @@ export function useCameraScanner(): CameraScannerReturn {
       } else {
         const current = smoothBoxesRef.current;
         if (!current || current.length !== target.length) {
-          smoothBoxesRef.current = target.map(t => ({ ...t }));
+          smoothBoxesRef.current = target.map((t) => ({ ...t }));
         } else {
           smoothBoxesRef.current = current.map((cb, i) => {
             const tb = target[i];
@@ -540,19 +542,24 @@ export function useCameraScanner(): CameraScannerReturn {
     const fullFrameBlob = await canvasToBlob(canvas, 0.85);
 
     // Supplement with /auto-detect for reliable category + color
-    let autoType = "";
-    let autoColor = "";
+    let autoType = '';
+    let autoColor = '';
     try {
       const fd = new FormData();
-      fd.append("file", new File([fullFrameBlob], "capture.jpg", { type: "image/jpeg" }));
+      fd.append(
+        'file',
+        new File([fullFrameBlob], 'capture.jpg', { type: 'image/jpeg' }),
+      );
       const autoRes = await fetch(
         `${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`,
-        { method: "POST", body: fd },
+        { method: 'POST', body: fd },
       );
       const autoData = await autoRes.json();
-      autoType = autoData.type || "";
-      autoColor = autoData.color || "";
-    } catch { /* /auto-detect is supplementary — ignore failure */ }
+      autoType = autoData.type || '';
+      autoColor = autoData.color || '';
+    } catch {
+      /* /auto-detect is supplementary — ignore failure */
+    }
 
     const cap = (s: string) =>
       s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
@@ -561,7 +568,7 @@ export function useCameraScanner(): CameraScannerReturn {
     const initialItems: EditItem[] = scaledItems.map((item, idx) => ({
       id: idx,
       name: item.yolo_type || item.type || '',
-      type: autoType || item.type || item.yolo_type || '',
+      type: item.type || item.yolo_type || autoType || '',
       color: '',
       season: '',
       confidence: item.confidence,
@@ -587,7 +594,7 @@ export function useCameraScanner(): CameraScannerReturn {
     // Color/season analysis from canvas (no image re-load needed)
     const filledItems: EditItem[] = scaledItems.map((item, idx) => {
       const perItemColor = dominantColorFromCanvas(canvas, item.box);
-      const color = autoColor || perItemColor;
+      const color = perItemColor || autoColor;
       const type = initialItems[idx].type;
       const seasonGuess = detectSeason(item.yolo_type, type);
       const desc = item.yolo_type || type || '';
@@ -606,7 +613,8 @@ export function useCameraScanner(): CameraScannerReturn {
 
     // Deduplicate final names
     const finalFreq = new Map<string, number>();
-    for (const item of filledItems) finalFreq.set(item.name, (finalFreq.get(item.name) || 0) + 1);
+    for (const item of filledItems)
+      finalFreq.set(item.name, (finalFreq.get(item.name) || 0) + 1);
     const finalCounter = new Map<string, number>();
     for (const item of filledItems) {
       const raw = item.name;
