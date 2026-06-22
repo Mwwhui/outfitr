@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
 
 interface Category {
@@ -51,6 +52,7 @@ const MATERIALS = [
 export default function EditWardrobePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const { data: session } = useSession();
   const id = params?.id;
 
   const [clothes, setClothes] = useState<Clothes | null>(null);
@@ -59,6 +61,12 @@ export default function EditWardrobePage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isEditingMainInfo, setIsEditingMainInfo] = useState(false);
+  const [customBrand, setCustomBrand] = useState(false);
+  const [customMaterial, setCustomMaterial] = useState(false);
+  const [customLocation, setCustomLocation] = useState(false);
+  const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
+  const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
 
   // Fetch item and category list
   useEffect(() => {
@@ -111,6 +119,23 @@ export default function EditWardrobePage() {
     fetchItem();
     fetchCategories();
   }, [id]);
+
+  // Fetch suggestions
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    Promise.all([
+      fetch(`/api/brands?user_id=${userId}`).then((r) => r.json()),
+      fetch(`/api/locations?user_id=${userId}`).then((r) => r.json()),
+      fetch(`/api/materials?user_id=${userId}`).then((r) => r.json()),
+    ])
+      .then(([brandsData, locationsData, materialsData]) => {
+        setBrandSuggestions(brandsData.brands || []);
+        setLocationSuggestions(locationsData.locations || []);
+        setMaterialSuggestions(materialsData.materials || []);
+      })
+      .catch(() => {});
+  }, [session?.user?.id]);
 
   const updateField = <K extends keyof Clothes>(
     field: K,
@@ -327,7 +352,26 @@ export default function EditWardrobePage() {
             Edit the details of your clothing item below.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Season + Size */}
+            {/* Type */}
+            <div className="md:col-span-2">
+              <label className="block text-xs text-slate-600 mb-1">
+                Type
+              </label>
+              <select
+                value={clothes.type ?? ""}
+                onChange={(e) => updateField("type", e.target.value)}
+                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+              >
+                <option value="">Select type...</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Season */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">
                 Season
@@ -366,13 +410,47 @@ export default function EditWardrobePage() {
             {/* Brand + Price */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">Brand</label>
-              <input
-                type="text"
-                value={clothes.brand ?? ""}
-                onChange={(e) => updateField("brand", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
-                placeholder="e.g. Uniqlo"
-              />
+              {customBrand ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={clothes.brand ?? ""}
+                    onChange={(e) => updateField("brand", e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                    placeholder="Type brand name..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateField("brand", null);
+                      setCustomBrand(false);
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-700"
+                  >
+                    ← Pick from saved brands
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={clothes.brand ?? ""}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setCustomBrand(true);
+                      updateField("brand", "");
+                    } else updateField("brand", e.target.value);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                >
+                  <option value="">Select brand...</option>
+                  {brandSuggestions.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                  <option value="__custom__">+ Add new brand</option>
+                </select>
+              )}
             </div>
 
             <div>
@@ -398,18 +476,54 @@ export default function EditWardrobePage() {
               <label className="block text-xs text-slate-600 mb-1">
                 Material
               </label>
-              <select
-                value={clothes.material ?? ""}
-                onChange={(e) => updateField("material", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
-              >
-                <option value="">Select material...</option>
-                {MATERIALS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+              {customMaterial ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={clothes.material ?? ""}
+                    onChange={(e) => updateField("material", e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                    placeholder="Type material name..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateField("material", null);
+                      setCustomMaterial(false);
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-700"
+                  >
+                    ← Pick from saved materials
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={clothes.material ?? ""}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setCustomMaterial(true);
+                      updateField("material", "");
+                    } else updateField("material", e.target.value);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                >
+                  <option value="">Select material...</option>
+                  {MATERIALS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  {materialSuggestions
+                    .filter((m) => !MATERIALS.includes(m))
+                    .map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  <option value="__custom__">+ Add new material</option>
+                </select>
+              )}
             </div>
 
             <div>
@@ -429,13 +543,47 @@ export default function EditWardrobePage() {
               <label className="block text-xs text-slate-600 mb-1">
                 Location
               </label>
-              <input
-                type="text"
-                value={clothes.location ?? ""}
-                onChange={(e) => updateField("location", e.target.value)}
-                className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
-                placeholder="e.g. Wardrobe A, Drawer 2"
-              />
+              {customLocation ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={clothes.location ?? ""}
+                    onChange={(e) => updateField("location", e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                    placeholder="e.g. Wardrobe A, Drawer 2"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateField("location", null);
+                      setCustomLocation(false);
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-700"
+                  >
+                    ← Pick from saved locations
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={clothes.location ?? ""}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setCustomLocation(true);
+                      updateField("location", "");
+                    } else updateField("location", e.target.value);
+                  }}
+                  className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
+                >
+                  <option value="">Select location...</option>
+                  {locationSuggestions.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                  <option value="__custom__">+ Add new location</option>
+                </select>
+              )}
             </div>
           </div>
 
