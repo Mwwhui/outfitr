@@ -61,12 +61,13 @@ interface ClusterResponse {
 // min-max scales each dimension to [0,1] based on actual observed range.
 // When all values are identical (range=0), returns 0.5 so the dimension
 // contributes zero distance rather than NaN.
+// Non-finite values are filtered out when computing min/max and mapped to 0.5.
 function minmax(arr: number[]): number[] {
   if (arr.length === 0) return [];
-  const finite = arr.filter(isFinite);
-  if (finite.length === 0) return arr.map(() => 0.5);
-  const min = Math.min(...finite);
-  const max = Math.max(...finite);
+  const clean = arr.filter((v) => isFinite(v));
+  if (clean.length === 0) return arr.map(() => 0.5);
+  const min = Math.min(...clean);
+  const max = Math.max(...clean);
   const range = max - min;
   if (range === 0) return arr.map(() => 0.5);
   return arr.map((v) => (isFinite(v) ? (v - min) / range : 0.5));
@@ -234,7 +235,7 @@ export async function GET() {
         Math.log1p(price / (wear + 1)),
         Math.log1p(unused),
         Math.log1p(age),
-      ];
+      ].map((v) => (isFinite(v) ? v : 0));
     });
 
     const nanCount = featureVectors.filter((v) =>
@@ -285,7 +286,7 @@ export async function GET() {
       'Clusters: sizes',
       result.sizes,
       'inertia',
-      result.inertia.toFixed(3),
+      isFinite(result.inertia) ? result.inertia.toFixed(3) : result.inertia,
     );
     console.log('Clusters: centroids', result.centroids);
 
