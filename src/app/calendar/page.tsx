@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import Loader from '../components/Loader';
 import GoogleCalendarConnectCard from '../components/GoogleCalendarConnectCard';
 import GoogleEventsPanel from '../components/GoogleEventsPanel';
+import ConfirmModal from '../components/ConfirmModal';
 
 type TimeSlot = 'day' | 'night';
 
@@ -67,6 +69,8 @@ export default function CalendarPage() {
   );
   const [panelOpen, setPanelOpen] = useState(true);
   const [showGoogleEvents, setShowGoogleEvents] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
   const [googleConnected, setGoogleConnected] = useState(false);
 
@@ -164,6 +168,24 @@ export default function CalendarPage() {
         timeSlot,
       )}`,
     );
+  };
+
+  const handleDeletePlan = async (planId: string) => {
+    setDeletingPlanId(planId);
+    try {
+      const res = await fetch(`/api/outfit_plans/${planId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      setPlans((prev) => prev.filter((p) => p.id !== planId));
+      toast.success('Outfit deleted');
+    } catch (e) {
+      console.error('Delete outfit plan failed:', e);
+      toast.error('Failed to delete outfit');
+    } finally {
+      setDeletingPlanId(null);
+      setConfirmDeleteId(null);
+    }
   };
 
   if (status === 'loading') {
@@ -397,13 +419,27 @@ export default function CalendarPage() {
                   <div className="font-semibold text-sm text-black">
                     ☀ Day outfit
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => goPlanner(selectedDate, 'day')}
-                    className="text-xs px-3 py-1 rounded-lg border border-slate-200 hover:bg-slate-50"
-                  >
-                    {selectedPlans.day ? 'Edit' : 'Plan'}
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {selectedPlans.day?.id && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(selectedPlans.day!.id!)}
+                        className="text-xs p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+                        title="Delete outfit"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => goPlanner(selectedDate, 'day')}
+                      className="text-xs px-3 py-1 rounded-lg border border-slate-200 hover:bg-slate-50"
+                    >
+                      {selectedPlans.day ? 'Edit' : 'Plan'}
+                    </button>
+                  </div>
                 </div>
 
                 {selectedPlans.day ? (
@@ -432,13 +468,27 @@ export default function CalendarPage() {
                   <div className="font-semibold text-sm text-black">
                     🌙 Night outfit
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => goPlanner(selectedDate, 'night')}
-                    className="text-xs px-3 py-1 rounded-lg border border-slate-200 hover:bg-slate-50"
-                  >
-                    {selectedPlans.night ? 'Edit' : 'Plan'}
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {selectedPlans.night?.id && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(selectedPlans.night!.id!)}
+                        className="text-xs p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+                        title="Delete outfit"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => goPlanner(selectedDate, 'night')}
+                      className="text-xs px-3 py-1 rounded-lg border border-slate-200 hover:bg-slate-50"
+                    >
+                      {selectedPlans.night ? 'Edit' : 'Plan'}
+                    </button>
+                  </div>
                 </div>
 
                 {selectedPlans.night ? (
@@ -489,6 +539,16 @@ export default function CalendarPage() {
             </div>
           )}
         </aside>
+
+        <ConfirmModal
+          open={confirmDeleteId !== null}
+          title="Delete outfit?"
+          message="This will remove the outfit plan and its wear logs. This cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={() => confirmDeleteId && handleDeletePlan(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+          loading={deletingPlanId !== null}
+        />
       </div>
     </div>
     </div>
