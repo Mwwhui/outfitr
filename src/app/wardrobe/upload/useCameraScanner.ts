@@ -74,6 +74,7 @@ export function useCameraScanner(): CameraScannerReturn {
   const editCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const prevFrameRef = useRef<ImageData | null>(null);
+  const stableRefFrameRef = useRef<ImageData | null>(null);
   const pollAttemptRef = useRef(0);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const lastFrameRef = useRef<HTMLCanvasElement | null>(null);
@@ -340,14 +341,21 @@ export function useCameraScanner(): CameraScannerReturn {
     };
 
     const checkStability = (currentData: ImageData) => {
+      const reference =
+        stableRefFrameRef.current || prevFrameRef.current;
+      if (!reference) return;
       let diff = 0;
       for (let i = 0; i < currentData.data.length; i += 4) {
         diff +=
-          Math.abs(currentData.data[i] - prevFrameRef.current!.data[i]) / 255;
+          Math.abs(currentData.data[i] - reference.data[i]) / 255;
       }
       const avgDiff = diff / (currentData.data.length / 4);
-      stableStreakRef.current =
-        avgDiff < STABLE_DIFF_THRESHOLD ? stableStreakRef.current + 1 : 0;
+      if (avgDiff < STABLE_DIFF_THRESHOLD) {
+        stableStreakRef.current += 1;
+      } else {
+        stableStreakRef.current = 0;
+        stableRefFrameRef.current = null;
+      }
       prevFrameRef.current = currentData;
     };
 
@@ -365,16 +373,27 @@ export function useCameraScanner(): CameraScannerReturn {
         fullCanvas.height,
       );
 
-      if (hasHighConfidence && stable && positioned && active) {
-        setReadiness(null);
-        if (countdownRef.current === 0) {
-          countdownRef.current = COUNTDOWN_SECONDS;
-          setCountdownDisplay(COUNTDOWN_SECONDS);
-          pendingCanvasRef.current = fullCanvas;
-          pendingDetectionsRef.current = scaledItems;
-          if (navigator.vibrate) navigator.vibrate(30);
+      if (hasHighConfidence && positioned && active) {
+        if (!stableRefFrameRef.current) {
+          stableRefFrameRef.current = captureThumb(videoRef.current!);
+          stableStreakRef.current = 0;
+        }
+        if (stable) {
+          setReadiness(null);
+          if (countdownRef.current === 0) {
+            countdownRef.current = COUNTDOWN_SECONDS;
+            setCountdownDisplay(COUNTDOWN_SECONDS);
+            pendingCanvasRef.current = fullCanvas;
+            pendingDetectionsRef.current = scaledItems;
+            if (navigator.vibrate) navigator.vibrate(30);
+          }
+        } else {
+          countdownRef.current = 0;
+          setCountdownDisplay(null);
+          setReadiness('standby');
         }
       } else if (hasHighConfidence && active) {
+        stableRefFrameRef.current = null;
         countdownRef.current = 0;
         setCountdownDisplay(null);
         setReadiness(stable ? null : 'standby');
@@ -388,6 +407,7 @@ export function useCameraScanner(): CameraScannerReturn {
       setCountdownDisplay(null);
       setReadiness(null);
       stableStreakRef.current = 0;
+      stableRefFrameRef.current = null;
       prevBoxesRef.current = null;
     };
 
@@ -466,6 +486,7 @@ export function useCameraScanner(): CameraScannerReturn {
     pendingCanvasRef.current = null;
     pendingDetectionsRef.current = null;
     stableStreakRef.current = 0;
+    stableRefFrameRef.current = null;
     prevBoxesRef.current = null;
     prevFrameRef.current = null;
     pollAttemptRef.current = 0;
