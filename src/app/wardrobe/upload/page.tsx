@@ -8,9 +8,12 @@ import {
   SEASONS,
   SIZES,
   MATERIALS,
+  ColorSource,
+  GEMINI_TIMEOUT_MS,
   inputBase,
   compressImage,
   detectSeason,
+  fetchWithTimeout,
 } from './upload-utils';
 import { useCameraScanner } from './useCameraScanner';
 import CameraViewfinder from './CameraViewfinder';
@@ -89,6 +92,7 @@ export default function UploadClothesPage() {
     type: string;
     confidence: number;
     color: string | null;
+    source: ColorSource | null;
   } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -121,22 +125,49 @@ export default function UploadClothesPage() {
       setDetecting(true);
       setDetectResult(null);
       try {
-        const fd = new FormData();
-        fd.append('file', imageFile);
+        const compressed = await compressImage(imageFile);
+        // Each fetch needs its own FormData — a body can only be read once
+        const fdYolo = new FormData();
+        fdYolo.append('file', compressed);
+        const fdGemini = new FormData();
+        fdGemini.append('file', compressed);
 
-        // 1. /auto-detect → reliable category (type) + color
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`,
-          { method: 'POST', body: fd, signal: abortController.signal },
-        );
-        const data = await res.json();
+        const [yoloData, geminiData] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
+            method: 'POST',
+            body: fdYolo,
+            signal: abortController.signal,
+          }).then((r) => {
+            if (!r.ok) throw new Error('YOLO API error');
+            return r.json();
+          }).catch((err) => {
+            console.error('YOLO detection failed:', err);
+            return null;
+          }),
+          fetchWithTimeout('/api/clothes/detect-color', {
+            method: 'POST',
+            body: fdGemini,
+            signal: abortController.signal,
+          }, GEMINI_TIMEOUT_MS).then((r) => {
+            if (!r.ok) throw new Error('Gemini API error');
+            return r.json();
+          }).catch((err) => {
+            console.error('Gemini color detection failed:', err);
+            return null;
+          }),
+        ]);
+
         if (!active) return;
 
-        // 2. /detect → specific yolo_type for a more specific name
+        const detectedColor = geminiData?.color || yoloData?.color || '';
+        const detectedType = yoloData?.type || '';
+        const confidence = yoloData?.confidence || 0;
+        const colorSource: ColorSource = geminiData?.color ? "gemini" : yoloData?.color ? "yolo" : "hsv";
+
         let yoloType = '';
         try {
           const fd2 = new FormData();
-          fd2.append('file', imageFile);
+          fd2.append('file', compressed);
           const detRes = await fetch(
             `${process.env.NEXT_PUBLIC_YOLO_API_URL}/detect`,
             { method: 'POST', body: fd2, signal: abortController.signal },
@@ -146,16 +177,12 @@ export default function UploadClothesPage() {
             yoloType = detData.items?.[0]?.yolo_type || '';
           }
         } catch {
-          /* /detect is supplementary — ignore failure */
+          /* ignore yolo-detect failure */
         }
 
-        const cap = (s: string) =>
-          s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
         const title = (s: string) => s.split(' ').map(cap).join(' ');
 
-        const detectedType = data.type || '';
-        const detectedColor = data.color || '';
-        const confidence = data.confidence || 0;
         const specificName = yoloType || detectedType;
         const desc = title(specificName);
 
@@ -169,10 +196,7 @@ export default function UploadClothesPage() {
           setField({ color: detectedColor });
         }
 
-        const label = [detectedColor, specificName]
-          .filter(Boolean)
-          .map(title)
-          .join(' ');
+        const label = [detectedColor, specificName].filter(Boolean).map(title).join(' ');
         if (label) setField({ name: label });
 
         if (desc) {
@@ -180,13 +204,16 @@ export default function UploadClothesPage() {
             type: desc,
             confidence,
             color: detectedColor || null,
+            source: colorSource,
           });
           setTimeout(() => {
             if (active) setDetectResult(null);
           }, 4000);
         }
-      } catch (e: any) {
-        if (e.name !== 'AbortError') {
+      } catch (e) {
+        if (e instanceof Error && e.name !== 'AbortError') {
+          console.error('Auto-detect failed:', e);
+        } else if (!(e instanceof Error)) {
           console.error('Auto-detect failed:', e);
         }
       } finally {
@@ -272,9 +299,9 @@ export default function UploadClothesPage() {
         throw new Error(err.error || 'Failed to save clothing');
       }
       router.push('/wardrobe');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setFormError(err.message || 'Something went wrong');
+      setFormError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setIsUploading(false);
     }
@@ -378,7 +405,12 @@ export default function UploadClothesPage() {
                     <div className="flex items-center gap-1 text-[10px] text-slate-400 pt-1 px-1 animate-in fade-in duration-300">
                       <span className="text-amber-400">✦</span>
                       <span>
-                        AI detected at{' '}
+                        {detectResult.source === 'gemini'
+                          ? 'AI detected'
+                          : detectResult.source === 'yolo'
+                            ? 'YOLO detected'
+                            : 'Auto detected'}{' '}
+                        at{' '}
                         {Math.round(detectResult.confidence * 100)}% confidence
                       </span>
                     </div>
@@ -728,6 +760,7 @@ export default function UploadClothesPage() {
         categories={categories}
         saving={cam.saving}
         savingPhase={cam.savingPhase}
+        refining={cam.refining}
         editCanvasRef={cam.editCanvasRef}
         onStopCamera={cam.stopCamera}
         onRetake={cam.handleRetake}

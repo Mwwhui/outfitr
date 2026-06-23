@@ -1,7 +1,7 @@
 "use client";
 
 import { RefObject } from "react";
-import { EditItem, Category, SEASONS } from "./upload-utils";
+import { EditItem, Category, SEASONS, ColorSource } from "./upload-utils";
 
 interface Props {
   capturedFrame: Blob | null;
@@ -9,6 +9,7 @@ interface Props {
   categories: Category[];
   saving: boolean;
   savingPhase: 'removing-bg' | 'uploading' | null;
+  refining: boolean;
   editCanvasRef: RefObject<HTMLCanvasElement | null>;
   onStopCamera: () => void;
   onRetake: () => void;
@@ -16,8 +17,15 @@ interface Props {
   onEditItemsChange: (items: EditItem[]) => void;
 }
 
+const SOURCE_LABELS: Record<ColorSource, string> = {
+  gemini: "AI",
+  yolo: "YOLO",
+  hsv: "Auto",
+  manual: "",
+};
+
 export default function EditItemsModal({
-  capturedFrame, editItems, categories, saving, savingPhase,
+  capturedFrame, editItems, categories, saving, savingPhase, refining,
   editCanvasRef, onStopCamera, onRetake, onSave, onEditItemsChange,
 }: Props) {
   if (!capturedFrame || !editItems) return null;
@@ -67,10 +75,54 @@ export default function EditItemsModal({
                       <option key={cat.id} value={cat.name}>{cat.name}</option>
                     ))}
                   </select>
-                  <input type="text" value={item.color}
-                    onChange={(e) => updateItem(item.id, { color: e.target.value })}
-                    className="rounded-lg border border-slate-200 text-sm px-2 py-1.5 focus:ring-2 focus:ring-slate-500/70"
-                    placeholder={item.color ? "Color" : "Detecting..."} />
+                  <div className="space-y-1.5">
+                    <div className="relative">
+                      <input type="text" value={item.color}
+                        onChange={(e) => updateItem(item.id, { color: e.target.value, colorSource: "manual" })}
+                        className="w-full rounded-lg border border-slate-200 text-sm px-2 py-1.5 focus:ring-2 focus:ring-slate-500/70"
+                        placeholder={item.color ? "Color" : "Detecting..."} />
+                      {item.colorSource && item.colorSource !== "manual" && item.color && (
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 bg-slate-100 px-1 rounded">
+                          {SOURCE_LABELS[item.colorSource]}
+                        </span>
+                      )}
+                    </div>
+                    {refining && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-amber-500">
+                        <span className="relative flex w-1.5 h-1.5 shrink-0">
+                          <span className="absolute inline-flex w-full h-full rounded-full bg-amber-400 opacity-75 animate-ping" />
+                          <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        </span>
+                        <span>AI enhancing</span>
+                      </div>
+                    )}
+                    {!refining && item.colorCandidates && item.colorCandidates.length > 1 && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-amber-500 shrink-0">✦</span>
+                        <div className="flex flex-wrap gap-1">
+                          {item.colorCandidates.map((c) => (
+                            <button key={c} type="button"
+                              onClick={() => {
+                                const isAiColor = item.colorCandidates && c === item.colorCandidates[0];
+                                updateItem(item.id, {
+                                  color: c,
+                                  colorSource: isAiColor
+                                    ? (item.aiColorSource || item.colorSource)
+                                    : "hsv",
+                                });
+                              }}
+                              className={`text-[10px] px-2 py-0.5 rounded-full border transition-all duration-150 ${
+                                item.color === c
+                                  ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-sm'
+                                  : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400 hover:text-slate-700'
+                              }`}>
+                              {c}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <select value={item.season}
                     onChange={(e) => updateItem(item.id, { season: e.target.value })}
                     className="rounded-lg border border-slate-200 text-sm px-2 py-1.5 focus:ring-2 focus:ring-slate-500/70">

@@ -16,7 +16,8 @@ import {
   POLL_BACKOFF_EMPTY,
   POLL_MAX,
   NO_DETECTION_TIMEOUT,
-  dominantColorFromCanvas,
+  GEMINI_TIMEOUT_MS,
+  dominantColorCandidatesFromCanvas,
   detectSeason,
   isWellPositioned,
   drawBoundingBoxes,
@@ -25,6 +26,7 @@ import {
   scaleDetections,
   smoothBoxes,
   checkBrightnessFromThumb,
+  fetchWithTimeout,
 } from './upload-utils';
 
 export interface CameraScannerReturn {
@@ -39,6 +41,7 @@ export interface CameraScannerReturn {
   stablePct: number;
   saving: boolean;
   savingPhase: 'removing-bg' | 'uploading' | null;
+  refining: boolean;
   capturing: boolean;
   cameraError: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -64,6 +67,7 @@ export function useCameraScanner(): CameraScannerReturn {
     'removing-bg' | 'uploading' | null
   >(null);
   const [capturing, setCapturing] = useState(false);
+  const [refining, setRefining] = useState(false);
   const [countdownDisplay, setCountdownDisplay] = useState<number | null>(null);
   const [readiness, setReadiness] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
@@ -481,6 +485,7 @@ export function useCameraScanner(): CameraScannerReturn {
     setEditItems(null);
     setSaving(false);
     setSavingPhase(null);
+    setRefining(false);
     setCountdownDisplay(null);
     countdownRef.current = 0;
     pendingCanvasRef.current = null;
@@ -562,61 +567,15 @@ export function useCameraScanner(): CameraScannerReturn {
 
     const fullFrameBlob = await canvasToBlob(canvas, 0.85);
 
-    // Supplement with /auto-detect for reliable category + color
-    let autoType = '';
-    let autoColor = '';
-    try {
-      const fd = new FormData();
-      fd.append(
-        'file',
-        new File([fullFrameBlob], 'capture.jpg', { type: 'image/jpeg' }),
-      );
-      const autoRes = await fetch(
-        `${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`,
-        { method: 'POST', body: fd },
-      );
-      const autoData = await autoRes.json();
-      autoType = autoData.type || '';
-      autoColor = autoData.color || '';
-    } catch {
-      /* /auto-detect is supplementary — ignore failure */
-    }
-
     const cap = (s: string) =>
       s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
     const title = (s: string) => s.split(' ').map(cap).join(' ');
 
-    const initialItems: EditItem[] = scaledItems.map((item, idx) => ({
-      id: idx,
-      name: item.yolo_type || item.type || '',
-      type: item.type || item.yolo_type || autoType || '',
-      color: '',
-      season: '',
-      confidence: item.confidence,
-      box: item.box,
-      included: item.confidence > 0.5,
-    }));
-
-    // Deduplicate names when multiple items share the same type
-    const nameFreq = new Map<string, number>();
-    for (const item of initialItems) {
-      nameFreq.set(item.name, (nameFreq.get(item.name) || 0) + 1);
-    }
-    const nameCounter = new Map<string, number>();
-    for (const item of initialItems) {
-      const raw = item.name;
-      const c = nameCounter.get(raw) || 0;
-      nameCounter.set(raw, c + 1);
-      if (nameFreq.get(raw)! > 1) {
-        item.name = `${raw} ${c + 1}`;
-      }
-    }
-
-    // Color/season analysis from canvas (no image re-load needed)
-    const filledItems: EditItem[] = scaledItems.map((item, idx) => {
-      const perItemColor = dominantColorFromCanvas(canvas, item.box);
-      const color = perItemColor || autoColor;
-      const type = initialItems[idx].type;
+    // Build items from HSV instantly (no network needed)
+    const hsvItems: EditItem[] = scaledItems.map((item, idx) => {
+      const hsvCandidates = dominantColorCandidatesFromCanvas(canvas, item.box, 3);
+      const color = hsvCandidates[0] || '';
+      const type = item.type || item.yolo_type || '';
       const seasonGuess = detectSeason(item.yolo_type, type);
       const desc = item.yolo_type || type || '';
       const itemName = [color, desc]
@@ -624,31 +583,109 @@ export function useCameraScanner(): CameraScannerReturn {
         .map(title)
         .join(' ');
       return {
-        ...initialItems[idx],
+        id: idx,
         name: itemName,
         type,
-        color: color || '',
+        color,
         season: seasonGuess || '',
+        confidence: item.confidence,
+        box: item.box,
+        included: item.confidence > 0.5,
+        colorSource: 'hsv' as const,
+        aiColorSource: undefined,
       };
     });
 
-    // Deduplicate final names
-    const finalFreq = new Map<string, number>();
-    for (const item of filledItems)
-      finalFreq.set(item.name, (finalFreq.get(item.name) || 0) + 1);
-    const finalCounter = new Map<string, number>();
-    for (const item of filledItems) {
+    // Deduplicate names
+    const nameFreq = new Map<string, number>();
+    for (const item of hsvItems) nameFreq.set(item.name, (nameFreq.get(item.name) || 0) + 1);
+    const nameCounter = new Map<string, number>();
+    for (const item of hsvItems) {
       const raw = item.name;
-      const c = finalCounter.get(raw) || 0;
-      finalCounter.set(raw, c + 1);
-      if (finalFreq.get(raw)! > 1) {
-        item.name = `${raw} ${c + 1}`;
-      }
+      const c = nameCounter.get(raw) || 0;
+      nameCounter.set(raw, c + 1);
+      if (nameFreq.get(raw)! > 1) item.name = `${raw} ${c + 1}`;
     }
 
+    // Show modal immediately with HSV results
     setCapturedFrame(fullFrameBlob);
-    setEditItems(filledItems);
+    setEditItems(hsvItems);
     setCapturing(false);
+    setRefining(true);
+
+    // Background: fire YOLO + Gemini, then update items with better results
+    const captureFile = new File([fullFrameBlob], 'capture.jpg', { type: 'image/jpeg' });
+
+    const fetchGeminiWithRetry = async (): Promise<{ color: string } | null> => {
+      const fd = new FormData();
+      fd.append('file', captureFile);
+      try {
+        const res = await fetchWithTimeout('/api/clothes/detect-color', {
+          method: 'POST', body: fd,
+        }, GEMINI_TIMEOUT_MS);
+        if (res.ok) return res.json();
+        // Retry once on non-200 (503, etc.)
+        await new Promise(r => setTimeout(r, 1000));
+        const retry = await fetchWithTimeout('/api/clothes/detect-color', {
+          method: 'POST', body: fd,
+        }, GEMINI_TIMEOUT_MS);
+        if (retry.ok) return retry.json();
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
+    const fdYolo = new FormData();
+    fdYolo.append('file', captureFile);
+
+    Promise.all([
+      fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
+        method: 'POST', body: fdYolo,
+      }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetchGeminiWithRetry(),
+    ]).then(([autoData, geminiData]) => {
+      const autoColor = geminiData?.color || autoData?.color || '';
+      const autoType = autoData?.type || '';
+      const geminiAvailable = !!geminiData?.color;
+
+      if (!autoColor && !autoType) return; // nothing better to offer
+
+      setEditItems(prev => {
+        if (!prev) return prev;
+        return prev.map((item, idx) => {
+          const hsvCandidates = dominantColorCandidatesFromCanvas(canvas, item.box, 3);
+          const perItemColor = hsvCandidates[0] || null;
+          const betterColor = autoColor || item.color;
+          const betterType = autoType || item.type;
+          const newAiSource = autoColor
+            ? (geminiAvailable ? "gemini" as const : "yolo" as const)
+            : undefined;
+          // Preserve existing aiColorSource if already set, otherwise use new one
+          const aiColorSource = item.aiColorSource || newAiSource;
+          const colorSource = aiColorSource || "hsv" as const;
+          const hasDisagreement = autoColor && perItemColor && autoColor !== perItemColor;
+          const seasonGuess = detectSeason(scaledItems[idx]?.yolo_type, betterType);
+          const desc = scaledItems[idx]?.yolo_type || betterType || '';
+          const itemName = [betterColor, desc]
+            .filter((s): s is string => !!s)
+            .map(title)
+            .join(' ');
+          return {
+            ...item,
+            name: itemName,
+            type: betterType,
+            color: betterColor || item.color,
+            season: seasonGuess || item.season,
+            colorCandidates: hasDisagreement
+              ? [betterColor, ...hsvCandidates.filter(c => c !== betterColor)].slice(0, 2)
+              : undefined,
+            colorSource,
+            aiColorSource,
+          };
+        });
+      });
+    }).catch(() => { /* background — ignore */ }).finally(() => setRefining(false));
   }
 
   function handleRetake() {
@@ -738,6 +775,7 @@ export function useCameraScanner(): CameraScannerReturn {
     stablePct,
     saving,
     savingPhase,
+    refining,
     capturing,
     cameraError,
     videoRef,
