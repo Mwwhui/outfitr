@@ -37,7 +37,7 @@ export async function GET(req: Request) {
       .select('id, name, type, color, image_url')
       .eq('user_id', user_id)
       .is('deleted_at', null)
-      .eq('status', 'available')
+      .or('status.is.null,status.eq.available')
       .limit(200);
 
     if (exclude_id) {

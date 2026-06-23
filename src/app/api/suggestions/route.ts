@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     .select('id, name, type, color, season, image_url, favorite, wear_count')
     .eq('user_id', userId)
     .is('deleted_at', null)
-    .eq('status', 'available');
+    .or('status.is.null,status.eq.available');
 
   if (clothesError || !clothes) {
     return NextResponse.json(

@@ -194,6 +194,30 @@ export default function WardrobePage() {
             Plan Outfit
           </button>
 
+          {/* Style Lab Tab */}
+          <button
+            onClick={() => router.push("/outfits")}
+            className={`text-sm flex items-center gap-2 -mb-[1px] ${
+              pathname === "/outfits"
+                ? "border-b-2 border-black font-semibold text-black"
+                : "text-slate-500 hover:text-black"
+            }`}
+          >
+            {/* Sparkle Icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z" />
+              <path d="M18 14l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" opacity="0.6" />
+            </svg>
+            Style Lab
+          </button>
+
           {/* Calendar Tab */}
           <button
             onClick={() => router.push("/calendar")}

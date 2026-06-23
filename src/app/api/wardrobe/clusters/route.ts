@@ -174,7 +174,7 @@ export async function GET() {
       )
       .eq('user_id', userId)
       .is('deleted_at', null)
-      .eq('status', 'available');
+      .or('status.is.null,status.eq.available');
     console.log('Clusters: clothes count', clothes?.length, 'error', error);
 
     if (error || !clothes) {

@@ -25,7 +25,7 @@ export async function POST() {
     .select('id, user_id, name, type, created_at')
     .eq('user_id', userId)
     .is('deleted_at', null)
-    .eq('status', 'available');
+    .or('status.is.null,status.eq.available');
 
   if (clothesError || !clothes) {
     console.error('score-unused clothes error:', clothesError);
