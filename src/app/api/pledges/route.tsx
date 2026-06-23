@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 
     const { data: itemsData, error: itemsError } = await supabase
       .from('clothes')
-      .select('id, name, brand')
+      .select('id, name, brand, image_url')
       .in('id', trimmedItemIds)
       .eq('user_id', userId)
       .is('deleted_at', null);
@@ -117,6 +117,7 @@ export async function POST(req: Request) {
         items={itemsData.map((item) => ({
           name: item.name,
           brand: item.brand,
+          image_url: item.image_url,
         }))}
         pledgeId={pledgeData.id}
       />,

@@ -196,7 +196,7 @@ export async function PATCH(
 
     const { data: itemsData, error: itemsError } = await supabase
       .from('clothes')
-      .select('id, name, brand')
+      .select('id, name, brand, image_url')
       .in('id', pledge.item_ids || [])
       .is('deleted_at', null);
 
@@ -207,6 +207,7 @@ export async function PATCH(
     const items = (itemsData || []).map((item) => ({
       name: item.name,
       brand: item.brand,
+      image_url: item.image_url,
     }));
 
     const userName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'User';
