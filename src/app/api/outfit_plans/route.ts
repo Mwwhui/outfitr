@@ -18,7 +18,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { date, timeSlot, slots, name } = await req.json();
+  let body: { date: string; timeSlot: string; slots: unknown; name?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid or empty request body' },
+      { status: 400 },
+    );
+  }
+  const { date, timeSlot, slots, name } = body;
 
   if (!date || !timeSlot || !slots) {
     return NextResponse.json(
@@ -27,7 +36,45 @@ export async function POST(req: Request) {
     );
   }
 
-  // upsert: Insert if it doesn’t exist, update if it does
+  // Fetch existing plan for this date+timeSlot to detect replaced items
+  const { data: existingPlan } = await supabase
+    .from('outfit_plans')
+    .select('slots')
+    .eq('user_id', userId)
+    .eq('date', date)
+    .eq('time_slot', timeSlot)
+    .maybeSingle();
+
+  const oldIds = new Set<string>();
+  if (existingPlan?.slots) {
+    for (const item of Object.values(existingPlan.slots)) {
+      if (item && typeof item === 'object' && 'id' in item) {
+        oldIds.add((item as { id: string }).id);
+      }
+    }
+  }
+
+  // Extract new item IDs
+  const newIds = new Set<string>();
+  for (const item of Object.values(slots)) {
+    if (item && typeof item === 'object' && 'id' in item) {
+      newIds.add((item as { id: string }).id);
+    }
+  }
+
+  // Delete wear_logs for items removed from the outfit
+  const removedIds = [...oldIds].filter((id) => !newIds.has(id));
+  if (removedIds.length > 0) {
+    await supabase
+      .from('wear_logs')
+      .delete()
+      .eq('user_id', userId)
+      .eq('worn_at', date)
+      .eq('time_slot', timeSlot)
+      .in('cloth_id', removedIds);
+  }
+
+  // Upsert the outfit plan
   const { error } = await supabase.from('outfit_plans').upsert(
     {
       user_id: userId,
@@ -43,34 +90,44 @@ export async function POST(req: Request) {
     return NextResponse.json({ error }, { status: 500 });
   }
 
-  // Extract worn item IDs from slots
-  const wornItemIds: string[] = Object.values(slots)
-    .filter(
-      (item): item is { id: string } =>
-        item !== null && typeof item === 'object' && 'id' in item,
-    )
-    .map((item) => item.id);
+  const newItemIds = [...newIds];
 
-  if (wornItemIds.length > 0) {
-    const wearLogRows = wornItemIds.map((clothId) => ({
+  if (newItemIds.length > 0) {
+    // Insert wear_logs for new items (with time_slot for accurate pair grouping)
+    const wearLogRows = newItemIds.map((clothId) => ({
       user_id: userId,
       cloth_id: clothId,
       worn_at: date,
+      time_slot: timeSlot,
     }));
 
     const { error: wearLogError } = await supabase
       .from('wear_logs')
       .upsert(wearLogRows, {
-        onConflict: 'user_id,cloth_id,worn_at',
+        onConflict: 'user_id,cloth_id,worn_at,time_slot',
         ignoreDuplicates: true,
       });
 
     if (wearLogError) {
       console.error('Failed to insert wear logs:', wearLogError);
     } else {
+      // Only increment wear_count for items that are genuinely NEW logs
+      // (items that were already logged for this date+slot are skipped)
+      const trulyNewIds = newItemIds.filter((id) => !oldIds.has(id));
+      if (trulyNewIds.length > 0) {
+        const { error: wearCountError } = await supabase.rpc(
+          'increment_clothes_wear_counts',
+          { p_user_id: userId, p_cloth_ids: trulyNewIds },
+        );
+        if (wearCountError) {
+          console.error('Failed to increment wear counts:', wearCountError);
+        }
+      }
+
       const origin = new URL(req.url).origin;
-      fetch(`${origin}/api/clothes/score-unused`, { method: 'POST' })
-        .catch((err: Error) => console.error('score-unused trigger failed:', err));
+      fetch(`${origin}/api/clothes/score-unused`, { method: 'POST' }).catch(
+        (err: Error) => console.error('score-unused trigger failed:', err),
+      );
     }
   }
 

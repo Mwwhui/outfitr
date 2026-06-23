@@ -60,7 +60,9 @@ export function useCameraScanner(): CameraScannerReturn {
   const [editItems, setEditItems] = useState<EditItem[] | null>(null);
   const [itemCount, setItemCount] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [savingPhase, setSavingPhase] = useState<'removing-bg' | 'uploading' | null>(null);
+  const [savingPhase, setSavingPhase] = useState<
+    'removing-bg' | 'uploading' | null
+  >(null);
   const [capturing, setCapturing] = useState(false);
   const [countdownDisplay, setCountdownDisplay] = useState<number | null>(null);
   const [readiness, setReadiness] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export function useCameraScanner(): CameraScannerReturn {
   const editCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const prevFrameRef = useRef<ImageData | null>(null);
+  const stableRefFrameRef = useRef<ImageData | null>(null);
   const pollAttemptRef = useRef(0);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const lastFrameRef = useRef<HTMLCanvasElement | null>(null);
@@ -142,7 +145,7 @@ export function useCameraScanner(): CameraScannerReturn {
       } else {
         const current = smoothBoxesRef.current;
         if (!current || current.length !== target.length) {
-          smoothBoxesRef.current = target.map(t => ({ ...t }));
+          smoothBoxesRef.current = target.map((t) => ({ ...t }));
         } else {
           smoothBoxesRef.current = current.map((cb, i) => {
             const tb = target[i];
@@ -338,14 +341,21 @@ export function useCameraScanner(): CameraScannerReturn {
     };
 
     const checkStability = (currentData: ImageData) => {
+      const reference =
+        stableRefFrameRef.current || prevFrameRef.current;
+      if (!reference) return;
       let diff = 0;
       for (let i = 0; i < currentData.data.length; i += 4) {
         diff +=
-          Math.abs(currentData.data[i] - prevFrameRef.current!.data[i]) / 255;
+          Math.abs(currentData.data[i] - reference.data[i]) / 255;
       }
       const avgDiff = diff / (currentData.data.length / 4);
-      stableStreakRef.current =
-        avgDiff < STABLE_DIFF_THRESHOLD ? stableStreakRef.current + 1 : 0;
+      if (avgDiff < STABLE_DIFF_THRESHOLD) {
+        stableStreakRef.current += 1;
+      } else {
+        stableStreakRef.current = 0;
+        stableRefFrameRef.current = null;
+      }
       prevFrameRef.current = currentData;
     };
 
@@ -363,16 +373,27 @@ export function useCameraScanner(): CameraScannerReturn {
         fullCanvas.height,
       );
 
-      if (hasHighConfidence && stable && positioned && active) {
-        setReadiness(null);
-        if (countdownRef.current === 0) {
-          countdownRef.current = COUNTDOWN_SECONDS;
-          setCountdownDisplay(COUNTDOWN_SECONDS);
-          pendingCanvasRef.current = fullCanvas;
-          pendingDetectionsRef.current = scaledItems;
-          if (navigator.vibrate) navigator.vibrate(30);
+      if (hasHighConfidence && positioned && active) {
+        if (!stableRefFrameRef.current) {
+          stableRefFrameRef.current = captureThumb(videoRef.current!);
+          stableStreakRef.current = 0;
+        }
+        if (stable) {
+          setReadiness(null);
+          if (countdownRef.current === 0) {
+            countdownRef.current = COUNTDOWN_SECONDS;
+            setCountdownDisplay(COUNTDOWN_SECONDS);
+            pendingCanvasRef.current = fullCanvas;
+            pendingDetectionsRef.current = scaledItems;
+            if (navigator.vibrate) navigator.vibrate(30);
+          }
+        } else {
+          countdownRef.current = 0;
+          setCountdownDisplay(null);
+          setReadiness('standby');
         }
       } else if (hasHighConfidence && active) {
+        stableRefFrameRef.current = null;
         countdownRef.current = 0;
         setCountdownDisplay(null);
         setReadiness(stable ? null : 'standby');
@@ -386,6 +407,7 @@ export function useCameraScanner(): CameraScannerReturn {
       setCountdownDisplay(null);
       setReadiness(null);
       stableStreakRef.current = 0;
+      stableRefFrameRef.current = null;
       prevBoxesRef.current = null;
     };
 
@@ -464,6 +486,7 @@ export function useCameraScanner(): CameraScannerReturn {
     pendingCanvasRef.current = null;
     pendingDetectionsRef.current = null;
     stableStreakRef.current = 0;
+    stableRefFrameRef.current = null;
     prevBoxesRef.current = null;
     prevFrameRef.current = null;
     pollAttemptRef.current = 0;
@@ -540,19 +563,24 @@ export function useCameraScanner(): CameraScannerReturn {
     const fullFrameBlob = await canvasToBlob(canvas, 0.85);
 
     // Supplement with /auto-detect for reliable category + color
-    let autoType = "";
-    let autoColor = "";
+    let autoType = '';
+    let autoColor = '';
     try {
       const fd = new FormData();
-      fd.append("file", new File([fullFrameBlob], "capture.jpg", { type: "image/jpeg" }));
+      fd.append(
+        'file',
+        new File([fullFrameBlob], 'capture.jpg', { type: 'image/jpeg' }),
+      );
       const autoRes = await fetch(
         `${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`,
-        { method: "POST", body: fd },
+        { method: 'POST', body: fd },
       );
       const autoData = await autoRes.json();
-      autoType = autoData.type || "";
-      autoColor = autoData.color || "";
-    } catch { /* /auto-detect is supplementary — ignore failure */ }
+      autoType = autoData.type || '';
+      autoColor = autoData.color || '';
+    } catch {
+      /* /auto-detect is supplementary — ignore failure */
+    }
 
     const cap = (s: string) =>
       s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
@@ -561,7 +589,7 @@ export function useCameraScanner(): CameraScannerReturn {
     const initialItems: EditItem[] = scaledItems.map((item, idx) => ({
       id: idx,
       name: item.yolo_type || item.type || '',
-      type: autoType || item.type || item.yolo_type || '',
+      type: item.type || item.yolo_type || autoType || '',
       color: '',
       season: '',
       confidence: item.confidence,
@@ -587,7 +615,7 @@ export function useCameraScanner(): CameraScannerReturn {
     // Color/season analysis from canvas (no image re-load needed)
     const filledItems: EditItem[] = scaledItems.map((item, idx) => {
       const perItemColor = dominantColorFromCanvas(canvas, item.box);
-      const color = autoColor || perItemColor;
+      const color = perItemColor || autoColor;
       const type = initialItems[idx].type;
       const seasonGuess = detectSeason(item.yolo_type, type);
       const desc = item.yolo_type || type || '';
@@ -606,7 +634,8 @@ export function useCameraScanner(): CameraScannerReturn {
 
     // Deduplicate final names
     const finalFreq = new Map<string, number>();
-    for (const item of filledItems) finalFreq.set(item.name, (finalFreq.get(item.name) || 0) + 1);
+    for (const item of filledItems)
+      finalFreq.set(item.name, (finalFreq.get(item.name) || 0) + 1);
     const finalCounter = new Map<string, number>();
     for (const item of filledItems) {
       const raw = item.name;

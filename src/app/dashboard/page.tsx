@@ -13,6 +13,7 @@ import RecentActivity from '../components/dashboard/RecentActivity';
 import ImpactCard from '../components/dashboard/ImpactCard';
 import WardrobeValueCard from '../components/dashboard/WardrobeValueCard';
 import WornItemsCard from '../components/dashboard/WornItemsCard';
+import WardrobeClustersCard from '../components/dashboard/WardrobeClustersCard';
 
 interface DashboardTotals {
   items: number;
@@ -147,6 +148,23 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clusterData, setClusterData] = useState<{
+    clusters: {
+      id: number;
+      label: string;
+      color: string;
+      size: number;
+      insight: {
+        totalValue: number;
+        avgWear: number;
+        avgPrice: number;
+        wearVsAverage: number;
+        typeBreakdown: { type: string; count: number; percentage: number }[];
+      };
+    }[];
+  } | null>(null);
+  const [loadingClusters, setLoadingClusters] = useState(true);
+  const [clusterError, setClusterError] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -157,13 +175,17 @@ export default function DashboardPage() {
 
     setLoading(true);
     setError(null);
+    setLoadingClusters(true);
+    setClusterError(false);
 
     fetch('/api/clothes/score-unused', { method: 'POST' })
       .catch(() => {})
       .then(() => fetch('/api/dashboard/stats'))
       .then(async (res) => {
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Failed to load' }));
+          const err = await res
+            .json()
+            .catch(() => ({ error: 'Failed to load' }));
           throw new Error(err.error || 'Failed to load dashboard');
         }
         return res.json();
@@ -175,6 +197,17 @@ export default function DashboardPage() {
       .catch((err: Error) => {
         setError(err.message);
         setLoading(false);
+      });
+
+    fetch('/api/wardrobe/clusters')
+      .then((r) => r.json())
+      .then((json) => {
+        setClusterData(json);
+        setLoadingClusters(false);
+      })
+      .catch(() => {
+        setClusterError(true);
+        setLoadingClusters(false);
       });
   }, [status, router]);
 
@@ -272,7 +305,16 @@ export default function DashboardPage() {
             trend={`+${t.items_this_month} this month`}
             trendDirection={t.items_this_month > 0 ? 'up' : 'neutral'}
             icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M6 5 3 9l3 1.5V19h12v-8.5L21 9l-3-4h-2l-1 3h-2l-1-3h-2l-1 3H9L8 5H6z" />
               </svg>
             }
@@ -282,25 +324,30 @@ export default function DashboardPage() {
             label="Active Pledges"
             value={t.pledges_pending + t.pledges_accepted}
             icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
                 <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
               </svg>
             }
             iconBg="bg-amber-100"
             suffix={
-              t.pledges_total > 0
-                ? `of ${t.pledges_total} total`
-                : undefined
+              t.pledges_total > 0 ? `of ${t.pledges_total} total` : undefined
             }
           />
           <KpiCard
             label="Fulfilled"
             value={t.pledges_fulfilled}
             trend={
-              t.fulfilled_change_pct > 0
-                ? `+${t.fulfilled_change_pct}%`
-                : '—'
+              t.fulfilled_change_pct > 0 ? `+${t.fulfilled_change_pct}%` : '—'
             }
             trendDirection={
               t.fulfilled_change_pct > 0
@@ -310,7 +357,16 @@ export default function DashboardPage() {
                   : 'neutral'
             }
             icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                 <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
@@ -320,10 +376,7 @@ export default function DashboardPage() {
         </div>
 
         {!emptyWardrobe && (
-          <WardrobeValueCard
-            data={data!.wardrobe}
-            totalItems={t.items}
-          />
+          <WardrobeValueCard data={data!.wardrobe} totalItems={t.items} />
         )}
 
         {!emptyWardrobe && (
@@ -348,7 +401,9 @@ export default function DashboardPage() {
               <CategoryChart data={data?.categories || []} />
             </div>
           )}
-          <div className={`bg-white rounded-3xl shadow-sm p-5 ${emptyWardrobe ? 'lg:col-span-2' : ''}`}>
+          <div
+            className={`bg-white rounded-3xl shadow-sm p-5 ${emptyWardrobe ? 'lg:col-span-2' : ''}`}
+          >
             <h3 className="text-sm font-semibold text-[#163422] mb-4">
               Pledges Over Time
             </h3>
@@ -360,8 +415,7 @@ export default function DashboardPage() {
                 <span className="w-2 h-2 rounded-full bg-blue-500" /> Accepted
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#163422]" />{' '}
-                Fulfilled
+                <span className="w-2 h-2 rounded-full bg-[#163422]" /> Fulfilled
               </span>
             </div>
             {noPledges ? (
@@ -389,6 +443,31 @@ export default function DashboardPage() {
               <TopBrandsChart data={data?.brands || []} />
             </div>
           </div>
+        )}
+
+        {!emptyWardrobe && (
+          <WardrobeClustersCard
+            data={clusterData}
+            loading={loadingClusters}
+            error={clusterError}
+            onRefresh={() => {
+              setLoadingClusters(true);
+              setClusterError(false);
+              fetch('/api/wardrobe/clusters')
+                .then((r) => r.json())
+                .then((json) => {
+                  setClusterData(json);
+                  setLoadingClusters(false);
+                })
+                .catch(() => {
+                  setClusterError(true);
+                  setLoadingClusters(false);
+                });
+            }}
+            onViewCluster={(clusterId) =>
+              router.push(`/wardrobe?cluster=${clusterId}`)
+            }
+          />
         )}
 
         <div className="bg-white rounded-3xl shadow-sm p-5">
