@@ -97,6 +97,10 @@ export default function UploadClothesPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [formError, setFormError] = useState('');
+  const [similarItems, setSimilarItems] = useState<Array<{id: string; name: string; color: string | null; image_url: string | null; similarity: number}>>([]);
+  const [checkingSimilar, setCheckingSimilar] = useState(false);
+  const [visualResult, setVisualResult] = useState<{is_different: boolean; reasoning: string; confidence: number} | null>(null);
+  const [similarDismissed, setSimilarDismissed] = useState(false);
 
   const { brandSuggestions, locationSuggestions, materialSuggestions } =
     useSuggestions(session?.user?.id);
@@ -226,6 +230,69 @@ export default function UploadClothesPage() {
       abortController.abort();
     };
   }, [imageFile]);
+
+  // Check for similar items after type + color settle
+  useEffect(() => {
+    if (!session?.user?.id || !fields.type) return;
+    let active = true;
+    setSimilarDismissed(false);
+    setVisualResult(null);
+
+    const check = async () => {
+      setCheckingSimilar(true);
+      setSimilarItems([]);
+      try {
+        const params = new URLSearchParams({
+          user_id: session.user.id,
+          type: fields.type,
+        });
+        if (fields.color) params.set('color', fields.color);
+        const res = await fetch(`/api/clothes/similar?${params}`);
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (!active) return;
+        setSimilarItems(data.similar || []);
+
+        // Tier 2: If 1-3 matches and we have an image, fire Gemini visual comparison
+        if (data.similar?.length >= 1 && data.similar.length <= 3 && imageFile && active) {
+          try {
+            const compressed = await compressImage(imageFile);
+            const imageBase64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve((reader.result as string).split(',')[1]);
+              reader.readAsDataURL(compressed);
+            });
+            if (!active) return;
+            const visRes = await fetch('/api/clothes/visual-similarity', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                new_image: imageBase64,
+                existing_images: data.similar.map((s: { id: string; image_url: string; name: string }) => ({
+                  id: s.id,
+                  image_url: s.image_url,
+                  name: s.name,
+                })),
+                type: fields.type,
+              }),
+            });
+            if (visRes.ok && active) {
+              setVisualResult(await visRes.json());
+            }
+          } catch {
+            // Visual comparison is optional, ignore errors
+          }
+        }
+      } catch {
+        // Ignore errors
+      } finally {
+        if (active) setCheckingSimilar(false);
+      }
+    };
+
+    const timer = setTimeout(check, 800);
+    return () => { active = false; clearTimeout(timer); };
+  }, [fields.type, fields.color, session?.user?.id, imageFile]);
 
   // Clean up blob URLs
   useEffect(() => {
@@ -440,6 +507,57 @@ export default function UploadClothesPage() {
                 </div>
               )}
             </label>
+
+            {similarItems.length > 0 && !similarDismissed && (
+              <div className="mx-4 mt-3 p-3 rounded-xl border border-amber-200 bg-amber-50 animate-in fade-in slide-in-from-top-1 duration-300">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5 text-xs text-amber-700">
+                    <span className="text-amber-500">✦</span>
+                    <span className="font-medium">
+                      You already have {similarItems.length} similar {similarItems.length === 1 ? 'item' : 'items'}
+                    </span>
+                    {checkingSimilar && (
+                      <span className="relative flex w-1.5 h-1.5 ml-1">
+                        <span className="absolute inline-flex w-full h-full rounded-full bg-amber-400 opacity-75 animate-ping" />
+                        <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSimilarDismissed(true)}
+                    className="text-amber-500 hover:text-amber-700 text-xs shrink-0"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {similarItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border border-amber-100 shrink-0">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-8 h-8 rounded object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">?</div>
+                      )}
+                      <div className="text-[11px] min-w-0">
+                        <div className="font-medium text-slate-700 truncate">{item.name}</div>
+                        <div className="text-slate-400">
+                          {item.similarity >= 1 ? 'Same color' : 'Similar'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {visualResult && (
+                  <div className={`mt-2 text-[11px] px-2 py-1.5 rounded-lg ${visualResult.is_different ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+                    <span className="font-medium">
+                      {visualResult.is_different ? '✓ Different enough' : '⚠ May be redundant'}:
+                    </span>{' '}
+                    {visualResult.reasoning}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="p-4 space-y-3">
               <div>

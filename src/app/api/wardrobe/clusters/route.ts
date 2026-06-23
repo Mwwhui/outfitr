@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createClient } from '@supabase/supabase-js';
 import { kMeans } from '@/lib/kmeans';
+import { normalizeColor } from '@/lib/colorNorm';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -356,7 +357,62 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ clusters } satisfies ClusterResponse);
+    // Build a "Duplicates" cluster from items with same type + normalized color
+    const typeColorGroups = new Map<string, RawItem[]>();
+    for (const item of items) {
+      const key = `${item.type}::${normalizeColor(item.color || '')}`;
+      const group = typeColorGroups.get(key) || [];
+      group.push(item);
+      typeColorGroups.set(key, group);
+    }
+
+    const duplicateItems: ClusterItem[] = [];
+    for (const group of typeColorGroups.values()) {
+      if (group.length >= 2) {
+        for (const item of group) {
+          duplicateItems.push({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            image_url: item.image_url,
+            wear_count: item.wear_count ?? 0,
+            price: item.price ?? 0,
+          });
+        }
+      }
+    }
+
+    const allClusters = [...clusters];
+    if (duplicateItems.length > 0) {
+      const totalValue = duplicateItems.reduce((s, i) => s + i.price, 0);
+      const avgWear = duplicateItems.reduce((s, i) => s + i.wear_count, 0) / duplicateItems.length;
+      const wearVsAverage = overallAvgWear > 0 ? Math.round((avgWear / overallAvgWear) * 100) : 100;
+
+      const typeCount: Record<string, number> = {};
+      for (const item of duplicateItems) {
+        typeCount[item.type] = (typeCount[item.type] ?? 0) + 1;
+      }
+      const typeBreakdown = Object.entries(typeCount)
+        .map(([type, count]) => ({ type, count, percentage: Math.round((count / duplicateItems.length) * 100) }))
+        .sort((a, b) => b.count - a.count);
+
+      allClusters.push({
+        id: clusters.length,
+        label: 'Potential Duplicates',
+        color: '#f59e0b',
+        size: duplicateItems.length,
+        insight: {
+          totalValue,
+          avgWear: Math.round(avgWear * 10) / 10,
+          avgPrice: Math.round(totalValue / duplicateItems.length),
+          wearVsAverage,
+          typeBreakdown,
+        },
+        items: duplicateItems,
+      });
+    }
+
+    return NextResponse.json({ clusters: allClusters } satisfies ClusterResponse);
   } catch (err) {
     console.error('Clusters error:', err);
     return NextResponse.json(
