@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
 export const maxDuration = 30;
 
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Gemini API key not configured" },
+        { error: 'Gemini API key not configured' },
         { status: 500 },
       );
     }
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     if (!new_image || !existing_images?.length) {
       return NextResponse.json(
-        { error: "new_image and existing_images are required" },
+        { error: 'new_image and existing_images are required' },
         { status: 400 },
       );
     }
@@ -34,7 +34,9 @@ export async function POST(req: Request) {
     const toCompare = existing_images.slice(0, 3);
 
     // Build the prompt with all images
-    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+    const parts: Array<
+      { text: string } | { inlineData: { mimeType: string; data: string } }
+    > = [];
 
     parts.push({
       text: `You are a minimalist wardrobe advisor. Compare the FIRST image (new item being considered) against the ${toCompare.length} EXISTING items.
@@ -53,74 +55,98 @@ Respond with ONLY valid JSON (no markdown, no extra text):
     // Add new image as first image
     parts.push({
       inlineData: {
-        mimeType: "image/jpeg",
+        mimeType: 'image/jpeg',
         data: new_image,
       },
     });
 
-    parts.push({ text: "--- EXISTING ITEMS ---" });
+    parts.push({ text: '--- EXISTING ITEMS ---' });
 
-    // Add existing images
-    for (const item of toCompare) {
-      // Fetch and convert to base64
-      try {
-        const res = await fetch(item.image_url);
-        if (!res.ok) continue;
-        const buffer = Buffer.from(await res.arrayBuffer());
-        const base64 = buffer.toString("base64");
+    // Fetch existing images in parallel
+    const imageResults = await Promise.all(
+      toCompare.map(
+        async (item: { image_url: string | URL | Request; name: any }) => {
+          try {
+            const res = await fetch(item.image_url);
+            if (!res.ok) return null;
+            const buffer = Buffer.from(await res.arrayBuffer());
+            const contentType = res.headers.get('content-type') || 'image/jpeg';
+            return {
+              name: item.name,
+              mimeType: contentType.split(';')[0],
+              base64: buffer.toString('base64'),
+            };
+          } catch {
+            return null;
+          }
+        },
+      ),
+    );
 
-        parts.push({ text: `Existing: ${item.name}` });
-        parts.push({
-          inlineData: {
-            mimeType: "image/jpeg",
-            data: base64,
-          },
-        });
-      } catch {
-        // Skip items we can't fetch
-        continue;
-      }
+    // Add fetched images to prompt (skip nulls)
+    for (const img of imageResults) {
+      if (!img) continue;
+      parts.push({ text: `Existing: ${img.name}` });
+      parts.push({
+        inlineData: {
+          mimeType: img.mimeType,
+          data: img.base64,
+        },
+      });
+    }
+
+    // Guard: if no existing images were fetched, skip Gemini call
+    const hasExistingImages = imageResults.some(Boolean);
+    if (!hasExistingImages) {
+      return NextResponse.json({
+        is_different: true,
+        reasoning: 'Could not fetch existing items for comparison',
+        confidence: 0.2,
+      });
     }
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(geminiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts }] }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Gemini visual-similarity error:", errText);
+      console.error('Gemini visual-similarity error:', errText);
       return NextResponse.json(
-        { error: "Gemini API error" },
+        { error: 'Gemini API error' },
         { status: response.status },
       );
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 
     // Parse JSON response (handle markdown-wrapped JSON)
     let result: VisualSimilarityResponse;
     try {
-      const jsonStr = text.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+      const jsonStr = text
+        .replace(/```json?\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim();
       result = JSON.parse(jsonStr);
     } catch {
       // Fallback: if Gemini returns freeform text, treat as "different" with low confidence
       result = {
         is_different: true,
-        reasoning: text || "Could not parse AI response",
+        reasoning: text || 'Could not parse AI response',
         confidence: 0.3,
       };
     }
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("API /api/clothes/visual-similarity crashed:", error);
+    console.error('API /api/clothes/visual-similarity crashed:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal Error" },
+      { error: error instanceof Error ? error.message : 'Internal Error' },
       { status: 500 },
     );
   }

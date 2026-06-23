@@ -71,6 +71,8 @@ export default function EditWardrobePage() {
   const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [similarItems, setSimilarItems] = useState<Array<{id: string; name: string; color: string | null; image_url: string | null; similarity: number}>>([]);
+  const [visualResult, setVisualResult] = useState<{is_different: boolean; reasoning: string; confidence: number} | null>(null);
+  const [checkingVisual, setCheckingVisual] = useState(false);
 
   // Fetch item and category list
   useEffect(() => {
@@ -155,6 +157,41 @@ export default function EditWardrobePage() {
       .then((data) => setSimilarItems(data.similar || []))
       .catch(() => {});
   }, [clothes?.id, clothes?.type, clothes?.color, session?.user?.id]);
+
+  // Fire Gemini visual comparison when 1-3 similar items exist
+  useEffect(() => {
+    if (!clothes?.image_url || similarItems.length < 1 || similarItems.length > 3) return;
+    let active = true;
+    const check = async () => {
+      setCheckingVisual(true);
+      try {
+        const res = await fetch('/api/clothes/visual-similarity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            new_image: await (async () => {
+              const imgRes = await fetch(clothes!.image_url!);
+              const buf = Buffer.from(await imgRes.arrayBuffer());
+              return buf.toString('base64');
+            })(),
+            existing_images: similarItems.map((s) => ({
+              id: s.id,
+              image_url: s.image_url,
+              name: s.name,
+            })),
+            type: clothes!.type,
+          }),
+        });
+        if (res.ok && active) setVisualResult(await res.json());
+      } catch {
+        // Optional, ignore errors
+      } finally {
+        if (active) setCheckingVisual(false);
+      }
+    };
+    check();
+    return () => { active = false; };
+  }, [clothes?.image_url, clothes?.type, similarItems]);
 
   const updateField = <K extends keyof Clothes>(
     field: K,
@@ -646,9 +683,17 @@ export default function EditWardrobePage() {
         {/* SIMILAR ITEMS */}
         {similarItems.length > 0 && (
           <div className="mt-8 p-4 rounded-xl border border-slate-200 bg-slate-50">
-            <h3 className="text-sm font-medium text-slate-700 mb-3">
-              Similar items in your wardrobe ({similarItems.length})
-            </h3>
+            <div className="flex items-center gap-2 mb-3">
+              <h3 className="text-sm font-medium text-slate-700">
+                Similar items in your wardrobe ({similarItems.length})
+              </h3>
+              {checkingVisual && (
+                <span className="relative flex w-1.5 h-1.5">
+                  <span className="absolute inline-flex w-full h-full rounded-full bg-amber-400 opacity-75 animate-ping" />
+                  <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-amber-500" />
+                </span>
+              )}
+            </div>
             <div className="flex gap-3 overflow-x-auto pb-1">
               {similarItems.map((item) => (
                 <button
@@ -664,12 +709,20 @@ export default function EditWardrobePage() {
                   <div className="text-left min-w-0">
                     <div className="text-xs font-medium text-slate-700 truncate max-w-[100px]">{item.name}</div>
                     <div className="text-[10px] text-slate-400">
-                      {item.similarity >= 1 ? 'Same color' : 'Similar'}
+                      {item.similarity >= 1 ? 'Same color' : 'Same family'}
                     </div>
                   </div>
                 </button>
               ))}
             </div>
+            {visualResult && (
+              <div className={`mt-3 text-[11px] px-2 py-1.5 rounded-lg ${visualResult.is_different ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+                <span className="font-medium">
+                  {visualResult.is_different ? '✓ Different enough' : '⚠ May be redundant'}:
+                </span>{' '}
+                {visualResult.reasoning}
+              </div>
+            )}
           </div>
         )}
 

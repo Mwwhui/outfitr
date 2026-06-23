@@ -107,6 +107,7 @@ export default function UploadClothesPage() {
 
   const cam = useCameraScanner();
   const fileKeyRef = useRef('');
+  const compressedCacheRef = useRef<{ key: string; file: File } | null>(null);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -130,6 +131,7 @@ export default function UploadClothesPage() {
       setDetectResult(null);
       try {
         const compressed = await compressImage(imageFile);
+        compressedCacheRef.current = { key, file: compressed };
         // Each fetch needs its own FormData — a body can only be read once
         const fdYolo = new FormData();
         fdYolo.append('file', compressed);
@@ -253,14 +255,19 @@ export default function UploadClothesPage() {
         if (!active) return;
         setSimilarItems(data.similar || []);
 
-        // Tier 2: If 1-3 matches and we have an image, fire Gemini visual comparison
-        if (data.similar?.length >= 1 && data.similar.length <= 3 && imageFile && active) {
+        // Tier 2: If 1-3 matches, fire Gemini visual comparison (use cached compressed image)
+        if (data.similar?.length >= 1 && data.similar.length <= 3 && !similarDismissed && active) {
           try {
-            const compressed = await compressImage(imageFile);
+            // Reuse cached compressed image from auto-detect, or compress fresh
+            let compressed = compressedCacheRef.current?.file;
+            if (!compressed && imageFile) {
+              compressed = await compressImage(imageFile);
+            }
+            if (!compressed || !active) return;
             const imageBase64 = await new Promise<string>((resolve) => {
               const reader = new FileReader();
               reader.onload = () => resolve((reader.result as string).split(',')[1]);
-              reader.readAsDataURL(compressed);
+              reader.readAsDataURL(compressed!);
             });
             if (!active) return;
             const visRes = await fetch('/api/clothes/visual-similarity', {
@@ -328,7 +335,7 @@ export default function UploadClothesPage() {
     setFormError('');
 
     try {
-      const compressed = await compressImage(imageFile);
+      const compressed = compressedCacheRef.current?.file || await compressImage(imageFile);
       const formData = new FormData();
       formData.append('file', compressed);
 

@@ -200,22 +200,18 @@ export async function GET() {
     const medianPrice =
       prices.length > 0 ? prices[Math.floor(prices.length / 2)] : 0;
 
-    // ── Feature engineering (4 dimensions) ───────────────────────────────
-    //
-    // FIX 1: wear_count is now an explicit feature.
-    //   Without it, items that have never been worn are separated only by
-    //   price, losing the most important clustering signal entirely.
-    //
-    // FIX 2: unused_score fallback.
-    //   If your app doesn't yet compute unused_score for every item, many
-    //   will be 0. We still include it as a feature — minmax handles the
-    //   all-zero case by returning 0.5 (neutral), so it doesn't break things.
-    //   As soon as items accumulate scores it becomes meaningful.
+    // ── Feature engineering (5 dimensions) ───────────────────────────────
     //
     // [0] wear       = log1p(wear_count)
     // [1] cpw        = log1p(price / (wear_count + 1))   cost-per-wear
     // [2] unused     = log1p(unused_score)
     // [3] age        = log1p(days_since_purchase)
+    // [4] color      = color family index (0..10) for color-aware clustering
+
+    const COLOR_FAMILY_INDEX: Record<string, number> = {
+      blue: 0, red: 1, green: 2, brown: 3, pink: 4,
+      purple: 5, orange: 6, yellow: 7, black: 8, white: 9, grey: 10,
+    };
 
     const featureVectors = items.map((item) => {
       const wear =
@@ -224,18 +220,20 @@ export async function GET() {
           : 0;
       const price =
         item.price != null && isFinite(item.price) ? item.price : medianPrice;
-      // FIX: unused_score can be null/undefined/NaN from the DB — always coerce to 0
       const unused =
         item.unused_score != null && isFinite(item.unused_score)
           ? item.unused_score
           : 0;
       const age = daysSince(item.purchase_date ?? item.created_at);
+      const colorFamily = normalizeColor(item.color || "");
+      const colorIdx = COLOR_FAMILY_INDEX[colorFamily] ?? 5; // default to purple (mid-range)
 
       return [
         Math.log1p(wear),
         Math.log1p(price / (wear + 1)),
         Math.log1p(unused),
         Math.log1p(age),
+        colorIdx / 10, // normalize to [0, 1] range
       ].map((v) => (isFinite(v) ? v : 0));
     });
 
