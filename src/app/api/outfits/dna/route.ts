@@ -26,6 +26,165 @@ interface OutfitDNA {
 const DNA_CACHE = new Map<string, { data: OutfitDNA; ts: number }>();
 const DNA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// Color families for grouping
+const COLOR_FAMILIES: Record<string, string[]> = {
+  dark: ["black", "navy", "charcoal", "dark", "grey", "gray", "dark blue", "dark green", "burgundy", "maroon"],
+  light: ["white", "cream", "beige", "light", "pastel", "ivory", "off-white", "tan", "light blue", "light pink"],
+  earth: ["brown", "olive", "tan", "camel", "rust", "terracotta", "mustard", "khaki", "sage", "forest green"],
+  bright: ["red", "yellow", "orange", "pink", "lime", "cobalt", "electric", "coral", "fuchsia", "turquoise"],
+  blue: ["blue", "navy", "denim", "sky blue", "royal blue", "light blue", "teal"],
+  neutral: ["white", "black", "grey", "gray", "beige", "cream", "navy", "brown", "tan", "khaki"],
+};
+
+function getColorFamily(color: string): string {
+  const lower = color.toLowerCase();
+  for (const [family, keywords] of Object.entries(COLOR_FAMILIES)) {
+    if (keywords.some((kw) => lower.includes(kw))) return family;
+  }
+  return "other";
+}
+
+// Deterministic fallback: compute DNA from outfit history stats
+function computeStatisticalDNA(
+  outfitHistory: Array<{ date: string; items: Array<{ name: string; type: string; color: string }> }>,
+  wardrobe: Array<{ id: string; name: string; type: string; color: string; image_url: string | null }>
+): OutfitDNA {
+  // 1. Strong pairs — co-occurrence count
+  const pairCounts = new Map<string, { item_a: string; item_b: string; count: number }>();
+  for (const outfit of outfitHistory) {
+    const items = outfit.items;
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const key = [items[i].name, items[j].name].sort().join("|||");
+        const existing = pairCounts.get(key);
+        if (existing) {
+          existing.count++;
+        } else {
+          pairCounts.set(key, {
+            item_a: items[i].name,
+            item_b: items[j].name,
+            count: 1,
+          });
+        }
+      }
+    }
+  }
+  const strong_pairs = [...pairCounts.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // 2. Formula — most common type combo pattern
+  const typePatternCounts = new Map<string, number>();
+  for (const outfit of outfitHistory) {
+    const types = [...new Set(outfit.items.map((i) => i.type))].sort();
+    if (types.length >= 2) {
+      const pattern = types.join(" + ");
+      typePatternCounts.set(pattern, (typePatternCounts.get(pattern) || 0) + 1);
+    }
+  }
+  const topPattern = [...typePatternCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const formula = topPattern ? topPattern[0].toLowerCase() : "mixed styles";
+
+  // 3. Color habits — dominant color family per type
+  const typeColors = new Map<string, Map<string, number>>();
+  for (const outfit of outfitHistory) {
+    for (const item of outfit.items) {
+      const family = getColorFamily(item.color);
+      if (!typeColors.has(item.type)) typeColors.set(item.type, new Map());
+      const colorMap = typeColors.get(item.type)!;
+      colorMap.set(family, (colorMap.get(family) || 0) + 1);
+    }
+  }
+  const color_habits: string[] = [];
+  for (const [type, colorMap] of typeColors) {
+    const sorted = [...colorMap.entries()].sort((a, b) => b[1] - a[1]);
+    if (sorted.length >= 2 && sorted[0][1] > 1) {
+      const dominant = sorted[0][0];
+      const secondary = sorted[1][0];
+      if (dominant !== secondary) {
+        color_habits.push(`${dominant} ${type}s with ${secondary} pairings`);
+      } else {
+        color_habits.push(`mostly ${dominant} ${type}s`);
+      }
+    }
+  }
+
+  // 4. Never tried — items never paired that share complementary colors
+  const wornPairs = new Set<string>();
+  for (const outfit of outfitHistory) {
+    for (let i = 0; i < outfit.items.length; i++) {
+      for (let j = i + 1; j < outfit.items.length; j++) {
+        wornPairs.add([outfit.items[i].name, outfit.items[j].name].sort().join("|||"));
+      }
+    }
+  }
+  const never_tried: Array<{ item_a: string; item_b: string; reason: string }> = [];
+  for (let i = 0; i < wardrobe.length; i++) {
+    for (let j = i + 1; j < wardrobe.length; j++) {
+      const key = [wardrobe[i].name, wardrobe[j].name].sort().join("|||");
+      if (!wornPairs.has(key) && wardrobe[i].type !== wardrobe[j].type) {
+        const fA = getColorFamily(wardrobe[i].color);
+        const fB = getColorFamily(wardrobe[j].color);
+        if (fA !== fB && never_tried.length < 5) {
+          never_tried.push({
+            item_a: wardrobe[i].name,
+            item_b: wardrobe[j].name,
+            reason: `${fA} pairs well with ${fB} tones`,
+          });
+        }
+      }
+    }
+  }
+
+  // 5. Pattern breakers — outfits that deviate from the dominant type pattern
+  const pattern_breakers: Array<{ combo: string[]; combo_items: ComboItem[]; reason: string }> = [];
+  if (topPattern) {
+    const dominantTypes = topPattern[0].split(" + ");
+    for (const outfit of outfitHistory) {
+      const outfitTypes = [...new Set(outfit.items.map((i) => i.type))].sort();
+      const isOutlier = outfitTypes.some((t) => !dominantTypes.includes(t));
+      if (isOutlier && pattern_breakers.length < 3) {
+        const comboItems: ComboItem[] = outfit.items.map((it) => {
+          const match = wardrobe.find((w) => w.name === it.name);
+          return {
+            id: match?.id || "",
+            name: it.name,
+            type: it.type,
+            color: it.color || null,
+            image_url: match?.image_url || null,
+          };
+        });
+        const outfitTypeStr = outfitTypes.join(" + ");
+        pattern_breakers.push({
+          combo: outfit.items.map((i) => i.name),
+          combo_items: comboItems,
+          reason: `usually you wear ${formula} but this uses ${outfitTypeStr}`,
+        });
+      }
+    }
+  }
+
+  // 6. Style summary — template-based
+  const totalOutfits = outfitHistory.length;
+  const uniqueItems = new Set(outfitHistory.flatMap((o) => o.items.map((i) => i.name))).size;
+  const topPair = strong_pairs[0];
+  let style_summary: string;
+  if (topPair) {
+    style_summary = `Across ${totalOutfits} outfits, your go-to pairing is ${topPair.item_a} with ${topPair.item_b} (${topPair.count}×). You work with ${uniqueItems} unique pieces. ${color_habits.length > 0 ? `Your palette leans ${color_habits[0].split(" ").slice(0, 3).join(" ")}.` : ""}`;
+  } else {
+    style_summary = `You've put together ${totalOutfits} outfits with ${uniqueItems} unique pieces. Keep exploring to reveal more patterns.`;
+  }
+
+  return {
+    formula,
+    color_habits: color_habits.slice(0, 3),
+    strong_pairs,
+    never_tried,
+    pattern_breakers,
+    style_summary,
+  };
+}
+
 // POST /api/outfits/dna
 // Body: { user_id: string }
 export async function POST(req: Request) {
@@ -135,37 +294,51 @@ Return ONLY valid JSON (no markdown, no extra text):
   "style_summary": "2-3 sentence description of their style patterns and what makes it unique"
 }`;
 
+    // Retry Gemini with exponential backoff, fall back to statistical analysis
+    const MAX_RETRIES = 3;
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-    const response = await fetch(geminiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
-    });
+    let result: OutfitDNA | null = null;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Gemini DNA error:", errText);
-      return NextResponse.json({ error: "Gemini API error" }, { status: response.status });
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const response = await fetch(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+          try {
+            const jsonStr = text.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+            result = JSON.parse(jsonStr);
+            break; // Success — exit retry loop
+          } catch {
+            // Parse failed — treat as failed attempt
+            console.error("Gemini DNA parse failed:", text.slice(0, 200));
+          }
+        } else {
+          const errText = await response.text();
+          console.error(`Gemini DNA error (attempt ${attempt + 1}/${MAX_RETRIES}):`, errText);
+          // Don't retry on 4xx client errors (except 429)
+          if (response.status >= 400 && response.status < 500 && response.status !== 429) break;
+        }
+      } catch (e) {
+        console.error(`Gemini DNA fetch error (attempt ${attempt + 1}/${MAX_RETRIES}):`, e);
+      }
+      // Exponential backoff: 1s, 2s, 4s
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+      }
     }
 
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-
-    let result: OutfitDNA;
-    try {
-      const jsonStr = text.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
-      result = JSON.parse(jsonStr);
-    } catch {
-      result = {
-        formula: "Could not analyze",
-        color_habits: [],
-        strong_pairs: [],
-        never_tried: [],
-        pattern_breakers: [],
-        style_summary: text || "Could not parse AI response",
-      };
+    // If Gemini failed, fall back to statistical analysis
+    if (!result) {
+      console.log("Gemini DNA failed — using statistical fallback");
+      result = computeStatisticalDNA(outfitHistory, wardrobeSummary);
     }
 
     // Resolve pattern_breaker item names to full ComboItem objects
