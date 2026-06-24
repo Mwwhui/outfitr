@@ -32,6 +32,7 @@ interface FormFields {
   location: string | '';
   description: string;
   notes: string;
+  useCases: string[];
 }
 
 const initialForm: FormFields = {
@@ -47,6 +48,7 @@ const initialForm: FormFields = {
   location: '',
   description: '',
   notes: '',
+  useCases: [],
 };
 
 function formReducer(state: FormFields, next: Partial<FormFields>): FormFields {
@@ -101,6 +103,7 @@ export default function UploadClothesPage() {
   const [checkingSimilar, setCheckingSimilar] = useState(false);
   const [visualResult, setVisualResult] = useState<{is_different: boolean; reasoning: string; confidence: number} | null>(null);
   const [similarDismissed, setSimilarDismissed] = useState(false);
+  const [useCaseDetected, setUseCaseDetected] = useState(false);
 
   const { brandSuggestions, locationSuggestions, materialSuggestions } =
     useSuggestions(session?.user?.id);
@@ -129,6 +132,7 @@ export default function UploadClothesPage() {
     const detect = async () => {
       setDetecting(true);
       setDetectResult(null);
+      setUseCaseDetected(false);
       try {
         const compressed = await compressImage(imageFile);
         compressedCacheRef.current = { key, file: compressed };
@@ -137,8 +141,10 @@ export default function UploadClothesPage() {
         fdYolo.append('file', compressed);
         const fdGemini = new FormData();
         fdGemini.append('file', compressed);
+        const fdUseCase = new FormData();
+        fdUseCase.append('file', compressed);
 
-        const [yoloData, geminiData] = await Promise.all([
+        const [yoloData, geminiData, useCaseData] = await Promise.all([
           fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
             method: 'POST',
             body: fdYolo,
@@ -159,6 +165,17 @@ export default function UploadClothesPage() {
             return r.json();
           }).catch((err) => {
             console.error('Gemini color detection failed:', err);
+            return null;
+          }),
+          fetchWithTimeout('/api/clothes/detect-use-case', {
+            method: 'POST',
+            body: fdUseCase,
+            signal: abortController.signal,
+          }, GEMINI_TIMEOUT_MS).then((r) => {
+            if (!r.ok) throw new Error('Use case API error');
+            return r.json();
+          }).catch((err) => {
+            console.error('Use case detection failed:', err);
             return null;
           }),
         ]);
@@ -200,6 +217,11 @@ export default function UploadClothesPage() {
 
         if (detectedColor) {
           setField({ color: detectedColor });
+        }
+
+        if (useCaseData?.use_case && useCaseData.use_case.length > 0) {
+          setField({ useCases: useCaseData.use_case });
+          setUseCaseDetected(true);
         }
 
         const label = [detectedColor, specificName].filter(Boolean).map(title).join(' ');
@@ -331,6 +353,11 @@ export default function UploadClothesPage() {
       return;
     }
 
+    if (fields.useCases.length === 0) {
+      setFormError('Please select at least one use case (e.g. casual, business, sleepwear).');
+      return;
+    }
+
     setIsUploading(true);
     setFormError('');
 
@@ -362,6 +389,7 @@ export default function UploadClothesPage() {
           material: fields.material || null,
           favorite: false,
           image_url: imageUrl,
+          use_case: fields.useCases,
           description: fields.description || null,
           purchase_date: fields.purchaseDate || null,
           location: fields.location || null,
@@ -379,6 +407,23 @@ export default function UploadClothesPage() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const toggleUseCase = (value: string) => {
+    setField({
+      useCases: fields.useCases.includes(value)
+        ? fields.useCases.filter((v) => v !== value)
+        : [...fields.useCases, value],
+    });
+  };
+
+  const USE_CASE_LABELS: Record<string, string> = {
+    casual: 'Casual',
+    business: 'Business',
+    sport: 'Sport',
+    sleep: 'Sleepwear',
+    swim: 'Swimwear',
+    date: 'Date Night',
   };
 
   const upd =
@@ -823,6 +868,36 @@ export default function UploadClothesPage() {
               )}
             </div>
           </div>
+
+          {/* Use Case */}
+          <div>
+            <label className="block text-xs text-slate-600 mb-2">
+              Use case <span className="text-red-400">*</span>
+              {detecting && <span className="text-slate-400 font-normal ml-2">AI detecting…</span>}
+              {useCaseDetected && <span className="text-emerald-500 font-normal ml-2">✦ AI detected</span>}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(USE_CASE_LABELS).map(([value, label]) => (
+                <label
+                  key={value}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs cursor-pointer transition ${
+                    fields.useCases.includes(value)
+                      ? 'bg-black text-white border-black'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={fields.useCases.includes(value)}
+                    onChange={() => toggleUseCase(value)}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
           <hr className="border-slate-200" />
           <div>
             <label className="block text-xs text-slate-600 mb-1">

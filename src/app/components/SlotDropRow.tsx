@@ -8,6 +8,7 @@ export interface ClothingItem {
   type: string;
   image_url?: string;
   favorite?: boolean;
+  use_case?: string[];
 }
 
 export type OutfitSlotKey = 'top' | 'bottom' | 'onepiece' | 'outerwear';
@@ -66,6 +67,13 @@ export default function SlotDropRow({
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 rounded-b-2xl">
             <p className="text-white text-xs font-medium truncate">{item.name}</p>
             <p className="text-white/70 text-[10px] truncate">{label}</p>
+            {item.use_case && item.use_case.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {item.use_case.map((uc) => (
+                  <span key={uc} className="text-[8px] uppercase tracking-wider text-white/60 bg-white/10 rounded px-1 py-[1px]">{uc}</span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

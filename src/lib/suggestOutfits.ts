@@ -1,5 +1,15 @@
 import { multiColorScore, getPaletteName, pairHarmony } from './colorUtils';
 
+export const USE_CASE_OPTIONS = ['casual', 'business', 'sport', 'sleep', 'swim', 'date'] as const;
+
+export const INCOMPATIBLE_USE_CASES: Record<string, string[]> = {
+  sleep: ['business', 'sport', 'swim', 'date'],
+  business: ['sleep', 'swim', 'sport'],
+  sport: ['sleep', 'business'],
+  swim: ['sleep', 'business'],
+  date: ['sleep'],
+};
+
 export interface ClothingItem {
   id: string;
   name: string;
@@ -9,6 +19,7 @@ export interface ClothingItem {
   image_url?: string;
   favorite?: boolean;
   wear_count?: number;
+  use_case?: string[];
 }
 
 export interface ScoreBreakdown {
@@ -36,6 +47,32 @@ export interface WeatherData {
 }
 
 export type OccasionKey = 'casual' | 'business' | 'formal' | 'sport' | 'date';
+
+export function hasCompatibleUseCases(itemA: ClothingItem, itemB: ClothingItem): boolean {
+  const tagsA = itemA.use_case || [];
+  const tagsB = itemB.use_case || [];
+  if (tagsA.length === 0 || tagsB.length === 0) return true;
+  for (const tagA of tagsA) {
+    const blocked = INCOMPATIBLE_USE_CASES[tagA];
+    if (blocked) {
+      for (const tagB of tagsB) {
+        if (blocked.includes(tagB)) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function filterCompatibleUseCases<T extends { items: ClothingItem[] }>(expanded: T[]): T[] {
+  return expanded.filter(({ items }) => {
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        if (!hasCompatibleUseCases(items[i], items[j])) return false;
+      }
+    }
+    return true;
+  });
+}
 
 type SlotKey = 'top' | 'bottom' | 'onepiece' | 'outerwear';
 
@@ -526,7 +563,7 @@ export function suggestOutfits(
     const combosWithSeeds = rawCombos.map(combo => [...combo, ...seedItems]);
 
     // Handle onepiece expansion for remaining slots + seeds
-    const expanded = expandWithOnepiece(combosWithSeeds, stillRequired, partitioned.onepiece);
+    const expanded = filterCompatibleUseCases(expandWithOnepiece(combosWithSeeds, stillRequired, partitioned.onepiece));
 
     const scored = expanded.map(({ items, onepieceMode }) => {
       const result = scoreCombo(items, occasion, seasons, onepieceMode, pairFreq);
@@ -552,7 +589,7 @@ export function suggestOutfits(
   const rawCombos = generateCombinations(partitioned, required);
   if (rawCombos.length === 0) return [];
 
-  const expanded = expandWithOnepiece(rawCombos, required, partitioned.onepiece);
+  const expanded = filterCompatibleUseCases(expandWithOnepiece(rawCombos, required, partitioned.onepiece));
 
   const scored = expanded.map(({ items, onepieceMode }) => {
     const result = scoreCombo(items, occasion, seasons, onepieceMode, pairFreq);

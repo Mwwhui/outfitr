@@ -593,6 +593,7 @@ export function useCameraScanner(): CameraScannerReturn {
         included: item.confidence > 0.5,
         colorSource: 'hsv' as const,
         aiColorSource: undefined,
+        useCase: [],
       };
     });
 
@@ -638,22 +639,35 @@ export function useCameraScanner(): CameraScannerReturn {
 
     const fdYolo = new FormData();
     fdYolo.append('file', captureFile);
+    const fdUseCase = new FormData();
+    fdUseCase.append('file', captureFile);
 
     Promise.all([
       fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
         method: 'POST', body: fdYolo,
       }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetchGeminiWithRetry(),
-    ]).then(([autoData, geminiData]) => {
+      fetchWithTimeout('/api/clothes/detect-use-case', {
+        method: 'POST', body: fdUseCase,
+      }, GEMINI_TIMEOUT_MS).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([autoData, geminiData, useCaseData]) => {
       const autoColor = geminiData?.color || autoData?.color || '';
       const autoType = autoData?.type || '';
       const geminiAvailable = !!geminiData?.color;
-
-      if (!autoColor && !autoType) return; // nothing better to offer
+      const detectedUseCase: string[] = useCaseData?.use_case || [];
 
       setEditItems(prev => {
         if (!prev) return prev;
-        return prev.map((item, idx) => {
+
+        // Apply use case detection to all items (batch items share same context)
+        const withUseCase = detectedUseCase.length > 0
+          ? prev.map(item => ({ ...item, useCase: detectedUseCase }))
+          : prev;
+
+        // If no better color/type, just update use cases
+        if (!autoColor && !autoType) return withUseCase;
+
+        return withUseCase.map((item, idx) => {
           const hsvCandidates = dominantColorCandidatesFromCanvas(canvas, item.box, 3);
           const perItemColor = hsvCandidates[0] || null;
           const betterColor = autoColor || item.color;
@@ -743,6 +757,7 @@ export function useCameraScanner(): CameraScannerReturn {
           color: item.color,
           season: item.season || null,
           image_url: url,
+          use_case: item.useCase,
         }),
       });
       if (!saveRes.ok) throw new Error('Failed to save');

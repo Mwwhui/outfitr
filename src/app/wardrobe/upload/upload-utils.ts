@@ -31,6 +31,7 @@ export interface EditItem {
   colorCandidates?: string[];
   colorSource?: ColorSource;
   aiColorSource?: ColorSource;
+  useCase: string[];
 }
 
 export const SEASONS = ["All", "Spring", "Summer", "Autumn", "Winter"];

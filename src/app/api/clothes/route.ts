@@ -52,6 +52,7 @@ export async function POST(req: Request) {
       material: body.material,
       favorite: body.favorite,
       image_url: body.image_url,
+      use_case: body.use_case || null,
       description: body.description,
       purchase_date: body.purchase_date,
       location: body.location,

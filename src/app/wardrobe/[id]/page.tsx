@@ -32,6 +32,7 @@ type Clothes = {
   purchase_date: string | null; // date as "YYYY-MM-DD"
   location: string | null;
   notes: string | null;
+  use_case: string[] | null;
 
   created_at?: string;
   updated_at?: string | null;
@@ -193,6 +194,28 @@ export default function EditWardrobePage() {
     return () => { active = false; };
   }, [clothes?.image_url, clothes?.type, similarItems]);
 
+  const USE_CASE_LABELS: Record<string, string> = {
+    casual: 'Casual',
+    business: 'Business',
+    sport: 'Sport',
+    sleep: 'Sleepwear',
+    swim: 'Swimwear',
+    date: 'Date Night',
+  };
+
+  const toggleUseCase = (value: string) => {
+    setClothes((prev) => {
+      if (!prev) return prev;
+      const current = prev.use_case || [];
+      return {
+        ...prev,
+        use_case: current.includes(value)
+          ? current.filter((v) => v !== value)
+          : [...current, value],
+      };
+    });
+  };
+
   const updateField = <K extends keyof Clothes>(
     field: K,
     value: Clothes[K],
@@ -202,6 +225,13 @@ export default function EditWardrobePage() {
 
   const handleUpdate = async () => {
     if (!clothes) return;
+
+    const useCase = clothes.use_case || [];
+    if (useCase.length === 0) {
+      toast.error('Please select at least one use case.');
+      return;
+    }
+
     setSaving(true);
 
     await fetch(`/api/clothes/${id}`, {
@@ -218,6 +248,7 @@ export default function EditWardrobePage() {
         material: clothes.material,
         favorite: clothes.favorite ?? false,
         image_url: clothes.image_url,
+        use_case: clothes.use_case,
         categories: clothes.categories,
         description: clothes.description,
         purchase_date: clothes.purchase_date,
@@ -652,10 +683,39 @@ export default function EditWardrobePage() {
             </div>
 
             {/* Divider */}
-            <hr className="border-slate-200" />
+            {/* Use Case */}
+            <div className="md:col-span-2">
+              <label className="block text-xs text-slate-600 mb-2">
+                Use case <span className="text-red-400">*</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(USE_CASE_LABELS).map(([value, label]) => (
+                  <label
+                    key={value}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs cursor-pointer transition ${
+                      (clothes.use_case || []).includes(value)
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(clothes.use_case || []).includes(value)}
+                      onChange={() => toggleUseCase(value)}
+                      className="sr-only"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <hr className="border-slate-200" />
+            </div>
 
             {/* Description */}
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-xs text-slate-600 mb-1">
                 Description
               </label>

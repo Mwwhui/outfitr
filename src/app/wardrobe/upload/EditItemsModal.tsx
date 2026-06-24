@@ -24,6 +24,17 @@ const SOURCE_LABELS: Record<ColorSource, string> = {
   manual: '',
 };
 
+const USE_CASE_OPTIONS = ['casual', 'business', 'sport', 'sleep', 'swim', 'date'];
+
+const USE_CASE_LABELS: Record<string, string> = {
+  casual: 'Casual',
+  business: 'Business',
+  sport: 'Sport',
+  sleep: 'Sleepwear',
+  swim: 'Swimwear',
+  date: 'Date Night',
+};
+
 export default function EditItemsModal({
   capturedFrame,
   editItems,
@@ -40,6 +51,7 @@ export default function EditItemsModal({
   if (!capturedFrame || !editItems) return null;
 
   const includedCount = editItems.filter((i) => i.included).length;
+  const missingUseCase = editItems.some((i) => i.included && i.useCase.length === 0);
   const updateItem = (id: number, patch: Partial<EditItem>) =>
     onEditItemsChange(
       editItems.map((e) => (e.id === id ? { ...e, ...patch } : e)),
@@ -201,7 +213,34 @@ export default function EditItemsModal({
                     ))}
                   </select>
                 </div>
-              </div>
+                <div>
+                  <label className="block text-[10px] text-slate-500 mb-1">
+                    Use case <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {USE_CASE_OPTIONS.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() =>
+                          updateItem(item.id, {
+                            useCase: item.useCase.includes(value)
+                              ? item.useCase.filter((v) => v !== value)
+                              : [...item.useCase, value],
+                          })
+                        }
+                        className={`text-[10px] px-2 py-1 rounded-full border transition ${
+                          item.useCase.includes(value)
+                            ? 'bg-black text-white border-black'
+                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                        }`}
+                      >
+                        {USE_CASE_LABELS[value]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>  
             </div>
           ))}
         </div>
@@ -224,10 +263,12 @@ export default function EditItemsModal({
           <button
             type="button"
             onClick={onSave}
-            disabled={includedCount === 0 || saving}
+            disabled={includedCount === 0 || missingUseCase || saving}
             className="flex-1 px-4 py-2.5 rounded-lg bg-black text-white text-sm hover:bg-slate-800 disabled:opacity-40 flex items-center justify-center gap-2"
           >
-            {saving ? (
+            {missingUseCase && !saving ? (
+              'Select use case for all items'
+            ) : saving ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 {savingPhase === 'removing-bg'
