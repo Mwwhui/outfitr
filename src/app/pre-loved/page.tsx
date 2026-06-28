@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -14,6 +14,7 @@ import PartnerDirectory, {
   Partner,
 } from '../components/pre-loved/PartnerDirectory';
 import PartnerDrawer, { ClothesItem } from '../components/pre-loved/PartnerDrawer';
+import { recommendDisposal, countRecommendations, DisposalMethod } from '@/lib/disposalRecommender';
 
 const DynamicLeafletMap = dynamic(
   () => import('../components/pre-loved/LeafletMap'),
@@ -66,6 +67,16 @@ export default function PreLovedPage() {
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [wardrobeItems, setWardrobeItems] = useState<ClothesItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
+
+  const recommendations = useMemo(() => {
+    const map: Record<string, ReturnType<typeof recommendDisposal>> = {};
+    for (const item of wardrobeItems) {
+      map[item.id] = recommendDisposal(item);
+    }
+    return map;
+  }, [wardrobeItems]);
+
+  const recCounts = useMemo(() => countRecommendations(wardrobeItems), [wardrobeItems]);
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -184,6 +195,34 @@ export default function PreLovedPage() {
           setActiveCategory={setActiveCategory}
         />
 
+        {wardrobeItems.length > 0 && activeCategory !== 'diy' && (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm font-medium text-[#163422] mr-1">Smart insights:</p>
+            {(['sell', 'donate', 'recycle'] as DisposalMethod[]).map((method) => {
+              const count = recCounts[method];
+              if (count === 0) return null;
+              const labels: Record<DisposalMethod, string> = {
+                sell: 'Best to sell',
+                donate: 'Best to donate',
+                recycle: 'Best to recycle',
+              };
+              return (
+                <button
+                  key={method}
+                  onClick={() => setActiveCategory(method)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
+                    activeCategory === method
+                      ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {labels[method]} {count} best to {method}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {activeCategory === 'diy' && <DiyTutorials />}
 
         {activeCategory !== 'diy' && (
@@ -231,6 +270,7 @@ export default function PreLovedPage() {
         items={wardrobeItems}
         loading={loadingItems}
         onConfirm={handleConfirmPledge}
+        recommendations={recommendations}
       />
     </div>
   );

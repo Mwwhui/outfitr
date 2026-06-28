@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Partner } from './PartnerDirectory';
+import { ScoredItem, DisposalMethod } from '@/lib/disposalRecommender';
 
 export interface ClothesItem {
   id: string;
@@ -11,6 +12,18 @@ export interface ClothesItem {
   [key: string]: unknown;
 }
 
+const BADGE_LABELS_METHOD: Record<DisposalMethod, string> = {
+  donate: 'Best for Donate',
+  sell: 'Best for Sell',
+  recycle: 'Best for Recycle',
+};
+
+const METHOD_COLORS: Record<DisposalMethod, string> = {
+  donate: 'bg-amber-100 text-amber-800',
+  sell: 'bg-blue-100 text-blue-800',
+  recycle: 'bg-green-100 text-green-800',
+};
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -18,9 +31,10 @@ interface Props {
   items: ClothesItem[];
   loading: boolean;
   onConfirm: (itemIds: string[], partnerId: string, actionType: string) => Promise<void>;
+  recommendations?: Record<string, ScoredItem>;
 }
 
-export default function PartnerDrawer({ isOpen, onClose, partner, items, loading, onConfirm }: Props) {
+export default function PartnerDrawer({ isOpen, onClose, partner, items, loading, onConfirm, recommendations }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const badgeLabels: Record<string, string> = {
@@ -29,10 +43,36 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
     recycle: 'Recycle',
   };
 
+  const sortedItems = useMemo(() => {
+    if (!partner || !recommendations) return items;
+    const method = partner.type as DisposalMethod;
+    const copy = [...items];
+    copy.sort((a, b) => {
+      const recA = recommendations[a.id];
+      const recB = recommendations[b.id];
+      if (!recA || !recB) return 0;
+      const aMatch = recA.method === method ? 1 : 0;
+      const bMatch = recB.method === method ? 1 : 0;
+      if (aMatch !== bMatch) return bMatch - aMatch;
+      return recB.scores[method] - recA.scores[method];
+    });
+    return copy;
+  }, [items, partner, recommendations]);
+
   const toggleItem = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
     );
+  };
+
+  const getMismatchHint = (itemId: string): string | null => {
+    if (!partner || !recommendations) return null;
+    const rec = recommendations[itemId];
+    if (!rec) return null;
+    const method = partner.type as DisposalMethod;
+    if (rec.method === method) return null;
+    if (rec.scores[method] >= 40) return null;
+    return `Better suited for ${BADGE_LABELS_METHOD[rec.method].replace('Best for ', '').toLowerCase()}`;
   };
 
   return (
@@ -78,51 +118,72 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
                 <div className="w-8 h-8 border-2 border-[#0f172a] border-t-transparent rounded-full animate-spin mb-3" />
                 <p className="text-sm">Loading your wardrobe...</p>
               </div>
-            ) : items.length === 0 ? (
+            ) : sortedItems.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <p className="text-sm mb-1">Your wardrobe is empty</p>
                 <p className="text-xs">Add some items first to pledge them here.</p>
               </div>
             ) : (
-              items.map((item) => (
-                <label
-                  key={item.id}
-                  className="flex gap-4 p-4 border border-gray-200 rounded-2xl cursor-pointer hover:border-[#0f172a] bg-white transition-colors has-[:checked]:border-[#0f172a] has-[:checked]:bg-gray-50"
-                >
-                  <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0 flex items-center justify-center text-2xl overflow-hidden">
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
+              sortedItems.map((item) => {
+                const rec = recommendations?.[item.id];
+                const isSelected = selectedIds.includes(item.id);
+                const mismatchHint = isSelected ? getMismatchHint(item.id) : null;
+                return (
+                  <label
+                    key={item.id}
+                    className={`flex gap-4 p-4 border rounded-2xl cursor-pointer transition-colors has-[:checked]:border-[#0f172a] has-[:checked]:bg-gray-50 ${
+                      rec && partner && rec.method === partner.type
+                        ? 'border-gray-200 hover:border-[#0f172a] bg-white'
+                        : 'border-gray-200 hover:border-gray-300 bg-white/80'
+                    }`}
+                  >
+                    <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0 flex items-center justify-center text-2xl overflow-hidden">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-sm font-medium">No img</span>
+                      )}
+                    </div>
+                    <div className="flex-1 flex flex-col justify-center min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-[#0f172a] text-sm truncate">
+                          {item.name}
+                        </p>
+                        {rec && (
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md uppercase tracking-wide shrink-0 ${METHOD_COLORS[rec.method]}`}>
+                            {BADGE_LABELS_METHOD[rec.method]}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mb-1 truncate">
+                        {item.brand || '\u2014'} · {item.material || '\u2014'}
+                      </p>
+                      {item.unused ? (
+                        <span className="text-xs text-gray-500 font-medium">
+                          Unused
+                        </span>
+                      ) : null}
+                      {mismatchHint && (
+                        <p className="text-[11px] text-amber-600 mt-1 font-medium">
+                          💡 {mismatchHint}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleItem(item.id)}
+                        className="w-5 h-5 rounded border-gray-300 text-[#0f172a] focus:ring-[#0f172a] cursor-pointer"
                       />
-                    ) : (
-                      <span className="text-gray-400 text-sm font-medium">No img</span>
-                    )}
-                  </div>
-                  <div className="flex-1 flex flex-col justify-center min-w-0">
-                    <p className="font-semibold text-[#0f172a] text-sm truncate">
-                      {item.name}
-                    </p>
-                    <p className="text-xs text-gray-400 mb-1 truncate">
-                      {item.brand || '\u2014'} · {item.material || '\u2014'}
-                    </p>
-                    {item.unused ? (
-                      <span className="text-xs text-gray-500 font-medium">
-                        Unused
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(item.id)}
-                      onChange={() => toggleItem(item.id)}
-                      className="w-5 h-5 rounded border-gray-300 text-[#0f172a] focus:ring-[#0f172a] cursor-pointer"
-                    />
-                  </div>
-                </label>
-              ))
+                    </div>
+                  </label>
+                );
+              })
             )}
           </div>
         </div>
