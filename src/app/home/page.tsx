@@ -62,6 +62,9 @@ interface InsightsData {
     tip: string;
     missing_types: string[];
     coverage_pct: number;
+    coverage_detail: string;
+    missing_tooltips: Array<{ type: string; suggestion: string; reason: string }>;
+    transition_tip: string;
   };
   wardrobe_health: {
     total_items: number;
@@ -617,7 +620,14 @@ export default function HomePage() {
         {/* Wardrobe Wellness */}
         <section className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <SeasonalReadiness coveragePct={insights.seasonal_tip.coverage_pct} missingTypes={insights.seasonal_tip.missing_types} />
+            <SeasonalReadiness
+              coveragePct={insights.seasonal_tip.coverage_pct}
+              missingTypes={insights.seasonal_tip.missing_types}
+              tip={insights.seasonal_tip.tip}
+              coverageDetail={insights.seasonal_tip.coverage_detail}
+              missingTooltips={insights.seasonal_tip.missing_tooltips}
+              transitionTip={insights.seasonal_tip.transition_tip}
+            />
             <CircularityScore
               score={overallHealth}
               totalItems={health.total_items}

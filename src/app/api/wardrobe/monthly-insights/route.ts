@@ -126,6 +126,9 @@ interface MonthlyInsights {
     tip: string;
     missing_types: string[];
     coverage_pct: number;
+    coverage_detail: string;
+    missing_tooltips: Array<{ type: string; suggestion: string; reason: string }>;
+    transition_tip: string;
   };
   wardrobe_health: {
     total_items: number;
@@ -330,14 +333,68 @@ export async function GET() {
     const seasonalTypes = new Set(seasonItems.map((c) => c.type));
     const missingTypes = Object.keys(IDEAL_RATIOS).filter((t) => !seasonalTypes.has(t));
 
+    // Build missing type tooltips with suggestions
+    const SEASON_SUGGESTIONS: Record<string, Record<string, string>> = {
+      Spring: { Tops: 'Light layers, cardigans, and long-sleeve tees', Bottoms: 'Jeans, chinos, or midi skirts', Outerwear: 'Light jackets, trench coats, or denim jackets', 'One-Piece': 'Dresses or jumpsuits in breathable fabrics' },
+      Summer: { Tops: 'Tank tops, short-sleeve tees, and linen shirts', Bottoms: 'Shorts, lightweight skirts, or linen pants', Outerwear: 'Unstructured blazers, lightweight cardigans, or sun cover-ups', 'One-Piece': 'Sundresses, rompers, or swimwear cover-ups' },
+      Fall: { Tops: 'Sweaters, hoodies, and flannel shirts', Bottoms: 'Dark jeans, corduroys, or wool trousers', Outerwear: 'Leather jackets, wool coats, or puffer vests', 'One-Piece': 'Long-sleeve dresses or knit jumpsuits' },
+      Winter: { Tops: 'Thermal tops, turtlenecks, and fleece-lined layers', Bottoms: 'Heavy denim, wool pants, or lined leggings', Outerwear: 'Down coats, parkas, or wool overcoats', 'One-Piece': 'Knit dresses or fleece-lined overalls' },
+    };
+
+    const missingTooltips = missingTypes.map((type) => ({
+      type,
+      suggestion: SEASON_SUGGESTIONS[currentSeason]?.[type] || `Look for ${type.toLowerCase()} suitable for ${currentSeason} weather`,
+      reason: `You have no ${type.toLowerCase()} items rated for ${currentSeason}`,
+    }));
+
+    const coverageDetail = coveragePct < 40
+      ? `Only ${seasonItems.length} of ${clothes.length} items suit ${currentSeason}. Your wardrobe needs significant seasonal coverage.`
+      : coveragePct < 70
+        ? `${seasonItems.length} of ${clothes.length} items suit ${currentSeason}. Good foundation, but a few key pieces would help.`
+        : `${seasonItems.length} of ${clothes.length} items suit ${currentSeason}. You're well-prepared for the season.`;
+
+    const transitionTip = (() => {
+      const month = new Date().getMonth();
+      const seasonStarts = { Spring: 2, Summer: 5, Fall: 8, Winter: 11 };
+      const nextStart = seasonStarts[nextSeason as keyof typeof seasonStarts] ?? 0;
+      const weeksUntil = Math.max(0, Math.round(((nextStart * 30 + 15) - (month * 30 + new Date().getDate())) / 7));
+      if (weeksUntil <= 2) return `${nextSeason} is just ${weeksUntil} week${weeksUntil !== 1 ? 's' : ''} away — start transitioning now!`;
+      if (weeksUntil <= 6) return `${nextSeason} starts in ~${weeksUntil} weeks. Gradually add ${nextSeason.toLowerCase()} pieces.`;
+      return `Focus on ${currentSeason} for now. ${nextSeason} is ${weeksUntil} weeks away.`;
+    })();
+
+    // Try Gemini for personalized tip, fall back to template
+    let geminiTip = '';
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const prompt = `You are a minimalist wardrobe stylist. The user has ${clothes.length} items. ${seasonItems.length} suit ${currentSeason} (${coveragePct}% coverage). Missing types: ${missingTypes.join(', ') || 'none'}. Top items: ${seasonItems.slice(0, 5).map((c) => c.name).join(', ')}. Give 1-2 sentences of practical, specific seasonal advice. Be concise.`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
+        const response = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          geminiTip = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        }
+      } catch {
+        // Use fallback
+      }
+    }
+
     const seasonalTip = {
       season: currentSeason,
       next_season: nextSeason,
-      tip: coveragePct < 60
+      tip: geminiTip || (coveragePct < 60
         ? `Only ${coveragePct}% of your wardrobe is suitable for ${currentSeason}.`
-        : `You are well-covered for ${currentSeason}! Start thinking about ${nextSeason} transitions.`,
+        : `You are well-covered for ${currentSeason}! Start thinking about ${nextSeason} transitions.`),
       missing_types: missingTypes,
       coverage_pct: coveragePct,
+      coverage_detail: coverageDetail,
+      missing_tooltips: missingTooltips,
+      transition_tip: transitionTip,
     };
 
     const wardrobeHealth: MonthlyInsights['wardrobe_health'] = {
