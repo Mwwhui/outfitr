@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import StyleLabImpactMeter from '../components/outfits/StyleLabImpactMeter';
 import PlannedOutfitsSidebar from '../components/outfits/PlannedOutfitsSidebar';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface ComboItem {
   id: string;
@@ -100,12 +101,27 @@ function getNextWeekday(dayIndex: number): string {
   return target.toISOString().slice(0, 10);
 }
 
+function itemsToPlannerParams(items: Array<{ id: string; type: string }>): string {
+  const params = new URLSearchParams();
+  for (const item of items) {
+    const key = item.type === 'Tops' ? 'top'
+      : item.type === 'Bottoms' ? 'bottom'
+      : item.type === 'Outerwear' ? 'outerwear'
+      : item.type === 'One-Piece' ? 'onepiece'
+      : null;
+    if (key) params.set(key, item.id);
+  }
+  return params.toString();
+}
+
 function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onScheduled: () => void }) {
   const [scheduling, setScheduling] = useState(false);
+  const [confirmDay, setConfirmDay] = useState<number | null>(null);
   const days = ['M', 'T', 'W', 'T', 'F'];
   const dayIndices = [1, 2, 3, 4, 5];
 
-  const handleSchedule = async (dayIndex: number) => {
+  const handleConfirm = async () => {
+    if (confirmDay === null) return;
     setScheduling(true);
     try {
       const slots: Record<string, { id: string; name: string }> = {};
@@ -122,24 +138,36 @@ function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onSche
       await fetch('/api/outfit_plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: getNextWeekday(dayIndex), timeSlot: 'day', slots, name: items.map((i) => i.name).join(' + ') }),
+        body: JSON.stringify({ date: getNextWeekday(confirmDay), timeSlot: 'day', slots, name: items.map((i) => i.name).join(' + ') }),
       });
       onScheduled();
-    } catch { /* silently fail */ } finally { setScheduling(false); }
+    } catch { /* silently fail */ } finally { setScheduling(false); setConfirmDay(null); }
   };
 
   return (
-    <div className="mt-3 p-3 bg-surface-container-lowest border border-outline-variant rounded-lg">
-      <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-2">Quick Add to Next Week</p>
-      <div className="flex justify-between gap-1">
-        {days.map((day, i) => (
-          <button key={i} onClick={() => handleSchedule(dayIndices[i])} disabled={scheduling}
-            className="flex-1 py-1 rounded border border-outline-variant text-sm hover:bg-primary hover:text-on-primary transition-colors disabled:opacity-50">
-            {day}
-          </button>
-        ))}
+    <>
+      <div className="mt-3 p-3 bg-surface-container-lowest border border-outline-variant rounded-lg">
+        <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-2">Quick Add to Next Week</p>
+        <div className="flex justify-between gap-1">
+          {days.map((day, i) => (
+            <button key={i} onClick={() => setConfirmDay(dayIndices[i])} disabled={scheduling}
+              className="flex-1 py-1 rounded border border-outline-variant text-sm hover:bg-primary hover:text-on-primary transition-colors disabled:opacity-50">
+              {day}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+      <ConfirmModal
+        open={confirmDay !== null}
+        title="Schedule Outfit"
+        message={`Schedule "${items.map((i) => i.name).join(' + ')}" to ${days[dayIndices.indexOf(confirmDay as number)]}?`}
+        confirmLabel="Schedule"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirmDay(null)}
+        loading={scheduling}
+      />
+    </>
   );
 }
 
@@ -628,7 +656,10 @@ export default function OutfitsPage() {
                           </button>
                         </div>
                       </div>
-                      <div className="md:w-1/2 bg-surface-variant relative min-h-[200px]">
+                      <div
+                        className="md:w-1/2 bg-surface-variant relative min-h-[200px] cursor-pointer hover:opacity-90 transition"
+                        onClick={() => router.push(`/planner?${itemsToPlannerParams(bentoItem.items)}`)}
+                      >
                         <div className="absolute inset-0 p-4">
                           <div className="w-full h-full bg-surface-container rounded-lg overflow-hidden flex items-center gap-2 overflow-x-auto px-2 py-2">
                             {bentoItem.items.map((item, i) => (
@@ -652,7 +683,7 @@ export default function OutfitsPage() {
                   {secondaryItems.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {secondaryItems.map((item, i) => (
-                        <div key={i} className="bg-surface-bright border border-outline-variant p-4 rounded-xl flex items-center gap-4 group cursor-pointer hover:bg-surface-container-low transition-colors">
+                        <div key={i} onClick={() => router.push(`/planner?${itemsToPlannerParams(item.items)}`)} className="bg-surface-bright border border-outline-variant p-4 rounded-xl flex items-center gap-4 group cursor-pointer hover:bg-surface-container-low transition-colors">
                            <div className="w-20 h-20 rounded-lg shrink-0 overflow-hidden grid grid-cols-2 gap-0.5">
                             {item.items.slice(0, 2).map((it, j) => (
                               <div key={j} className="relative overflow-hidden">
