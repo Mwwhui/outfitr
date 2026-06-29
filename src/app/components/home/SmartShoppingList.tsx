@@ -23,10 +23,16 @@ export default function SmartShoppingList({ items = [], title = 'Seasonal Gaps' 
       </div>
       <div className="space-y-1">
         {items.map((item, i) => (
-          <div key={i} className="flex justify-between items-center p-3 bg-surface-container-low rounded border border-surface-variant">
+          <a
+            key={i}
+            href={`https://www.google.com/search?q=${encodeURIComponent(item.search_query)}&tbm=shop`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex justify-between items-center p-3 bg-surface-container-low rounded border border-surface-variant hover:bg-surface-variant transition-colors cursor-pointer"
+          >
             <span className="text-base">{item.color} {item.item_type}</span>
-            <span className="material-symbols-outlined text-on-surface-variant">shopping_cart</span>
-          </div>
+            <span className="material-symbols-outlined text-on-surface-variant">open_in_new</span>
+          </a>
         ))}
       </div>
     </div>

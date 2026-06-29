@@ -45,6 +45,20 @@ export async function GET() {
       }
     }
 
+    // Fetch all items referenced by pledges
+    const allItemIds = [...new Set(pledgesData.flatMap((p) => p.item_ids || []))];
+    let itemMap = new Map<string, { id: string; name: string; image_url: string | null }>();
+    if (allItemIds.length > 0) {
+      const { data: items } = await supabase
+        .from('clothes')
+        .select('id, name, image_url')
+        .in('id', allItemIds)
+        .is('deleted_at', null);
+      if (items) {
+        itemMap = new Map(items.map((item: any) => [item.id, item]));
+      }
+    }
+
     const ACTION_LABELS: Record<string, string> = {
       donate: 'Donation Pending',
       sell: 'Sale Pending',
@@ -78,6 +92,10 @@ export async function GET() {
             : 'Awaiting acceptance';
       }
 
+      const items = (pledge.item_ids || [])
+        .map((id: string) => itemMap.get(id))
+        .filter(Boolean);
+
       return {
         id: pledge.id,
         action_type: pledge.action_type,
@@ -89,6 +107,11 @@ export async function GET() {
           ? partnerNames.get(pledge.partner_id) || 'Unknown Partner'
           : null,
         item_count: pledge.item_ids?.length || 0,
+        items: items.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          image_url: item.image_url || null,
+        })),
         created_at: pledge.created_at,
       };
     });

@@ -11,6 +11,9 @@ import SmartShoppingList from '../components/home/SmartShoppingList';
 import SeasonalReadiness from '../components/home/SeasonalReadiness';
 import CircularityScore from '../components/home/CircularityScore';
 import WardrobeAnalytics from '../components/home/WardrobeAnalytics';
+import WeatherAlert from '../components/home/WeatherAlert';
+import TodayEvents from '../components/home/TodayEvents';
+import OutfitFeedback from '../components/home/OutfitFeedback';
 
 interface InsightsData {
   greeting: string;
@@ -99,7 +102,22 @@ interface PledgeData {
   status_text: string;
   partner_name: string | null;
   item_count: number;
+  items: Array<{ id: string; name: string; image_url: string | null }>;
   created_at: string;
+}
+
+interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+}
+
+interface WeatherAlert {
+  type: 'rain' | 'temp_drop' | 'temp_rise' | 'extreme_heat' | 'wind';
+  message: string;
+  icon: string;
 }
 
 const WMO_LABELS: Record<number, string> = {
@@ -132,6 +150,61 @@ function getTimeSlot(): string {
   return 'evening';
 }
 
+function detectOccasionFromEvents(events: CalendarEvent[]): string {
+  const text = events.map((e) => e.summary.toLowerCase()).join(' ');
+  if (/wedding|gala|black.tie|formal|ceremony|banquet/.test(text)) return 'formal';
+  if (/meeting|interview|presentation|conference|client|pitch/.test(text)) return 'business';
+  if (/date|dinner|anniversary|proposal/.test(text)) return 'date';
+  if (/gym|workout|run|race|yoga|pilates|training/.test(text)) return 'sport';
+  if (/party|birthday|celebration|night.out|club/.test(text)) return 'date';
+  return '';
+}
+
+function detectWeatherAlerts(hourly: { time: string; temp: number; code: number }[]): WeatherAlert[] {
+  const alerts: WeatherAlert[] = [];
+  const now = new Date();
+  const currentHour = now.getHours();
+  const future = hourly.filter((h) => new Date(h.time).getHours() > currentHour);
+
+  // Rain alert
+  const rainSoon = future.find((h) => h.code >= 51 && h.code <= 67);
+  if (rainSoon) {
+    const hour = new Date(rainSoon.time).getHours();
+    const ampm = hour >= 12 ? 'pm' : 'am';
+    const displayHour = hour > 12 ? hour - 12 : hour;
+    alerts.push({
+      type: 'rain',
+      message: `Rain expected at ${displayHour}${ampm} — don't forget an umbrella`,
+      icon: 'umbrella',
+    });
+  }
+
+  // Temperature drop alert
+  if (hourly.length >= 2) {
+    const current = hourly[0].temp;
+    const evening = hourly[Math.min(hourly.length - 1, 12)].temp;
+    if (current - evening >= 5) {
+      alerts.push({
+        type: 'temp_drop',
+        message: `Temperature dropping to ${evening}°C this evening — grab a layer`,
+        icon: 'thermometer',
+      });
+    }
+  }
+
+  // Extreme heat
+  const maxTemp = Math.max(...hourly.map((h) => h.temp));
+  if (maxTemp >= 32) {
+    alerts.push({
+      type: 'extreme_heat',
+      message: `High of ${maxTemp}°C today — stay cool and hydrated`,
+      icon: 'wb_sunny',
+    });
+  }
+
+  return alerts;
+}
+
 function SkeletonCard() {
   return (
     <div className="bg-surface-container-low rounded-lg p-6 animate-pulse">
@@ -153,6 +226,16 @@ export default function HomePage() {
   const [pledges, setPledges] = useState<PledgeData[]>([]);
   const [fallbackPartnerText, setFallbackPartnerText] = useState('Partner');
   const [loggingWear, setLoggingWear] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [detectedOccasion, setDetectedOccasion] = useState<string>('');
+  const [weatherAlerts, setWeatherAlerts] = useState<WeatherAlert[]>([]);
+  const [calendarNeedsReconnect, setCalendarNeedsReconnect] = useState(false);
+  const [outfitFeedback, setOutfitFeedback] = useState<{
+    weather: { temp: number; condition: string } | null;
+    occasion: string;
+    score: number;
+    wearCount: number;
+  } | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -192,9 +275,70 @@ export default function HomePage() {
       });
     };
 
-    fetchWeather()
-      .then((weatherData) => {
+    const fetchHourlyWeather = (): Promise<{ time: string; temp: number; code: number }[] | null> => {
+      if (!('geolocation' in navigator)) return Promise.resolve(null);
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            fetch(
+              `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=weather_code,temperature_2m&forecast_days=1`
+            )
+              .then((r) => r.json())
+              .then((data) => {
+                if (data?.hourly) {
+                  const hourly = data.hourly.time.map((t: string, i: number) => ({
+                    time: t,
+                    temp: Math.round(data.hourly.temperature_2m[i]),
+                    code: data.hourly.weather_code[i],
+                  }));
+                  resolve(hourly);
+                } else {
+                  resolve(null);
+                }
+              })
+              .catch(() => resolve(null));
+          },
+          () => resolve(null),
+        );
+      });
+    };
+
+    const fetchCalendar = async (): Promise<{ events: CalendarEvent[]; connected: boolean; needsReconnect: boolean }> => {
+      try {
+        const statusRes = await fetch('/api/integrations/google/status');
+        const status = await statusRes.json();
+        if (!status.connected) return { events: [], connected: false, needsReconnect: false };
+
+        const today = new Date().toISOString().slice(0, 10);
+        const eventsRes = await fetch(`/api/integrations/google/events?date=${today}`);
+        if (eventsRes.status === 401) {
+          return { events: [], connected: true, needsReconnect: true };
+        }
+        if (!eventsRes.ok) {
+          return { events: [], connected: true, needsReconnect: false };
+        }
+        const eventsData = await eventsRes.json();
+        return { events: eventsData.events || [], connected: true, needsReconnect: false };
+      } catch {
+        return { events: [], connected: false, needsReconnect: false };
+      }
+    };
+
+    Promise.all([fetchWeather(), fetchHourlyWeather(), fetchCalendar()])
+      .then(([weatherData, hourlyData, calendarData]) => {
         if (weatherData) setWeather(weatherData);
+        if (hourlyData) {
+          const alerts = detectWeatherAlerts(hourlyData);
+          setWeatherAlerts(alerts);
+        }
+
+        const occasionFromCalendar = detectOccasionFromEvents(calendarData.events);
+        setCalendarEvents(calendarData.events);
+        setDetectedOccasion(occasionFromCalendar);
+        setCalendarNeedsReconnect(calendarData.needsReconnect);
+
+        const finalOccasion = occasionFromCalendar || (getTimeSlot() === 'evening' ? 'formal' : getTimeSlot() === 'afternoon' ? 'business' : 'casual');
 
         return Promise.all([
           fetch('/api/wardrobe/monthly-insights').then(async (res) => {
@@ -205,7 +349,7 @@ export default function HomePage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              occasion: getTimeSlot() === 'evening' ? 'formal' : getTimeSlot() === 'afternoon' ? 'business' : 'casual',
+              occasion: finalOccasion,
               weather: weatherData ? { temperature: weatherData.temperature, weathercode: weatherData.weathercode } : null,
             }),
           }).then(async (res) => {
@@ -272,13 +416,20 @@ export default function HomePage() {
             },
           };
         });
+        // Show outfit feedback
+        setOutfitFeedback({
+          weather: weather ? { temp: weather.temperature, condition: weather.description } : null,
+          occasion: detectedOccasion || getTimeSlot(),
+          score: outfitSuggestion.score || 0,
+          wearCount: insights?.most_worn[0]?.total_wears || 0,
+        });
       }
     } catch {
       // silently fail
     } finally {
       setLoggingWear(false);
     }
-  }, [outfitSuggestion, loggingWear]);
+  }, [outfitSuggestion, loggingWear, detectedOccasion, weather, insights]);
 
   if (status === 'loading' || loading) {
     return (
@@ -384,6 +535,8 @@ export default function HomePage() {
           </div>
         </section>
 
+        <WeatherAlert alerts={weatherAlerts} />
+
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column - Today's Ensemble */}
@@ -411,14 +564,30 @@ export default function HomePage() {
 
           {/* Right Column */}
           <div className="lg:col-span-4 space-y-6">
+            {calendarNeedsReconnect ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
+                <span className="material-symbols-outlined text-amber-600">link_off</span>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-800">Calendar disconnected</p>
+                  <p className="text-xs text-amber-600">Reconnect to see today&apos;s events</p>
+                </div>
+                <Link href="/api/integrations/google/start" className="text-xs font-semibold text-amber-700 hover:underline whitespace-nowrap">
+                  Reconnect
+                </Link>
+              </div>
+            ) : (
+              <TodayEvents events={calendarEvents} suggestedOccasion={detectedOccasion || undefined} />
+            )}
+
             {/* Action Required */}
             {topPledge && (
               <ActionRequired
-                itemCount={topPledge.item_count}
                 partnerName={topPledge.partner_name || fallbackPartnerText}
-                progressPct={topPledge.progress_pct}
-                scheduledDate={topPledge.status_text}
+                status={topPledge.status}
                 label={topPledge.label}
+                actionType={topPledge.action_type}
+                items={topPledge.items || []}
+                createdAt={topPledge.created_at}
               />
             )}
 
@@ -460,6 +629,16 @@ export default function HomePage() {
         {/* Wardrobe Analytics */}
         <WardrobeAnalytics colors={insights.color_palette} categories={insights.category_balance} topWorn={insights.most_worn} />
       </div>
+
+      {outfitFeedback && (
+        <OutfitFeedback
+          weather={outfitFeedback.weather}
+          occasion={outfitFeedback.occasion}
+          score={outfitFeedback.score}
+          wearCount={outfitFeedback.wearCount}
+          onDismiss={() => setOutfitFeedback(null)}
+        />
+      )}
     </div>
   );
 }
