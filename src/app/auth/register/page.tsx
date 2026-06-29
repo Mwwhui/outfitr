@@ -58,9 +58,9 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
+    <main className="flex min-h-screen items-center justify-center p-6">
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-900">
+        <h2 className="text-2xl font-bold mb-6 text-center text-gray-900 font-headline">
           Create an Account
         </h2>
 

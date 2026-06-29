@@ -181,9 +181,9 @@ export default function PreLovedPage() {
     });
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
-        <h2 className="text-3xl font-bold text-[#163422]">Pre-Loved</h2>
+        <h2 className="text-3xl font-bold text-[#163422] font-headline">Pre-Loved</h2>
         <p className="text-[#424843] mt-1">
           Give your unused items a second life.
         </p>

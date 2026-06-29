@@ -263,10 +263,10 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-[#163422]">Calendar</h1>
+          <h1 className="text-3xl font-bold text-[#163422] font-headline">Calendar</h1>
 
           <div className="flex gap-6 border-b border-slate-200">
             <button

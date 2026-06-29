@@ -294,7 +294,7 @@ export default function EditWardrobePage() {
           ← Back
         </button>
 
-        <h1 className="text-3xl font-bold mb-6">Edit Clothing</h1>
+        <h1 className="text-3xl font-bold mb-6 font-headline">Edit Clothing</h1>
 
         {clothes.type && (
           <div className="mb-3">
@@ -395,7 +395,7 @@ export default function EditWardrobePage() {
                       </>
                     ) : (
                       <>
-                        <h2 className="text-lg font-semibold truncate">
+                        <h2 className="text-lg font-semibold truncate font-headline">
                           {clothes.name}
                         </h2>
                         <p className="text-sm text-gray-500">{clothes.color}</p>
@@ -436,7 +436,7 @@ export default function EditWardrobePage() {
 
           {/* RIGHT */}
           <div className="bg-white rounded-3xl p-6 shadow-md space-y-6">
-            <h2 className="text-lg font-semibold">Details</h2>
+            <h2 className="text-lg font-semibold font-headline">Details</h2>
             <p className="text-sm text-gray-500">
               Edit the details of your clothing item below.
             </p>
@@ -744,7 +744,7 @@ export default function EditWardrobePage() {
         {similarItems.length > 0 && (
           <div className="mt-8 p-4 rounded-xl border border-slate-200 bg-slate-50">
             <div className="flex items-center gap-2 mb-3">
-              <h3 className="text-sm font-medium text-slate-700">
+              <h3 className="text-sm font-medium text-slate-700 font-headline">
                 Similar items in your wardrobe ({similarItems.length})
               </h3>
               {checkingVisual && (

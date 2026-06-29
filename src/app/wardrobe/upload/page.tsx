@@ -444,7 +444,7 @@ export default function UploadClothesPage() {
         ← Back
       </button>
 
-      <h1 className="text-3xl font-bold mb-6">Add New Clothing</h1>
+      <h1 className="text-3xl font-bold mb-6 font-headline">Add New Clothing</h1>
 
       {errorMsg && (
         <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-xl">
@@ -663,7 +663,7 @@ export default function UploadClothesPage() {
 
         <div className="bg-white rounded-3xl p-6 shadow-md space-y-6">
           <div>
-            <h2 className="text-lg font-semibold">Details</h2>
+            <h2 className="text-lg font-semibold font-headline">Details</h2>
             <p className="text-sm text-gray-500">
               Add more information so you can filter and find this piece later.
             </p>

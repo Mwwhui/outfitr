@@ -231,7 +231,7 @@ export default function PartnerScanPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-[#163422] border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -250,7 +250,7 @@ export default function PartnerScanPage() {
     : '';
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-4xl mx-auto">
         <Link
           href="/partner/dashboard"
@@ -258,7 +258,7 @@ export default function PartnerScanPage() {
         >
           ← Back to Dashboard
         </Link>
-        <h2 className="text-3xl font-bold text-[#163422] mt-1">
+        <h2 className="text-3xl font-bold text-[#163422] mt-1 font-headline">
           Scan QR Code
         </h2>
       </div>
@@ -551,7 +551,7 @@ export default function PartnerScanPage() {
         )}
 
         <div className="bg-white rounded-3xl shadow-sm p-5">
-          <h3 className="font-semibold text-[#163422] text-sm mb-3">
+          <h3 className="font-semibold text-[#163422] text-sm mb-3 font-headline">
             Tips for scanning
           </h3>
           <ul className="text-sm text-gray-600 space-y-2">

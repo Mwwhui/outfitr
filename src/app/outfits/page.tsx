@@ -245,7 +245,7 @@ export default function OutfitsPage() {
     <div className="max-w-6xl mx-auto px-6 py-10 space-y-12">
       {/* Header */}
       <div className={`transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-        <h1 className="text-4xl font-bold tracking-tight mb-1">Style Lab</h1>
+        <h1 className="text-4xl font-bold tracking-tight mb-1 font-headline">Style Lab</h1>
         <p className="text-sm text-slate-500">{totalOutfits} outfits worn · {uniqueCombos} unique combinations</p>
       </div>
 
@@ -254,7 +254,7 @@ export default function OutfitsPage() {
         <GlassCard className={`p-6 bg-gradient-to-br from-slate-900/90 to-slate-800/90 text-white border-slate-700/30 transition-all duration-700 delay-100 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="flex items-center gap-2 mb-4">
             <span className="text-amber-400 text-lg">✦</span>
-            <h2 className="text-lg font-semibold">Your Outfit DNA</h2>
+            <h2 className="text-lg font-semibold font-headline">Your Outfit DNA</h2>
           </div>
           <p className="text-slate-300 text-sm mb-4">{dna.style_summary}</p>
           {frequentCombos.length > 0 && (
@@ -289,7 +289,7 @@ export default function OutfitsPage() {
           <GlassCard className="p-6 bg-gradient-to-br from-slate-900/90 to-slate-800/90 text-white border-slate-700/30 hover:from-slate-800/90 hover:to-slate-700/90">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-amber-400 text-lg">✦</span>
-              <h2 className="text-lg font-semibold">Unlock Your Outfit DNA</h2>
+              <h2 className="text-lg font-semibold font-headline">Unlock Your Outfit DNA</h2>
             </div>
             <p className="text-slate-300 text-sm">
               {loadingDna ? 'Analyzing your style patterns...' : 'AI analyzes your wearing patterns to find your unique style formula.'}
@@ -301,7 +301,7 @@ export default function OutfitsPage() {
       {/* Most Worn Combos — Flat-Lay Grid */}
       {frequentCombos.length > 0 && (
         <section className={`transition-all duration-700 delay-200 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <h2 className="text-lg font-semibold mb-4">Most Worn Combos</h2>
+          <h2 className="text-lg font-semibold mb-4 font-headline">Most Worn Combos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {frequentCombos.map((combo, i) => (
               <div key={combo.key} className="transition-all duration-500" style={{ transitionDelay: `${i * 50}ms` }}>
@@ -342,7 +342,7 @@ export default function OutfitsPage() {
       {/* AI Rotation — Model + Flat-Lay Layout */}
       {rotationSuggestions.length > 0 && (
         <section className={`transition-all duration-700 delay-300 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <h2 className="text-lg font-semibold mb-1">AI Rotation Suggestions</h2>
+          <h2 className="text-lg font-semibold mb-1 font-headline">AI Rotation Suggestions</h2>
           <p className="text-xs text-slate-500 mb-4">Combos you love but haven&apos;t worn recently</p>
           <div className="space-y-4">
             {rotationSuggestions.slice(0, 3).map((combo, i) => (
@@ -391,7 +391,7 @@ export default function OutfitsPage() {
       {/* AI New Combos — Horizontal Scrollable Grid */}
       {suggestions.length > 0 && (
         <section className={`transition-all duration-700 delay-[400ms] ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <h2 className="text-lg font-semibold mb-1">AI Says Try This</h2>
+          <h2 className="text-lg font-semibold mb-1 font-headline">AI Says Try This</h2>
           <p className="text-xs text-slate-500 mb-4">Fresh combinations based on your style patterns</p>
           <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide">
             {suggestions.map((s, i) => (
@@ -431,7 +431,7 @@ export default function OutfitsPage() {
       {/* Pattern Breakers — Flat-Lay Cards */}
       {dna && dna.pattern_breakers.length > 0 && (
         <section className={`transition-all duration-700 delay-[500ms] ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <h2 className="text-lg font-semibold mb-1">Pattern Breakers</h2>
+          <h2 className="text-lg font-semibold mb-1 font-headline">Pattern Breakers</h2>
           <p className="text-xs text-slate-500 mb-4">AI found patterns you always follow — and suggests breaking them</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {dna.pattern_breakers.map((pb, i) => (
@@ -457,7 +457,7 @@ export default function OutfitsPage() {
       {/* Unexplored Combos */}
       {dna && dna.never_tried.length > 0 && (
         <section className={`transition-all duration-700 delay-[600ms] ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <h2 className="text-lg font-semibold mb-1">Unexplored Combos</h2>
+          <h2 className="text-lg font-semibold mb-1 font-headline">Unexplored Combos</h2>
           <p className="text-xs text-slate-500 mb-4">Pairs you own but have never combined</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {dna.never_tried.slice(0, 4).map((nt, i) => (
@@ -482,7 +482,7 @@ export default function OutfitsPage() {
       {!loading && frequentCombos.length === 0 && (
         <div className="text-center py-16">
           <div className="text-5xl mb-4">👔</div>
-          <h2 className="text-lg font-semibold mb-2">No outfits yet</h2>
+          <h2 className="text-lg font-semibold mb-2 font-headline">No outfits yet</h2>
           <p className="text-sm text-slate-500 mb-4">Start planning outfits to see your most-worn combos here.</p>
           <button onClick={() => router.push('/planner')}
             className="px-6 py-2.5 rounded-lg bg-black text-white text-sm hover:bg-slate-800 transition">

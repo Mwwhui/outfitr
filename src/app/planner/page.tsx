@@ -438,10 +438,10 @@ export default function PlannerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-[#163422]">Plan My Outfit</h1>
+          <h1 className="text-3xl font-bold text-[#163422] font-headline">Plan My Outfit</h1>
 
           <div className="flex gap-6 border-b border-slate-200">
           {/* Wardrobe Tab */}
@@ -618,7 +618,7 @@ export default function PlannerPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-6">
         {/* LEFT: WARDROBE SIDEBAR */}
         <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 max-h-[80vh] overflow-hidden">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 font-headline">
             Wardrobe
           </h2>
 
@@ -770,7 +770,7 @@ export default function PlannerPage() {
             <div className="relative ml-auto w-full max-w-md bg-white shadow-xl h-full overflow-y-auto">
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-4 flex items-center justify-between z-10">
-                <h2 className="text-lg font-semibold text-[#0f172a]">Outfit Suggestions</h2>
+                <h2 className="text-lg font-semibold text-[#0f172a] font-headline">Outfit Suggestions</h2>
                 <button onClick={() => setShowSuggestions(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
               </div>
 
