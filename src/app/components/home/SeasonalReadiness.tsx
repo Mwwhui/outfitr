@@ -45,8 +45,9 @@ export default function SeasonalReadiness({
           {coverageDetail && (
             <div className="relative group">
               <span className="material-symbols-outlined text-xs text-on-surface-variant cursor-help">info</span>
-              <div className="absolute right-0 top-6 z-10 w-64 p-3 bg-surface-bright border border-outline-variant rounded-lg shadow-lg text-xs text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <div className="absolute right-0 top-6 z-10 w-64 p-3 bg-[#0f172a] text-white text-xs leading-relaxed rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                 {coverageDetail}
+                <span className="absolute top-full right-4 border-4 border-transparent border-t-[#0f172a]" />
               </div>
             </div>
           )}

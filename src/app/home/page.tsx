@@ -10,6 +10,7 @@ import MonthlyStory from '../components/home/MonthlyStory';
 import SmartShoppingList from '../components/home/SmartShoppingList';
 import SeasonalReadiness from '../components/home/SeasonalReadiness';
 import CircularityScore from '../components/home/CircularityScore';
+import SustainabilityStory from '../components/home/SustainabilityStory';
 import WardrobeAnalytics from '../components/home/WardrobeAnalytics';
 import WeatherAlert from '../components/home/WeatherAlert';
 import TodayEvents from '../components/home/TodayEvents';
@@ -243,6 +244,11 @@ export default function HomePage() {
     score: number;
     wearCount: number;
   } | null>(null);
+  const [sustainability, setSustainability] = useState<{
+    story: string;
+    impact: { co2_saved_kg: number; water_saved_l: number; equivalent_trees: number; items_diverted: number; money_saved: number };
+    sustainability_rate: number;
+  } | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -373,9 +379,13 @@ export default function HomePage() {
             }
             return { pledges: [], fallback_partner_text: 'Partner' };
           }).catch(() => ({ pledges: [], fallback_partner_text: 'Partner' })),
+          fetch('/api/wardrobe/sustainability-story').then(async (res) => {
+            if (res.ok) return res.json();
+            return null;
+          }).catch(() => null),
         ]);
       })
-      .then(([insightsData, outfitData, pledgesData]) => {
+      .then(([insightsData, outfitData, pledgesData, sustainabilityData]) => {
         if (insightsData.insufficient_data) {
           setInsights(null);
         } else {
@@ -384,6 +394,7 @@ export default function HomePage() {
         setOutfitSuggestion(outfitData);
         setPledges(pledgesData.pledges);
         setFallbackPartnerText(pledgesData.fallback_partner_text);
+        if (sustainabilityData) setSustainability(sustainabilityData);
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -623,7 +634,7 @@ export default function HomePage() {
 
         {/* Wardrobe Wellness */}
         <section className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <SeasonalReadiness
               coveragePct={insights.seasonal_tip.coverage_pct}
               missingTypes={insights.seasonal_tip.missing_types}
@@ -638,6 +649,13 @@ export default function HomePage() {
               itemsWornThisMonth={health.items_worn_this_month}
               scoreBreakdown={health.score_breakdown}
             />
+            {sustainability && (
+              <SustainabilityStory
+                story={sustainability.story}
+                impact={sustainability.impact}
+                sustainabilityRate={sustainability.sustainability_rate}
+              />
+            )}
           </div>
         </section>
 

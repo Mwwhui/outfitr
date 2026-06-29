@@ -119,6 +119,9 @@ interface MonthlyInsights {
     reason: string;
     search_query: string;
     priority: 'high' | 'medium' | 'low';
+    ai_recommendation?: string;
+    style_tip?: string;
+    avoid?: string;
   }>;
   seasonal_tip: {
     season: string;
@@ -480,6 +483,85 @@ export async function GET() {
         search_query: `women tops colorful non ${topColor[0]}`,
         priority: 'medium',
       });
+    }
+
+    // Enrich shopping list with Gemini-powered recommendations
+    if (geminiKey && shoppingList.length > 0) {
+      try {
+        const categorySummary = [...categoryCount.entries()]
+          .map(([type, count]) => `${type}: ${count}`)
+          .join(', ');
+        const topColors = [...colorCount.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([color, count]) => `${color} (${Math.round((count / clothes.length) * 100)}%)`)
+          .join(', ');
+        const topItems = clothes
+          .sort((a, b) => (b.wear_count || 0) - (a.wear_count || 0))
+          .slice(0, 5)
+          .map((c) => `${c.name} (${c.type})`)
+          .join(', ');
+
+        const gapsText = shoppingList
+          .map((item) => `- ${item.color} ${item.item_type}: ${item.reason}`)
+          .join('\n');
+
+        const prompt = `You are a personal wardrobe stylist. The user needs help building a balanced wardrobe.
+
+Their wardrobe gaps:
+${gapsText}
+
+Current categories: ${categorySummary}
+Dominant colors: ${topColors}
+Top worn items: ${topItems}
+Season: ${currentSeason}
+
+For each gap, return a JSON array with personalized recommendations:
+[
+  {
+    "item_type": "Tops",
+    "color": "Neutral",
+    "ai_recommendation": "1 sentence: what specific style/color to look for and why",
+    "style_tip": "1 sentence: how to style it with what they already own",
+    "avoid": "1 sentence: what they already have enough of"
+  }
+]
+
+Return ONLY valid JSON. Keep each field to 1 sentence max. Match the item_type and color from each gap.`;
+
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
+        const response = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+          const jsonStr = text.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
+          const enriched = JSON.parse(jsonStr) as Array<{
+            item_type: string;
+            color: string;
+            ai_recommendation: string;
+            style_tip: string;
+            avoid: string;
+          }>;
+
+          for (const item of shoppingList) {
+            const match = enriched.find(
+              (e) => e.item_type === item.item_type && e.color === item.color,
+            );
+            if (match) {
+              item.ai_recommendation = match.ai_recommendation;
+              item.style_tip = match.style_tip;
+              item.avoid = match.avoid;
+            }
+          }
+        }
+      } catch {
+        // Keep shopping list without AI enrichment
+      }
     }
 
     // MOST WORN: items with highest wear this month (with total as fallback)

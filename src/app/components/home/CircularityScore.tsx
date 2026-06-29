@@ -55,6 +55,13 @@ export default function CircularityScore({
         <div className="flex items-center gap-3 mb-4">
           <span className="material-symbols-outlined text-primary">recycling</span>
           <span className="text-sm font-bold text-on-surface">{title}</span>
+          <div className="relative group">
+            <span className="material-symbols-outlined text-xs text-on-surface-variant cursor-help">info</span>
+            <div className="absolute left-0 top-6 z-10 w-64 p-3 bg-[#0f172a] text-white text-xs leading-relaxed rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              Measures how well you reuse and cycle your wardrobe. Calculated as the average of your Category Balance and Color Diversity scores.
+              <span className="absolute top-full left-4 border-4 border-transparent border-t-[#0f172a]" />
+            </div>
+          </div>
         </div>
         <div className="flex items-baseline gap-1 mb-2">
           <span className="text-5xl font-bold text-on-surface">{score}</span>
