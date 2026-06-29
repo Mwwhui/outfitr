@@ -17,7 +17,7 @@ interface OutfitDNA {
   formula: string;
   color_habits: string[];
   strong_pairs: Array<{ item_a: string; item_b: string; count: number }>;
-  never_tried: Array<{ item_a: string; item_b: string; reason: string }>;
+  never_tried: Array<{ item_a: string; item_b: string; reason: string; item_a_id?: string | null; item_b_id?: string | null }>;
   pattern_breakers: Array<{ combo: string[]; combo_items: ComboItem[]; reason: string }>;
   style_summary: string;
 }
@@ -44,10 +44,33 @@ function getColorFamily(color: string): string {
   return "other";
 }
 
+const INCOMPATIBLE_USE_CASES: Record<string, string[]> = {
+  sleep: ["business", "sport", "swim", "date"],
+  business: ["sleep", "sport", "swim"],
+  sport: ["sleep", "business"],
+  swim: ["sleep", "business"],
+  date: ["sleep"],
+};
+
+function isCompatiblePair(a: { use_case?: string[] }, b: { use_case?: string[] }): boolean {
+  const tagsA = a.use_case || [];
+  const tagsB = b.use_case || [];
+  if (tagsA.length === 0 || tagsB.length === 0) return true;
+  for (const tagA of tagsA) {
+    const blocked = INCOMPATIBLE_USE_CASES[tagA];
+    if (blocked) {
+      for (const tagB of tagsB) {
+        if (blocked.includes(tagB)) return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Deterministic fallback: compute DNA from outfit history stats
 function computeStatisticalDNA(
   outfitHistory: Array<{ date: string; items: Array<{ name: string; type: string; color: string }> }>,
-  wardrobe: Array<{ id: string; name: string; type: string; color: string; image_url: string | null }>
+  wardrobe: Array<{ id: string; name: string; type: string; color: string; image_url: string | null; use_case?: string[]; wear_count?: number }>
 ): OutfitDNA {
   // 1. Strong pairs — co-occurrence count
   const pairCounts = new Map<string, { item_a: string; item_b: string; count: number }>();
@@ -109,7 +132,7 @@ function computeStatisticalDNA(
     }
   }
 
-  // 4. Never tried — items never paired that share complementary colors
+  // 4. Never tried — items never paired, prioritizing underutilized items
   const wornPairs = new Set<string>();
   for (const outfit of outfitHistory) {
     for (let i = 0; i < outfit.items.length; i++) {
@@ -118,23 +141,52 @@ function computeStatisticalDNA(
       }
     }
   }
-  const never_tried: Array<{ item_a: string; item_b: string; reason: string }> = [];
+  const neverTriedCandidates: Array<{ item_a: string; item_b: string; reason: string; item_a_id: string; item_b_id: string; score: number }> = [];
   for (let i = 0; i < wardrobe.length; i++) {
     for (let j = i + 1; j < wardrobe.length; j++) {
       const key = [wardrobe[i].name, wardrobe[j].name].sort().join("|||");
-      if (!wornPairs.has(key) && wardrobe[i].type !== wardrobe[j].type) {
-        const fA = getColorFamily(wardrobe[i].color);
-        const fB = getColorFamily(wardrobe[j].color);
-        if (fA !== fB && never_tried.length < 5) {
-          never_tried.push({
-            item_a: wardrobe[i].name,
-            item_b: wardrobe[j].name,
-            reason: `${fA} pairs well with ${fB} tones`,
-          });
-        }
-      }
+      if (wornPairs.has(key) || wardrobe[i].type === wardrobe[j].type) continue;
+      if (!isCompatiblePair({ use_case: wardrobe[i].use_case }, { use_case: wardrobe[j].use_case })) continue;
+
+      let score = 0;
+      const wearA = wardrobe[i].wear_count || 0;
+      const wearB = wardrobe[j].wear_count || 0;
+      const avgWear = (wearA + wearB) / 2;
+      if (avgWear === 0) score += 25;
+      else if (avgWear <= 2) score += 20;
+      else if (avgWear <= 5) score += 15;
+      else if (avgWear <= 10) score += 8;
+      else score += 2;
+
+      const fA = getColorFamily(wardrobe[i].color);
+      const fB = getColorFamily(wardrobe[j].color);
+      if (fA !== fB) score += 5;
+
+      const complementary = [['Tops', 'Bottoms'], ['Tops', 'One-Piece'], ['Outerwear', 'Tops'], ['Shoes', 'Bottoms']];
+      const isComplementary = complementary.some(([a, b]) =>
+        (wardrobe[i].type === a && wardrobe[j].type === b) || (wardrobe[i].type === b && wardrobe[j].type === a)
+      );
+      if (isComplementary) score += 3;
+
+      const useA = wardrobe[i].use_case || [];
+      const useB = wardrobe[j].use_case || [];
+      const shared = useA.filter((u) => useB.includes(u));
+      if (shared.length > 0) score += 4;
+
+      neverTriedCandidates.push({
+        item_a: wardrobe[i].name,
+        item_b: wardrobe[j].name,
+        reason: `${fA} pairs well with ${fB} tones`,
+        item_a_id: wardrobe[i].id,
+        item_b_id: wardrobe[j].id,
+        score,
+      });
     }
   }
+  const never_tried = neverTriedCandidates
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(({ item_a, item_b, reason, item_a_id, item_b_id }) => ({ item_a, item_b, reason, item_a_id, item_b_id }));
 
   // 5. Pattern breakers — outfits that deviate from the dominant type pattern
   const pattern_breakers: Array<{ combo: string[]; combo_items: ComboItem[]; reason: string }> = [];
@@ -154,6 +206,14 @@ function computeStatisticalDNA(
             image_url: match?.image_url || null,
           };
         });
+        const allCompatible = comboItems.every((itemA, i) =>
+          comboItems.slice(i + 1).every((itemB) => {
+            const matchA = wardrobe.find((w) => w.name === itemA.name);
+            const matchB = wardrobe.find((w) => w.name === itemB.name);
+            return isCompatiblePair({ use_case: matchA?.use_case }, { use_case: matchB?.use_case });
+          })
+        );
+        if (!allCompatible) continue;
         const outfitTypeStr = outfitTypes.join(" + ");
         pattern_breakers.push({
           combo: outfit.items.map((i) => i.name),
@@ -263,7 +323,7 @@ export async function POST(req: Request) {
     // Also fetch all clothes for "never tried" analysis
     const { data: allClothes } = await supabase
       .from("clothes")
-      .select("id, name, type, color, image_url")
+      .select("id, name, type, color, image_url, use_case, wear_count")
       .eq("user_id", user_id)
       .is("deleted_at", null)
       .or("status.is.null,status.eq.available");
@@ -274,14 +334,22 @@ export async function POST(req: Request) {
       type: c.type,
       color: c.color || "unknown",
       image_url: c.image_url || null,
+      use_case: c.use_case || [],
+      wear_count: c.wear_count || 0,
     }));
 
     const prompt = `You are a minimalist wardrobe analyst. Analyze this user's outfit history (last 90 days) and identify their STYLE DNA — the underlying patterns in what they combine.
 
+CRITICAL RULES for "never_tried" and "pattern_breakers":
+- NEVER pair items with incompatible use_case tags
+- Incompatible pairs: sleep↔business, sleep↔sport, sleep↔swim, sleep↔date, business↔sport, business↔swim, sport↔business, swim↔business
+- ONLY suggest pairings where both items share at least one compatible use_case (e.g., casual+casual, business+business, date+date, casual+date, sport+sport, etc.)
+- If both items have empty use_case, the pairing is allowed
+
 OUTFIT HISTORY:
 ${JSON.stringify(outfitHistory.slice(0, 50))}
 
-FULL WARDROBE (use the exact item names from this list):
+FULL WARDROBE (each item has use_case tags — respect them when pairing):
 ${JSON.stringify(wardrobeSummary)}
 
 Return ONLY valid JSON (no markdown, no extra text):
@@ -341,6 +409,30 @@ Return ONLY valid JSON (no markdown, no extra text):
       result = computeStatisticalDNA(outfitHistory, wardrobeSummary);
     }
 
+    // Server-side use_case filtering (safety net)
+    if (allClothes && result.never_tried?.length > 0) {
+      result.never_tried = result.never_tried.filter((nt) => {
+        const itemA = allClothes.find((c) => c.name === nt.item_a || c.name.toLowerCase().includes(nt.item_a.toLowerCase()));
+        const itemB = allClothes.find((c) => c.name === nt.item_b || c.name.toLowerCase().includes(nt.item_b.toLowerCase()));
+        if (!itemA || !itemB) return false;
+        return isCompatiblePair({ use_case: itemA.use_case || [] }, { use_case: itemB.use_case || [] });
+      });
+    }
+
+    if (allClothes && result.pattern_breakers?.length > 0) {
+      result.pattern_breakers = result.pattern_breakers.filter((pb) => {
+        const items = pb.combo.map((name) => {
+          const exact = allClothes.find((c) => c.name === name);
+          if (exact) return exact;
+          return allClothes.find((c) => c.name.toLowerCase().includes(name.toLowerCase()));
+        }).filter(Boolean);
+        if (items.length < 2) return false;
+        return items.every((itemA, i) =>
+          items.slice(i + 1).every((itemB) => isCompatiblePair({ use_case: itemA.use_case || [] }, { use_case: itemB.use_case || [] }))
+        );
+      });
+    }
+
     // Resolve pattern_breaker item names to full ComboItem objects
     if (allClothes && result.pattern_breakers?.length > 0) {
       const nameToItem = new Map<string, ComboItem>();
@@ -384,6 +476,19 @@ Return ONLY valid JSON (no markdown, no extra text):
           .map((name) => findItem(name))
           .filter(Boolean) as ComboItem[],
       }));
+    }
+
+    // Add item IDs to never_tried for client-side dedup
+    if (allClothes && result.never_tried?.length > 0) {
+      result.never_tried = result.never_tried.map((nt) => {
+        const itemA = allClothes.find((c) => c.name === nt.item_a || c.name.toLowerCase().includes(nt.item_a.toLowerCase()));
+        const itemB = allClothes.find((c) => c.name === nt.item_b || c.name.toLowerCase().includes(nt.item_b.toLowerCase()));
+        return {
+          ...nt,
+          item_a_id: itemA?.id || null,
+          item_b_id: itemB?.id || null,
+        };
+      });
     }
 
     // Cache the result (7-day TTL)
