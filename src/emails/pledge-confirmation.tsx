@@ -7,11 +7,13 @@ import {
   Section,
   Hr,
   Preview,
+  Img,
 } from 'react-email';
 
 interface PledgeItem {
   name: string;
   brand: string | null;
+  image_url?: string | null;
 }
 
 interface Props {
@@ -130,24 +132,54 @@ export default function PledgeConfirmation({
                 style={{
                   border: '1px solid #e2e8f0',
                   borderRadius: '12px',
-                  padding: '12px 16px',
+                  padding: '10px 14px',
                   marginBottom: '8px',
                   backgroundColor: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
                 }}
               >
-                <Text
-                  style={{
-                    margin: '0 0 4px',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: '#0f172a',
-                  }}
-                >
-                  {item.name}
-                </Text>
-                <Text style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
-                  Brand: {item.brand || '—'}
-                </Text>
+                {item.image_url ? (
+                  <Img
+                    src={item.image_url}
+                    alt={item.name}
+                    width="48"
+                    height="48"
+                    style={{
+                      borderRadius: '8px',
+                      objectFit: 'cover',
+                      flexShrink: 0,
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '8px',
+                      backgroundColor: '#f1f5f9',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <div style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      margin: '0 0 4px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: '#0f172a',
+                    }}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text
+                    style={{ margin: 0, fontSize: '12px', color: '#64748b' }}
+                  >
+                    Brand: {item.brand || '—'}
+                  </Text>
+                </div>
               </div>
             ))}
           </Section>

@@ -28,6 +28,10 @@ export interface EditItem {
   confidence: number;
   box: [number, number, number, number];
   included: boolean;
+  colorCandidates?: string[];
+  colorSource?: ColorSource;
+  aiColorSource?: ColorSource;
+  useCase: string[];
 }
 
 export const SEASONS = ["All", "Spring", "Summer", "Autumn", "Winter"];
@@ -49,6 +53,10 @@ export const POLL_BASE = 500;
 export const POLL_BACKOFF_EMPTY = 2000;
 export const POLL_MAX = 15000;
 export const NO_DETECTION_TIMEOUT = 30000;
+export const HSV_SAMPLE_SIZE = 128;
+export const GEMINI_TIMEOUT_MS = 8000;
+
+export type ColorSource = "gemini" | "yolo" | "hsv" | "manual";
 
 export const inputBase =
   "w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 " +
@@ -69,23 +77,23 @@ function rgbToHsv(r: number, g: number, b: number) {
 
 function hsvColorName(h: number, s: number, v: number): string {
   if (s < 10) {
-    if (v < 18) return "Black";
-    if (v > 88) return "White";
+    if (v < 15) return "Black";
+    if (v > 90) return "White";
     return "Grey";
   }
-  if (v < 12) return "Black";
+  if (v < 10) return "Black";
   if (h > 20 && h < 70 && s < 30 && v > 75) return v > 92 ? "Cream" : "Beige";
-  if (h < 60 && v < 65) return "Brown";
-  if (h < 60 && v < 80 && s > 25 && s < 70) return "Brown";
-  if (h > 200 && h < 290 && v < 30) return "Navy";
-  if (h > 210 && h < 260 && v > 30 && v < 65 && s > 30 && s < 65) return "Denim";
-  if (h > 200 && h < 290 && s < 25) return "Grey";
-  if ((h < 15 || h >= 340) && v > 65 && s < 50) return "Pink";
-  if (h > 300 && h < 345) return v > 35 ? "Pink" : "Purple";
-  if (h < 15 || h >= 345) return "Red";
-  if (h < 45) return "Orange";
+  if (h < 60 && v < 60) return "Brown";
+  if (h < 60 && v < 80 && s > 20 && s < 75) return "Brown";
+  if (h > 190 && h < 290 && v < 25) return "Navy";
+  if (h > 200 && h < 260 && v >= 25 && v < 60 && s > 25 && s < 70) return "Denim";
+  if (h > 190 && h < 290 && s < 20) return "Grey";
+  if ((h < 12 || h >= 345) && v > 60 && s < 45) return "Pink";
+  if (h > 300 && h < 345) return v > 30 ? "Pink" : "Purple";
+  if (h < 12 || h >= 345) return "Red";
+  if (h < 40) return "Orange";
   if (h < 70) return "Yellow";
-  if (h < 170) return "Green";
+  if (h < 165) return "Green";
   if (h < 260) return "Blue";
   if (h < 300) return "Purple";
   return "Pink";
@@ -160,46 +168,16 @@ export function dominantColorFromImage(
   img: HTMLImageElement,
   box?: [number, number, number, number],
 ): string | null {
-  const size = 32;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  if (box) {
-    const [x1, y1, x2, y2] = box;
-    const w = x2 - x1;
-    const h = y2 - y1;
-    const safeX = x1 + w * 0.25;
-    const safeY = y1 + h * 0.25;
-    const safeW = w * 0.5;
-    const safeH = h * 0.5;
-    ctx.drawImage(img, safeX, safeY, safeW, safeH, 0, 0, size, size);
-  } else {
-    const crop = 0.6;
-    const sx = (img.width * (1 - crop)) / 2;
-    const sy = (img.height * (1 - crop)) / 2;
-    ctx.drawImage(img, sx, sy, img.width * crop, img.height * crop, 0, 0, size, size);
-  }
-  const data = ctx.getImageData(0, 0, size, size).data;
-  const votes: Record<string, number> = {};
-  for (let i = 0; i < data.length; i += 4) {
-    const { h, s, v } = rgbToHsv(data[i], data[i + 1], data[i + 2]);
-    const name = hsvColorName(h, s, v);
-    votes[name] = (votes[name] || 0) + 1;
-  }
-  let best = "";
-  let max = 0;
-  for (const [name, count] of Object.entries(votes)) {
-    if (count > max) { max = count; best = name; }
-  }
-  return best || null;
+  const candidates = sampleColorCandidates(img, box);
+  return candidates[0] || null;
 }
 
-export function dominantColorFromCanvas(
-  canvas: HTMLCanvasElement,
+function sampleColorCandidates(
+  source: HTMLImageElement | HTMLCanvasElement,
   box?: [number, number, number, number],
-): string | null {
-  const size = 32;
+  maxCandidates: number = 3,
+): string[] {
+  const size = HSV_SAMPLE_SIZE;
   const tmp = document.createElement("canvas");
   tmp.width = size;
   tmp.height = size;
@@ -208,30 +186,53 @@ export function dominantColorFromCanvas(
     const [x1, y1, x2, y2] = box;
     const w = x2 - x1;
     const h = y2 - y1;
-    const safeX = x1 + w * 0.25;
-    const safeY = y1 + h * 0.25;
-    const safeW = w * 0.5;
-    const safeH = h * 0.5;
-    ctx.drawImage(canvas, safeX, safeY, safeW, safeH, 0, 0, size, size);
+    const safeX = x1 + w * 0.15;
+    const safeY = y1 + h * 0.15;
+    const safeW = w * 0.7;
+    const safeH = h * 0.7;
+    ctx.drawImage(source, safeX, safeY, safeW, safeH, 0, 0, size, size);
   } else {
-    const crop = 0.6;
-    const sx = (canvas.width * (1 - crop)) / 2;
-    const sy = (canvas.height * (1 - crop)) / 2;
-    ctx.drawImage(canvas, sx, sy, canvas.width * crop, canvas.height * crop, 0, 0, size, size);
+    const crop = 0.65;
+    const sx = (source.width * (1 - crop)) / 2;
+    const sy = (source.height * (1 - crop)) / 2;
+    ctx.drawImage(source, sx, sy, source.width * crop, source.height * crop, 0, 0, size, size);
   }
   const data = ctx.getImageData(0, 0, size, size).data;
   const votes: Record<string, number> = {};
-  for (let i = 0; i < data.length; i += 4) {
-    const { h, s, v } = rgbToHsv(data[i], data[i + 1], data[i + 2]);
-    const name = hsvColorName(h, s, v);
-    votes[name] = (votes[name] || 0) + 1;
+  const half = size / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const dx = (x - half) / half;
+      const dy = (y - half) / half;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const weight = dist < 0.5 ? 2 : dist < 0.8 ? 1.2 : 0.6;
+      const { h, s, v } = rgbToHsv(data[i], data[i + 1], data[i + 2]);
+      const name = hsvColorName(h, s, v);
+      votes[name] = (votes[name] || 0) + weight;
+    }
   }
-  let best = "";
-  let max = 0;
-  for (const [name, count] of Object.entries(votes)) {
-    if (count > max) { max = count; best = name; }
-  }
-  return best || null;
+  const sorted = Object.entries(votes)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, maxCandidates)
+    .map(([name]) => name);
+  return sorted;
+}
+
+export function dominantColorFromCanvas(
+  canvas: HTMLCanvasElement,
+  box?: [number, number, number, number],
+): string | null {
+  const candidates = dominantColorCandidatesFromCanvas(canvas, box, 1);
+  return candidates[0] || null;
+}
+
+export function dominantColorCandidatesFromCanvas(
+  canvas: HTMLCanvasElement,
+  box?: [number, number, number, number],
+  maxCandidates: number = 3,
+): string[] {
+  return sampleColorCandidates(canvas, box, maxCandidates);
 }
 
 export function blobToImage(blob: Blob): Promise<HTMLImageElement> {
@@ -344,4 +345,33 @@ export function canvasToBlob(canvas: HTMLCanvasElement, quality = 0.5): Promise<
   return new Promise((resolve, reject) => {
     canvas.toBlob(b => b ? resolve(b) : reject(new Error("toBlob failed")), "image/jpeg", quality);
   });
+}
+
+export async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number = GEMINI_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const signal = options.signal
+      ? mergeAbortSignals(options.signal, controller.signal)
+      : controller.signal;
+    return await fetch(url, { ...options, signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function mergeAbortSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  if (a.aborted || b.aborted) {
+    controller.abort();
+  } else {
+    a.addEventListener("abort", onAbort, { once: true });
+    b.addEventListener("abort", onAbort, { once: true });
+  }
+  return controller.signal;
 }

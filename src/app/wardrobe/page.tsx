@@ -136,10 +136,10 @@ export default function WardrobePage() {
   console.log('Wardrobe render:', { clothes: clothes.length, clusterData, selectedCluster, loading });
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-[#163422]">My Wardrobe</h1>
+          <h1 className="text-3xl font-bold text-[#163422] font-headline">My Wardrobe</h1>
 
           <div className="flex gap-6 border-b border-slate-200">
           {/* Wardrobe Tab */}
@@ -192,6 +192,30 @@ export default function WardrobePage() {
               <path d="M15.5 9.5l3.2-3.2a1.4 1.4 0 0 1 2 2l-3.2 3.2-2.4.4.4-2.4z" />
             </svg>
             Plan Outfit
+          </button>
+
+          {/* Style Lab Tab */}
+          <button
+            onClick={() => router.push("/outfits")}
+            className={`text-sm flex items-center gap-2 -mb-[1px] ${
+              pathname === "/outfits"
+                ? "border-b-2 border-black font-semibold text-black"
+                : "text-slate-500 hover:text-black"
+            }`}
+          >
+            {/* Sparkle Icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z" />
+              <path d="M18 14l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" opacity="0.6" />
+            </svg>
+            Style Lab
           </button>
 
           {/* Calendar Tab */}

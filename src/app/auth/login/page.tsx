@@ -39,7 +39,7 @@ export default function LoginPage() {
   // While signing in, hide the form and show only the loader
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+      <div className="flex min-h-screen items-center justify-center">
         <Loader message={'Signing in…'} />
       </div>
     );
@@ -48,7 +48,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-semibold text-center mb-6 text-black">
+        <h1 className="text-2xl font-semibold text-center mb-6 text-black font-headline">
           Login
         </h1>
 

@@ -213,7 +213,7 @@ export default function DashboardPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen bg-[#f8fafc]">
+      <div className="min-h-screen">
         <div className="px-6 pt-8 pb-4 max-w-6xl mx-auto">
           <div className="h-8 bg-gray-100 rounded w-40 animate-pulse mb-1" />
           <div className="h-4 bg-gray-100 rounded w-60 animate-pulse" />
@@ -242,10 +242,10 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md">
           <div className="text-5xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold text-[#0f172a] mb-2">
+          <h2 className="text-xl font-bold text-[#0f172a] mb-2 font-headline">
             Could not load dashboard
           </h2>
           <p className="text-sm text-gray-500 mb-6">{error}</p>
@@ -269,7 +269,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       <div className="px-6 pt-8 pb-4 max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-[#163422]">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-[#163422] font-headline">Dashboard</h1>
         <p className="text-[#424843] mt-1">
           Your wardrobe analytics at a glance
         </p>
@@ -395,7 +395,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {!emptyWardrobe && (
             <div className="bg-white rounded-3xl shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-[#163422] mb-4">
+              <h3 className="text-sm font-semibold text-[#163422] mb-4 font-headline">
                 Wardrobe by Category
               </h3>
               <CategoryChart data={data?.categories || []} />
@@ -431,13 +431,13 @@ export default function DashboardPage() {
         {!emptyWardrobe && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-3xl shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-[#163422] mb-4">
+              <h3 className="text-sm font-semibold text-[#163422] mb-4 font-headline">
                 Items Added Over Time
               </h3>
               <ItemsAddedChart data={data?.items_over_time || []} />
             </div>
             <div className="bg-white rounded-3xl shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-[#163422] mb-4">
+              <h3 className="text-sm font-semibold text-[#163422] mb-4 font-headline">
                 Top Brands
               </h3>
               <TopBrandsChart data={data?.brands || []} />
@@ -472,7 +472,7 @@ export default function DashboardPage() {
 
         <div className="bg-white rounded-3xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[#163422]">
+            <h3 className="text-sm font-semibold text-[#163422] font-headline">
               Recent Activity
             </h3>
             {!noPledges && (

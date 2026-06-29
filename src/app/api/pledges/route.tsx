@@ -13,6 +13,54 @@ const supabase = createClient(
 
 const VALID_ACTION_TYPES = ['donate', 'sell', 'recycle'] as const;
 
+export async function GET() {
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: pledges, error } = await supabase
+      .from('pledges')
+      .select('id, partner_id, item_ids, action_type, status, created_at')
+      .eq('user_id', userId)
+      .in('status', ['pending', 'accepted'])
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase error GET /api/pledges:', error);
+      return NextResponse.json({ error: 'Failed to fetch pledges' }, { status: 500 });
+    }
+
+    if (!pledges || pledges.length === 0) {
+      return NextResponse.json({ pledges: [] });
+    }
+
+    const partnerIds = [...new Set(pledges.map((p) => p.partner_id).filter(Boolean))];
+    const { data: partners } = await supabase
+      .from('partners')
+      .select('id, name')
+      .in('id', partnerIds);
+
+    const partnerMap = new Map((partners || []).map((p) => [p.id, p.name]));
+
+    const result = pledges.map((p) => ({
+      id: p.id,
+      action_type: p.action_type,
+      status: p.status,
+      partner_name: partnerMap.get(p.partner_id) || null,
+      item_count: (p.item_ids || []).length,
+      created_at: p.created_at,
+    }));
+
+    return NextResponse.json({ pledges: result });
+  } catch (err) {
+    console.error('API GET /api/pledges crashed:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -77,7 +125,7 @@ export async function POST(req: Request) {
 
     const { data: itemsData, error: itemsError } = await supabase
       .from('clothes')
-      .select('id, name, brand')
+      .select('id, name, brand, image_url')
       .in('id', trimmedItemIds)
       .eq('user_id', userId)
       .is('deleted_at', null);
@@ -117,6 +165,7 @@ export async function POST(req: Request) {
         items={itemsData.map((item) => ({
           name: item.name,
           brand: item.brand,
+          image_url: item.image_url,
         }))}
         pledgeId={pledgeData.id}
       />,

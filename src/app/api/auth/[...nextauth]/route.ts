@@ -149,7 +149,8 @@ export const authOptions: NextAuthOptions = {
       }
 
       // ALSO: fetch DB user id, role, partner_id so session.user has them
-      if (token.email) {
+      // Only query DB when token doesn't already have id (first login / new token)
+      if (token.email && !token.id) {
         const { data } = await supabase
           .from('users')
           .select('id, role, partner_id')

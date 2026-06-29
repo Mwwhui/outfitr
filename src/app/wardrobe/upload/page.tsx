@@ -8,9 +8,12 @@ import {
   SEASONS,
   SIZES,
   MATERIALS,
+  ColorSource,
+  GEMINI_TIMEOUT_MS,
   inputBase,
   compressImage,
   detectSeason,
+  fetchWithTimeout,
 } from './upload-utils';
 import { useCameraScanner } from './useCameraScanner';
 import CameraViewfinder from './CameraViewfinder';
@@ -29,6 +32,7 @@ interface FormFields {
   location: string | '';
   description: string;
   notes: string;
+  useCases: string[];
 }
 
 const initialForm: FormFields = {
@@ -44,6 +48,7 @@ const initialForm: FormFields = {
   location: '',
   description: '',
   notes: '',
+  useCases: [],
 };
 
 function formReducer(state: FormFields, next: Partial<FormFields>): FormFields {
@@ -89,16 +94,23 @@ export default function UploadClothesPage() {
     type: string;
     confidence: number;
     color: string | null;
+    source: ColorSource | null;
   } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [formError, setFormError] = useState('');
+  const [similarItems, setSimilarItems] = useState<Array<{id: string; name: string; color: string | null; image_url: string | null; similarity: number}>>([]);
+  const [checkingSimilar, setCheckingSimilar] = useState(false);
+  const [visualResult, setVisualResult] = useState<{is_different: boolean; reasoning: string; confidence: number} | null>(null);
+  const [similarDismissed, setSimilarDismissed] = useState(false);
+  const [useCaseDetected, setUseCaseDetected] = useState(false);
 
   const { brandSuggestions, locationSuggestions, materialSuggestions } =
     useSuggestions(session?.user?.id);
 
   const cam = useCameraScanner();
   const fileKeyRef = useRef('');
+  const compressedCacheRef = useRef<{ key: string; file: File } | null>(null);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -120,23 +132,65 @@ export default function UploadClothesPage() {
     const detect = async () => {
       setDetecting(true);
       setDetectResult(null);
+      setUseCaseDetected(false);
       try {
-        const fd = new FormData();
-        fd.append('file', imageFile);
+        const compressed = await compressImage(imageFile);
+        compressedCacheRef.current = { key, file: compressed };
+        // Each fetch needs its own FormData — a body can only be read once
+        const fdYolo = new FormData();
+        fdYolo.append('file', compressed);
+        const fdGemini = new FormData();
+        fdGemini.append('file', compressed);
+        const fdUseCase = new FormData();
+        fdUseCase.append('file', compressed);
 
-        // 1. /auto-detect → reliable category (type) + color
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`,
-          { method: 'POST', body: fd, signal: abortController.signal },
-        );
-        const data = await res.json();
+        const [yoloData, geminiData, useCaseData] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
+            method: 'POST',
+            body: fdYolo,
+            signal: abortController.signal,
+          }).then((r) => {
+            if (!r.ok) throw new Error('YOLO API error');
+            return r.json();
+          }).catch((err) => {
+            console.error('YOLO detection failed:', err);
+            return null;
+          }),
+          fetchWithTimeout('/api/clothes/detect-color', {
+            method: 'POST',
+            body: fdGemini,
+            signal: abortController.signal,
+          }, GEMINI_TIMEOUT_MS).then((r) => {
+            if (!r.ok) throw new Error('Gemini API error');
+            return r.json();
+          }).catch((err) => {
+            console.error('Gemini color detection failed:', err);
+            return null;
+          }),
+          fetchWithTimeout('/api/clothes/detect-use-case', {
+            method: 'POST',
+            body: fdUseCase,
+            signal: abortController.signal,
+          }, GEMINI_TIMEOUT_MS).then((r) => {
+            if (!r.ok) throw new Error('Use case API error');
+            return r.json();
+          }).catch((err) => {
+            console.error('Use case detection failed:', err);
+            return null;
+          }),
+        ]);
+
         if (!active) return;
 
-        // 2. /detect → specific yolo_type for a more specific name
+        const detectedColor = geminiData?.color || yoloData?.color || '';
+        const detectedType = yoloData?.type || '';
+        const confidence = yoloData?.confidence || 0;
+        const colorSource: ColorSource = geminiData?.color ? "gemini" : yoloData?.color ? "yolo" : "hsv";
+
         let yoloType = '';
         try {
           const fd2 = new FormData();
-          fd2.append('file', imageFile);
+          fd2.append('file', compressed);
           const detRes = await fetch(
             `${process.env.NEXT_PUBLIC_YOLO_API_URL}/detect`,
             { method: 'POST', body: fd2, signal: abortController.signal },
@@ -146,16 +200,12 @@ export default function UploadClothesPage() {
             yoloType = detData.items?.[0]?.yolo_type || '';
           }
         } catch {
-          /* /detect is supplementary — ignore failure */
+          /* ignore yolo-detect failure */
         }
 
-        const cap = (s: string) =>
-          s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
         const title = (s: string) => s.split(' ').map(cap).join(' ');
 
-        const detectedType = data.type || '';
-        const detectedColor = data.color || '';
-        const confidence = data.confidence || 0;
         const specificName = yoloType || detectedType;
         const desc = title(specificName);
 
@@ -169,10 +219,12 @@ export default function UploadClothesPage() {
           setField({ color: detectedColor });
         }
 
-        const label = [detectedColor, specificName]
-          .filter(Boolean)
-          .map(title)
-          .join(' ');
+        if (useCaseData?.use_case && useCaseData.use_case.length > 0) {
+          setField({ useCases: useCaseData.use_case });
+          setUseCaseDetected(true);
+        }
+
+        const label = [detectedColor, specificName].filter(Boolean).map(title).join(' ');
         if (label) setField({ name: label });
 
         if (desc) {
@@ -180,13 +232,16 @@ export default function UploadClothesPage() {
             type: desc,
             confidence,
             color: detectedColor || null,
+            source: colorSource,
           });
           setTimeout(() => {
             if (active) setDetectResult(null);
           }, 4000);
         }
-      } catch (e: any) {
-        if (e.name !== 'AbortError') {
+      } catch (e) {
+        if (e instanceof Error && e.name !== 'AbortError') {
+          console.error('Auto-detect failed:', e);
+        } else if (!(e instanceof Error)) {
           console.error('Auto-detect failed:', e);
         }
       } finally {
@@ -199,6 +254,74 @@ export default function UploadClothesPage() {
       abortController.abort();
     };
   }, [imageFile]);
+
+  // Check for similar items after type + color settle
+  useEffect(() => {
+    if (!session?.user?.id || !fields.type) return;
+    let active = true;
+    setSimilarDismissed(false);
+    setVisualResult(null);
+
+    const check = async () => {
+      setCheckingSimilar(true);
+      setSimilarItems([]);
+      try {
+        const params = new URLSearchParams({
+          user_id: session.user.id,
+          type: fields.type,
+        });
+        if (fields.color) params.set('color', fields.color);
+        const res = await fetch(`/api/clothes/similar?${params}`);
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (!active) return;
+        setSimilarItems(data.similar || []);
+
+        // Tier 2: If 1-3 matches, fire Gemini visual comparison (use cached compressed image)
+        if (data.similar?.length >= 1 && data.similar.length <= 3 && !similarDismissed && active) {
+          try {
+            // Reuse cached compressed image from auto-detect, or compress fresh
+            let compressed = compressedCacheRef.current?.file;
+            if (!compressed && imageFile) {
+              compressed = await compressImage(imageFile);
+            }
+            if (!compressed || !active) return;
+            const imageBase64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve((reader.result as string).split(',')[1]);
+              reader.readAsDataURL(compressed!);
+            });
+            if (!active) return;
+            const visRes = await fetch('/api/clothes/visual-similarity', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                new_image: imageBase64,
+                existing_images: data.similar.map((s: { id: string; image_url: string; name: string }) => ({
+                  id: s.id,
+                  image_url: s.image_url,
+                  name: s.name,
+                })),
+                type: fields.type,
+              }),
+            });
+            if (visRes.ok && active) {
+              setVisualResult(await visRes.json());
+            }
+          } catch {
+            // Visual comparison is optional, ignore errors
+          }
+        }
+      } catch {
+        // Ignore errors
+      } finally {
+        if (active) setCheckingSimilar(false);
+      }
+    };
+
+    const timer = setTimeout(check, 800);
+    return () => { active = false; clearTimeout(timer); };
+  }, [fields.type, fields.color, session?.user?.id, imageFile]);
 
   // Clean up blob URLs
   useEffect(() => {
@@ -230,11 +353,16 @@ export default function UploadClothesPage() {
       return;
     }
 
+    if (fields.useCases.length === 0) {
+      setFormError('Please select at least one use case (e.g. casual, business, sleepwear).');
+      return;
+    }
+
     setIsUploading(true);
     setFormError('');
 
     try {
-      const compressed = await compressImage(imageFile);
+      const compressed = compressedCacheRef.current?.file || await compressImage(imageFile);
       const formData = new FormData();
       formData.append('file', compressed);
 
@@ -261,6 +389,7 @@ export default function UploadClothesPage() {
           material: fields.material || null,
           favorite: false,
           image_url: imageUrl,
+          use_case: fields.useCases,
           description: fields.description || null,
           purchase_date: fields.purchaseDate || null,
           location: fields.location || null,
@@ -272,12 +401,29 @@ export default function UploadClothesPage() {
         throw new Error(err.error || 'Failed to save clothing');
       }
       router.push('/wardrobe');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setFormError(err.message || 'Something went wrong');
+      setFormError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const toggleUseCase = (value: string) => {
+    setField({
+      useCases: fields.useCases.includes(value)
+        ? fields.useCases.filter((v) => v !== value)
+        : [...fields.useCases, value],
+    });
+  };
+
+  const USE_CASE_LABELS: Record<string, string> = {
+    casual: 'Casual',
+    business: 'Business',
+    sport: 'Sport',
+    sleep: 'Sleepwear',
+    swim: 'Swimwear',
+    date: 'Date Night',
   };
 
   const upd =
@@ -298,7 +444,7 @@ export default function UploadClothesPage() {
         ← Back
       </button>
 
-      <h1 className="text-3xl font-bold mb-6">Add New Clothing</h1>
+      <h1 className="text-3xl font-bold mb-6 font-headline">Add New Clothing</h1>
 
       {errorMsg && (
         <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-xl">
@@ -378,7 +524,12 @@ export default function UploadClothesPage() {
                     <div className="flex items-center gap-1 text-[10px] text-slate-400 pt-1 px-1 animate-in fade-in duration-300">
                       <span className="text-amber-400">✦</span>
                       <span>
-                        AI detected at{' '}
+                        {detectResult.source === 'gemini'
+                          ? 'AI detected'
+                          : detectResult.source === 'yolo'
+                            ? 'YOLO detected'
+                            : 'Auto detected'}{' '}
+                        at{' '}
                         {Math.round(detectResult.confidence * 100)}% confidence
                       </span>
                     </div>
@@ -408,6 +559,57 @@ export default function UploadClothesPage() {
                 </div>
               )}
             </label>
+
+            {similarItems.length > 0 && !similarDismissed && (
+              <div className="mx-4 mt-3 p-3 rounded-xl border border-amber-200 bg-amber-50 animate-in fade-in slide-in-from-top-1 duration-300">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5 text-xs text-amber-700">
+                    <span className="text-amber-500">✦</span>
+                    <span className="font-medium">
+                      You already have {similarItems.length} similar {similarItems.length === 1 ? 'item' : 'items'}
+                    </span>
+                    {checkingSimilar && (
+                      <span className="relative flex w-1.5 h-1.5 ml-1">
+                        <span className="absolute inline-flex w-full h-full rounded-full bg-amber-400 opacity-75 animate-ping" />
+                        <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSimilarDismissed(true)}
+                    className="text-amber-500 hover:text-amber-700 text-xs shrink-0"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {similarItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border border-amber-100 shrink-0">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-8 h-8 rounded object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">?</div>
+                      )}
+                      <div className="text-[11px] min-w-0">
+                        <div className="font-medium text-slate-700 truncate">{item.name}</div>
+                        <div className="text-slate-400">
+                          {item.similarity >= 1 ? 'Same color' : 'Similar'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {visualResult && (
+                  <div className={`mt-2 text-[11px] px-2 py-1.5 rounded-lg ${visualResult.is_different ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+                    <span className="font-medium">
+                      {visualResult.is_different ? '✓ Different enough' : '⚠ May be redundant'}:
+                    </span>{' '}
+                    {visualResult.reasoning}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="p-4 space-y-3">
               <div>
@@ -461,7 +663,7 @@ export default function UploadClothesPage() {
 
         <div className="bg-white rounded-3xl p-6 shadow-md space-y-6">
           <div>
-            <h2 className="text-lg font-semibold">Details</h2>
+            <h2 className="text-lg font-semibold font-headline">Details</h2>
             <p className="text-sm text-gray-500">
               Add more information so you can filter and find this piece later.
             </p>
@@ -666,6 +868,36 @@ export default function UploadClothesPage() {
               )}
             </div>
           </div>
+
+          {/* Use Case */}
+          <div>
+            <label className="block text-xs text-slate-600 mb-2">
+              Use case <span className="text-red-400">*</span>
+              {detecting && <span className="text-slate-400 font-normal ml-2">AI detecting…</span>}
+              {useCaseDetected && <span className="text-emerald-500 font-normal ml-2">✦ AI detected</span>}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(USE_CASE_LABELS).map(([value, label]) => (
+                <label
+                  key={value}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs cursor-pointer transition ${
+                    fields.useCases.includes(value)
+                      ? 'bg-black text-white border-black'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={fields.useCases.includes(value)}
+                    onChange={() => toggleUseCase(value)}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
           <hr className="border-slate-200" />
           <div>
             <label className="block text-xs text-slate-600 mb-1">
@@ -728,6 +960,7 @@ export default function UploadClothesPage() {
         categories={categories}
         saving={cam.saving}
         savingPhase={cam.savingPhase}
+        refining={cam.refining}
         editCanvasRef={cam.editCanvasRef}
         onStopCamera={cam.stopCamera}
         onRetake={cam.handleRetake}

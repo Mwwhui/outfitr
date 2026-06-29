@@ -92,9 +92,23 @@ export default function PlannerPage() {
   useEffect(() => {
     const qpDate = searchParams.get('date');
     const qpTimeSlot = searchParams.get('timeSlot');
+    const qpTop = searchParams.get('top');
+    const qpBottom = searchParams.get('bottom');
+    const qpOuterwear = searchParams.get('outerwear');
+    const qpOnepiece = searchParams.get('onepiece');
 
     if (qpDate) setSelectedDate(qpDate);
     if (qpTimeSlot === 'day' || qpTimeSlot === 'night') setTimeSlot(qpTimeSlot);
+
+    // Store item IDs for pre-filling after clothes load
+    if (qpTop || qpBottom || qpOuterwear || qpOnepiece) {
+      (window as any).__prefillSlots = {
+        top: qpTop,
+        bottom: qpBottom,
+        outerwear: qpOuterwear,
+        onepiece: qpOnepiece,
+      };
+    }
 
     setUrlReady(true);
   }, [searchParams]);
@@ -165,6 +179,25 @@ export default function PlannerPage() {
       setLoading(false);
     }
   };
+
+  // Pre-fill slots from URL params (after clothes are loaded)
+  useEffect(() => {
+    const prefill = (window as any).__prefillSlots;
+    if (!prefill || clothes.length === 0) return;
+    delete (window as any).__prefillSlots;
+
+    const findItem = (id: string | null) => {
+      if (!id) return null;
+      return clothes.find((c) => c.id === id) || null;
+    };
+
+    setSlots({
+      top: findItem(prefill.top),
+      bottom: findItem(prefill.bottom),
+      outerwear: findItem(prefill.outerwear),
+      onepiece: findItem(prefill.onepiece),
+    });
+  }, [clothes]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -405,10 +438,10 @@ export default function PlannerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-[#163422]">Plan My Outfit</h1>
+          <h1 className="text-3xl font-bold text-[#163422] font-headline">Plan My Outfit</h1>
 
           <div className="flex gap-6 border-b border-slate-200">
           {/* Wardrobe Tab */}
@@ -461,6 +494,29 @@ export default function PlannerPage() {
               <path d="M15.5 9.5l3.2-3.2a1.4 1.4 0 0 1 2 2l-3.2 3.2-2.4.4.4-2.4z" />
             </svg>
             Plan Outfit
+          </button>
+
+          {/* Style Lab Tab */}
+          <button
+            onClick={() => router.push('/outfits')}
+            className={`text-sm flex items-center gap-2 -mb-[1px] ${
+              pathname === '/outfits'
+                ? 'border-b-2 border-black font-semibold text-black'
+                : 'text-slate-500 hover:text-black'
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z" />
+              <path d="M18 14l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" opacity="0.6" />
+            </svg>
+            Style Lab
           </button>
 
           {/* Calendar Tab */}
@@ -562,7 +618,7 @@ export default function PlannerPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-6">
         {/* LEFT: WARDROBE SIDEBAR */}
         <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 max-h-[80vh] overflow-hidden">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 font-headline">
             Wardrobe
           </h2>
 
@@ -714,7 +770,7 @@ export default function PlannerPage() {
             <div className="relative ml-auto w-full max-w-md bg-white shadow-xl h-full overflow-y-auto">
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-4 flex items-center justify-between z-10">
-                <h2 className="text-lg font-semibold text-[#0f172a]">Outfit Suggestions</h2>
+                <h2 className="text-lg font-semibold text-[#0f172a] font-headline">Outfit Suggestions</h2>
                 <button onClick={() => setShowSuggestions(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
               </div>
 

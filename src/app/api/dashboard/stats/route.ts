@@ -35,7 +35,7 @@ export async function GET() {
         .select('id, name, type, brand, material, price, wear_count, image_url, created_at, status')
         .eq('user_id', userId)
         .is('deleted_at', null)
-        .eq('status', 'available'),
+        .or('status.is.null,status.eq.available'),
       supabase
         .from('pledges')
         .select('id, action_type, status, item_ids, created_at')
@@ -46,7 +46,7 @@ export async function GET() {
         .select('created_at')
         .eq('user_id', userId)
         .is('deleted_at', null)
-        .eq('status', 'available')
+        .or('status.is.null,status.eq.available')
         .gte('created_at', twelveMonthsAgo)
         .order('created_at', { ascending: true }),
       supabase

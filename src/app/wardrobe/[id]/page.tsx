@@ -32,6 +32,7 @@ type Clothes = {
   purchase_date: string | null; // date as "YYYY-MM-DD"
   location: string | null;
   notes: string | null;
+  use_case: string[] | null;
 
   created_at?: string;
   updated_at?: string | null;
@@ -70,6 +71,9 @@ export default function EditWardrobePage() {
   const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
   const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
+  const [similarItems, setSimilarItems] = useState<Array<{id: string; name: string; color: string | null; image_url: string | null; similarity: number}>>([]);
+  const [visualResult, setVisualResult] = useState<{is_different: boolean; reasoning: string; confidence: number} | null>(null);
+  const [checkingVisual, setCheckingVisual] = useState(false);
 
   // Fetch item and category list
   useEffect(() => {
@@ -140,6 +144,78 @@ export default function EditWardrobePage() {
       .catch(() => {});
   }, [session?.user?.id]);
 
+  // Fetch similar items
+  useEffect(() => {
+    if (!clothes || !session?.user?.id) return;
+    const params = new URLSearchParams({
+      user_id: session.user.id,
+      type: clothes.type,
+      exclude_id: clothes.id,
+    });
+    if (clothes.color) params.set('color', clothes.color);
+    fetch(`/api/clothes/similar?${params}`)
+      .then((r) => r.json())
+      .then((data) => setSimilarItems(data.similar || []))
+      .catch(() => {});
+  }, [clothes?.id, clothes?.type, clothes?.color, session?.user?.id]);
+
+  // Fire Gemini visual comparison when 1-3 similar items exist
+  useEffect(() => {
+    if (!clothes?.image_url || similarItems.length < 1 || similarItems.length > 3) return;
+    let active = true;
+    const check = async () => {
+      setCheckingVisual(true);
+      try {
+        const res = await fetch('/api/clothes/visual-similarity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            new_image: await (async () => {
+              const imgRes = await fetch(clothes!.image_url!);
+              const buf = Buffer.from(await imgRes.arrayBuffer());
+              return buf.toString('base64');
+            })(),
+            existing_images: similarItems.map((s) => ({
+              id: s.id,
+              image_url: s.image_url,
+              name: s.name,
+            })),
+            type: clothes!.type,
+          }),
+        });
+        if (res.ok && active) setVisualResult(await res.json());
+      } catch {
+        // Optional, ignore errors
+      } finally {
+        if (active) setCheckingVisual(false);
+      }
+    };
+    check();
+    return () => { active = false; };
+  }, [clothes?.image_url, clothes?.type, similarItems]);
+
+  const USE_CASE_LABELS: Record<string, string> = {
+    casual: 'Casual',
+    business: 'Business',
+    sport: 'Sport',
+    sleep: 'Sleepwear',
+    swim: 'Swimwear',
+    date: 'Date Night',
+  };
+
+  const toggleUseCase = (value: string) => {
+    setClothes((prev) => {
+      if (!prev) return prev;
+      const current = prev.use_case || [];
+      return {
+        ...prev,
+        use_case: current.includes(value)
+          ? current.filter((v) => v !== value)
+          : [...current, value],
+      };
+    });
+  };
+
   const updateField = <K extends keyof Clothes>(
     field: K,
     value: Clothes[K],
@@ -149,6 +225,13 @@ export default function EditWardrobePage() {
 
   const handleUpdate = async () => {
     if (!clothes) return;
+
+    const useCase = clothes.use_case || [];
+    if (useCase.length === 0) {
+      toast.error('Please select at least one use case.');
+      return;
+    }
+
     setSaving(true);
 
     await fetch(`/api/clothes/${id}`, {
@@ -165,6 +248,7 @@ export default function EditWardrobePage() {
         material: clothes.material,
         favorite: clothes.favorite ?? false,
         image_url: clothes.image_url,
+        use_case: clothes.use_case,
         categories: clothes.categories,
         description: clothes.description,
         purchase_date: clothes.purchase_date,
@@ -210,7 +294,7 @@ export default function EditWardrobePage() {
           ← Back
         </button>
 
-        <h1 className="text-3xl font-bold mb-6">Edit Clothing</h1>
+        <h1 className="text-3xl font-bold mb-6 font-headline">Edit Clothing</h1>
 
         {clothes.type && (
           <div className="mb-3">
@@ -311,7 +395,7 @@ export default function EditWardrobePage() {
                       </>
                     ) : (
                       <>
-                        <h2 className="text-lg font-semibold truncate">
+                        <h2 className="text-lg font-semibold truncate font-headline">
                           {clothes.name}
                         </h2>
                         <p className="text-sm text-gray-500">{clothes.color}</p>
@@ -352,7 +436,7 @@ export default function EditWardrobePage() {
 
           {/* RIGHT */}
           <div className="bg-white rounded-3xl p-6 shadow-md space-y-6">
-            <h2 className="text-lg font-semibold">Details</h2>
+            <h2 className="text-lg font-semibold font-headline">Details</h2>
             <p className="text-sm text-gray-500">
               Edit the details of your clothing item below.
             </p>
@@ -599,10 +683,39 @@ export default function EditWardrobePage() {
             </div>
 
             {/* Divider */}
-            <hr className="border-slate-200" />
+            {/* Use Case */}
+            <div className="md:col-span-2">
+              <label className="block text-xs text-slate-600 mb-2">
+                Use case <span className="text-red-400">*</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(USE_CASE_LABELS).map(([value, label]) => (
+                  <label
+                    key={value}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs cursor-pointer transition ${
+                      (clothes.use_case || []).includes(value)
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(clothes.use_case || []).includes(value)}
+                      onChange={() => toggleUseCase(value)}
+                      className="sr-only"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <hr className="border-slate-200" />
+            </div>
 
             {/* Description */}
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-xs text-slate-600 mb-1">
                 Description
               </label>
@@ -626,6 +739,52 @@ export default function EditWardrobePage() {
             </div>
           </div>
         </div>
+
+        {/* SIMILAR ITEMS */}
+        {similarItems.length > 0 && (
+          <div className="mt-8 p-4 rounded-xl border border-slate-200 bg-slate-50">
+            <div className="flex items-center gap-2 mb-3">
+              <h3 className="text-sm font-medium text-slate-700 font-headline">
+                Similar items in your wardrobe ({similarItems.length})
+              </h3>
+              {checkingVisual && (
+                <span className="relative flex w-1.5 h-1.5">
+                  <span className="absolute inline-flex w-full h-full rounded-full bg-amber-400 opacity-75 animate-ping" />
+                  <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-amber-500" />
+                </span>
+              )}
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {similarItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => router.push(`/wardrobe/${item.id}`)}
+                  className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-slate-200 hover:border-slate-400 transition shrink-0"
+                >
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-400">?</div>
+                  )}
+                  <div className="text-left min-w-0">
+                    <div className="text-xs font-medium text-slate-700 truncate max-w-[100px]">{item.name}</div>
+                    <div className="text-[10px] text-slate-400">
+                      {item.similarity >= 1 ? 'Same color' : 'Same family'}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            {visualResult && (
+              <div className={`mt-3 text-[11px] px-2 py-1.5 rounded-lg ${visualResult.is_different ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+                <span className="font-medium">
+                  {visualResult.is_different ? '✓ Different enough' : '⚠ May be redundant'}:
+                </span>{' '}
+                {visualResult.reasoning}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ACTIONS */}
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-end">

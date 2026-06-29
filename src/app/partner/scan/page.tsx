@@ -59,6 +59,7 @@ export default function PartnerScanPage() {
   const [pendingPledgeId, setPendingPledgeId] = useState<string | null>(null);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [preview, setPreview] = useState<PledgePreview | null>(null);
+  const [expandedImage, setExpandedImage] = useState<PledgePreviewItem | null>(null);
 
   const processingRef = useRef(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -230,7 +231,7 @@ export default function PartnerScanPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-[#163422] border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -249,7 +250,7 @@ export default function PartnerScanPage() {
     : '';
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-4xl mx-auto">
         <Link
           href="/partner/dashboard"
@@ -257,7 +258,7 @@ export default function PartnerScanPage() {
         >
           ← Back to Dashboard
         </Link>
-        <h2 className="text-3xl font-bold text-[#163422] mt-1">
+        <h2 className="text-3xl font-bold text-[#163422] mt-1 font-headline">
           Scan QR Code
         </h2>
       </div>
@@ -414,16 +415,36 @@ export default function PartnerScanPage() {
                             <p className="text-xs text-white/50 uppercase tracking-wide mb-1.5">
                               Items ({preview.items.length})
                             </p>
-                            <ul className="space-y-1">
+                            <ul className="space-y-1.5">
                               {preview.items.slice(0, 3).map((item) => (
                                 <li
                                   key={item.id}
                                   className="text-sm text-white/90 flex items-center gap-2"
                                 >
-                                  <span className="w-1.5 h-1.5 bg-white/40 rounded-full shrink-0" />
-                                  {item.name}
+                                  {item.image_url ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedImage(item)}
+                                      className="shrink-0"
+                                    >
+                                      <img
+                                        src={item.image_url}
+                                        alt={item.name}
+                                        className="w-8 h-8 rounded-lg object-cover cursor-pointer hover:ring-2 hover:ring-white/50 transition"
+                                      />
+                                    </button>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                                      <span className="text-xs text-white/40">
+                                        N/A
+                                      </span>
+                                    </div>
+                                  )}
+                                  <span className="truncate">
+                                    {item.name}
+                                  </span>
                                   {item.brand && (
-                                    <span className="text-white/40 text-xs">
+                                    <span className="text-white/40 text-xs truncate">
                                       · {item.brand}
                                     </span>
                                   )}
@@ -530,7 +551,7 @@ export default function PartnerScanPage() {
         )}
 
         <div className="bg-white rounded-3xl shadow-sm p-5">
-          <h3 className="font-semibold text-[#163422] text-sm mb-3">
+          <h3 className="font-semibold text-[#163422] text-sm mb-3 font-headline">
             Tips for scanning
           </h3>
           <ul className="text-sm text-gray-600 space-y-2">
@@ -557,6 +578,34 @@ export default function PartnerScanPage() {
           </ul>
         </div>
       </div>
+
+      {expandedImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6"
+          onClick={() => setExpandedImage(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setExpandedImage(null)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white text-3xl leading-none"
+          >
+            ✕
+          </button>
+          <div className="max-w-full max-h-full flex flex-col items-center">
+            <img
+              src={expandedImage.image_url!}
+              alt={expandedImage.name}
+              className="max-w-full max-h-[75vh] rounded-xl object-contain"
+            />
+            <p className="text-white text-sm mt-3 font-medium">
+              {expandedImage.name}
+              {expandedImage.brand && (
+                <span className="text-white/50"> · {expandedImage.brand}</span>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

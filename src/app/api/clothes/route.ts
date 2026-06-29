@@ -12,7 +12,7 @@ export async function GET(req: Request) {
       .from("clothes")
       .select("*")
       .is("deleted_at", null)
-      .eq("status", "available")
+      .or("status.is.null,status.eq.available")
       .order("created_at", { ascending: false });
 
     if (user_id) {
@@ -52,6 +52,7 @@ export async function POST(req: Request) {
       material: body.material,
       favorite: body.favorite,
       image_url: body.image_url,
+      use_case: body.use_case || null,
       description: body.description,
       purchase_date: body.purchase_date,
       location: body.location,
