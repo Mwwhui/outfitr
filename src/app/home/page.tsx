@@ -73,6 +73,10 @@ interface InsightsData {
     color_diversity_score: number;
     cost_per_wear: number;
     cost_per_wear_trend: 'up' | 'down' | 'stable';
+    score_breakdown: {
+      category_balance: { score: number; detail: string; suggestion: string };
+      color_diversity: { score: number; detail: string; suggestion: string };
+    };
   };
   color_palette: Array<{ color: string; hex: string | null; count: number; pct: number }>;
   category_balance: Array<{ type: string; count: number; ideal: number; pct: number }>;
@@ -632,6 +636,7 @@ export default function HomePage() {
               score={overallHealth}
               totalItems={health.total_items}
               itemsWornThisMonth={health.items_worn_this_month}
+              scoreBreakdown={health.score_breakdown}
             />
           </div>
         </section>

@@ -137,6 +137,10 @@ interface MonthlyInsights {
     color_diversity_score: number;
     cost_per_wear: number;
     cost_per_wear_trend: 'up' | 'down' | 'stable';
+    score_breakdown: {
+      category_balance: { score: number; detail: string; suggestion: string };
+      color_diversity: { score: number; detail: string; suggestion: string };
+    };
   };
   color_palette: ColorPaletteItem[];
   category_balance: CategoryBalanceItem[];
@@ -397,6 +401,48 @@ export async function GET() {
       transition_tip: transitionTip,
     };
 
+    // Compute score breakdown details
+    const categoryBreakdown = (() => {
+      const issues: string[] = [];
+      const suggestions: string[] = [];
+      for (const [type, ideal] of Object.entries(IDEAL_RATIOS)) {
+        const current = categoryCount.get(type) || 0;
+        const idealCount = Math.max(1, Math.round((ideal / 6.5) * totalUnits));
+        if (current === 0) {
+          issues.push(`no ${type.toLowerCase()}`);
+          suggestions.push(`Add 1-2 ${type.toLowerCase()}`);
+        } else if (current < idealCount * 0.5) {
+          issues.push(`only ${current} ${type.toLowerCase()} (ideal: ${idealCount})`);
+          suggestions.push(`Add ${idealCount - current} more ${type.toLowerCase()}`);
+        } else if (current < idealCount * 0.8) {
+          issues.push(`${current} ${type.toLowerCase()} (ideal: ${idealCount})`);
+        }
+      }
+      const detail = issues.length > 0
+        ? `Imbalances: ${issues.join(', ')}.`
+        : 'All categories are well-balanced.';
+      const suggestion = suggestions.length > 0
+        ? suggestions.slice(0, 2).join('. ') + '.'
+        : 'Your category mix looks good.';
+      return { score: balanceScore, detail, suggestion };
+    })();
+
+    const colorBreakdown = (() => {
+      const topColor = [...colorCount.entries()].sort((a, b) => b[1] - a[1])[0];
+      const topColorName = topColor ? topColor[0] : 'unknown';
+      const topColorPct = topColor ? Math.round((topColor[1] / clothes.length) * 100) : 0;
+      const uniqueColors = colorCount.size;
+      const detail = topColorPct > 40
+        ? `${topColorPct}% of your wardrobe is ${topColorName}. This limits outfit variety.`
+        : `Your most common color is ${topColorName} (${topColorPct}%). You have ${uniqueColors} unique colors.`;
+      const suggestion = topColorPct > 40
+        ? `Adding items in complementary colors (not ${topColorName}) would improve diversity.`
+        : uniqueColors < 5
+          ? 'Adding 2-3 more colors would increase outfit options.'
+          : 'Your color palette is well-diversified.';
+      return { score: colorDiversityScore, detail, suggestion };
+    })();
+
     const wardrobeHealth: MonthlyInsights['wardrobe_health'] = {
       total_items: clothes.length,
       items_worn_this_month: itemsWornThisMonth,
@@ -404,6 +450,10 @@ export async function GET() {
       color_diversity_score: colorDiversityScore,
       cost_per_wear: Math.round(costPerWear * 100) / 100,
       cost_per_wear_trend: costPerWearTrend,
+      score_breakdown: {
+        category_balance: categoryBreakdown,
+        color_diversity: colorBreakdown,
+      },
     };
 
     // Shopping list (already computed from category gaps)
