@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Loader from "../components/Loader";
 import WardrobeFilters from "../components/WardrobeFilters";
+import DuplicateCompareModal from "../components/DuplicateCompareModal";
 
 interface Category {
   id: string;
@@ -21,12 +22,19 @@ type ClothingItem = {
   favorite?: boolean;
 };
 
+interface DuplicateGroup {
+  type: string;
+  color: string;
+  items: { id: string; name: string; type: string; image_url: string | null; wear_count: number; price: number; status?: string | null }[];
+}
+
 interface ClusterGroup {
   id: number;
   label: string;
   color: string;
   size: number;
-  items: { id: string; name: string; type: string; image_url: string | null; wear_count: number; price: number }[];
+  items: { id: string; name: string; type: string; image_url: string | null; wear_count: number; price: number; status?: string | null }[];
+  groups?: DuplicateGroup[];
 }
 
 export default function WardrobePage() {
@@ -45,6 +53,7 @@ export default function WardrobePage() {
   });
   const [selectedCluster, setSelectedCluster] = useState<number | null>(null);
   const [clusterData, setClusterData] = useState<{ clusters: ClusterGroup[] } | null>(null);
+  const [compareGroup, setCompareGroup] = useState<DuplicateGroup | null>(null);
 
   useEffect(() => {
     // Fetch categories on mount
@@ -71,13 +80,7 @@ export default function WardrobePage() {
 
     if (status === "authenticated") {
       fetchClothes();
-      fetch('/api/wardrobe/clusters')
-        .then(async r => {
-          const json = await r.json();
-          console.log('Clusters API:', r.status, json);
-          if (json && Array.isArray(json.clusters)) setClusterData(json);
-        })
-        .catch(err => console.error('Clusters fetch failed:', err));
+      refreshClusters();
     }
   }, [status]);
 
@@ -96,9 +99,34 @@ export default function WardrobePage() {
     setLoading(false);
   };
 
+  const refreshClusters = useCallback(() => {
+    fetch('/api/wardrobe/clusters')
+      .then(async r => {
+        const json = await r.json();
+        if (json && Array.isArray(json.clusters)) setClusterData(json);
+      })
+      .catch(err => console.error('Clusters fetch failed:', err));
+  }, []);
+
+  const handleCompareClose = useCallback(() => {
+    setCompareGroup(null);
+    fetchClothes();
+    refreshClusters();
+  }, [fetchClothes, refreshClusters]);
+
   const getCategoryColor = (categoryName: string) => {
     return categories.find((c) => c.name === categoryName);
   };
+
+  const selectedClusterData = useMemo(() => {
+    if (selectedCluster === null || !clusterData) return null;
+    return clusterData.clusters.find(c => c.id === selectedCluster) || null;
+  }, [selectedCluster, clusterData]);
+
+  const jumpToColors = useMemo(() => {
+    if (!selectedClusterData?.groups) return [];
+    return [...new Set(selectedClusterData.groups.map(g => g.color || 'Other'))];
+  }, [selectedClusterData]);
 
   const filteredClothes = useMemo(() => {
     let filtered = clothes.filter((item) => {
@@ -113,12 +141,9 @@ export default function WardrobePage() {
       return true;
     });
 
-    if (selectedCluster !== null && clusterData) {
-      const cluster = clusterData.clusters.find(c => c.id === selectedCluster);
-      if (cluster) {
-        const ids = new Set(cluster.items.map(i => i.id));
-        filtered = filtered.filter(item => ids.has(item.id));
-      }
+    if (selectedClusterData) {
+      const ids = new Set(selectedClusterData.items.map(i => i.id));
+      filtered = filtered.filter(item => ids.has(item.id));
     }
 
     // favourites first, then others
@@ -128,7 +153,7 @@ export default function WardrobePage() {
       if (aFav === bFav) return 0;
       return aFav ? -1 : 1;
     });
-  }, [clothes, filters, selectedCluster, clusterData]);
+  }, [clothes, filters, selectedClusterData]);
 
   if (loading) {
     return <Loader message={"Loading your wardrobe… ✨"} />;
@@ -301,6 +326,31 @@ export default function WardrobePage() {
         </div>
       )}
 
+      {/* JUMP TO color pills — only for duplicates */}
+      {jumpToColors.length > 0 && (
+        <div className="flex items-center gap-2 mt-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 select-none">Jump to</span>
+          <div className="flex gap-1.5 flex-wrap">
+            {jumpToColors.map((color) => (
+              <button
+                key={color}
+                onClick={() => {
+                  const el = document.getElementById(`dup-group-${color}`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center gap-1.5"
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0"
+                  style={{ backgroundColor: color === 'black' ? '#1e293b' : color === 'white' ? '#f8fafc' : color === 'grey' ? '#94a3b8' : color === 'blue' ? '#3b82f6' : color === 'red' ? '#ef4444' : color === 'green' ? '#22c55e' : color === 'brown' ? '#a16207' : color === 'pink' ? '#ec4899' : color === 'purple' ? '#a855f7' : color === 'orange' ? '#f97316' : color === 'yellow' ? '#eab308' : '#cbd5e1' }}
+                />
+                {color.charAt(0).toUpperCase() + color.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* if wardrobe empty (after filters) */}
       {filteredClothes.length === 0 && (
         <div className="text-center text-black mt-6">
@@ -315,101 +365,162 @@ export default function WardrobePage() {
         </div>
       )}
 
-      {/* wardrobe grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mt-4">
-        {filteredClothes.map((item) => (
-          <div
-            key={item.id}
-            className="bg-white rounded-xl overflow-hidden shadow hover:shadow-lg cursor-pointer transition-transform transform hover:scale-105"
-            onClick={() => router.push(`/wardrobe/${item.id}`)}
-            style={{ cursor: "pointer" }}
-          >
-            {item.image_url ? (
-              <img
-                src={item.image_url}
-                alt={item.name}
-                className="h-50 w-full object-cover"
-              />
-            ) : (
-              <div className="h-50 w-full bg-gray-200 flex items-center justify-center text-gray-500">
-                No Image
-              </div>
-            )}
-
-            <div className="p-3">
-              {item.type && getCategoryColor(item.type) && (
-                <div
-                  className={`inline-block px-3 py-1 rounded-full text-sm font-semibold mb-1.25 ${
-                    getCategoryColor(item.type)?.color
-                  } ${getCategoryColor(item.type)?.textColor}`}
+      {selectedClusterData?.groups ? (
+        /* Duplicate groups view */
+        <div className="space-y-5 mt-4">
+          {selectedClusterData.groups.map((group, gi) => (
+            <div
+              key={gi}
+              id={`dup-group-${group.color || 'Other'}`}
+              className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden scroll-mt-4"
+            >
+              <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2">
+                <span
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ backgroundColor: group.color === 'black' ? '#1e293b' : group.color === 'white' ? '#f8fafc' : group.color === 'grey' ? '#94a3b8' : group.color === 'blue' ? '#3b82f6' : group.color === 'red' ? '#ef4444' : group.color === 'green' ? '#22c55e' : group.color === 'brown' ? '#a16207' : group.color === 'pink' ? '#ec4899' : group.color === 'purple' ? '#a855f7' : group.color === 'orange' ? '#f97316' : group.color === 'yellow' ? '#eab308' : '#cbd5e1' }}
+                />
+                <span className="text-sm font-bold capitalize">{group.color || 'Unknown'}</span>
+                <span className="text-xs text-slate-300">·</span>
+                <span className="text-xs text-slate-500 font-medium">{group.type}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 px-2 py-1 rounded-full">{group.items.length} items</span>
+                <button
+                  onClick={() => setCompareGroup(group)}
+                  className="ml-auto px-3 py-1.5 rounded-full bg-black text-white text-[11px] font-semibold hover:bg-slate-800 transition flex items-center gap-1"
                 >
-                  {item.type}
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  Compare
+                </button>
+              </div>
+              <div className="p-4 flex gap-4 overflow-x-auto">
+                {group.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="shrink-0 w-36 cursor-pointer group/item transition-transform hover:scale-105"
+                    onClick={() => router.push(`/wardrobe/${item.id}`)}
+                  >
+                    <div className="aspect-[3/4] rounded-xl overflow-hidden bg-slate-100 mb-2 shadow-sm relative">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">No Image</div>
+                      )}
+                      {item.status === 'pending_action' && (
+                        <div className="absolute top-1.5 right-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[9px] font-bold shadow-sm">
+                          Pending in Pre-Loved
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs font-medium truncate">{item.name}</p>
+                    <p className="text-[10px] text-slate-400">Worn {item.wear_count}×</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Flat wardrobe grid */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mt-4">
+          {filteredClothes.map((item) => (
+            <div
+              key={item.id}
+              className="bg-white rounded-xl overflow-hidden shadow hover:shadow-lg cursor-pointer transition-transform transform hover:scale-105 relative"
+              onClick={() => router.push(`/wardrobe/${item.id}`)}
+              style={{ cursor: "pointer" }}
+            >
+              {item.image_url ? (
+                <img
+                  src={item.image_url}
+                  alt={item.name}
+                  className="h-50 w-full object-cover"
+                />
+              ) : (
+                <div className="h-50 w-full bg-gray-200 flex items-center justify-center text-gray-500">
+                  No Image
                 </div>
               )}
 
-              {/* NAME + CLICKABLE FAVOURITE ICON */}
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[14px] text-black px-2 truncate">
-                  {item.name}
-                </p>
+              {/* Pending badge */}
+              {(item as Record<string, unknown>).status === 'pending_action' && (
+                <div className="absolute top-1.5 right-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[9px] font-bold shadow-sm">
+                  Pending in Pre-Loved
+                </div>
+              )}
 
-                {/* Favourite toggle */}
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation(); // prevent opening item page
+              <div className="p-3">
+                {item.type && getCategoryColor(item.type) && (
+                  <div
+                    className={`inline-block px-3 py-1 rounded-full text-sm font-semibold mb-1.25 ${
+                      getCategoryColor(item.type)?.color
+                    } ${getCategoryColor(item.type)?.textColor}`}
+                  >
+                    {item.type}
+                  </div>
+                )}
 
-                    const updatedFav = !item.favorite;
+                {/* NAME + CLICKABLE FAVOURITE ICON */}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[14px] text-black px-2 truncate">
+                    {item.name}
+                  </p>
 
-                    // update UI instantly
-                    setClothes((prev) =>
-                      prev.map((c) =>
-                        c.id === item.id ? { ...c, favorite: updatedFav } : c
-                      )
-                    );
+                  {/* Favourite toggle */}
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
 
-                    // send update to backend
-                    await fetch(`/api/clothes/${item.id}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ favorite: updatedFav }),
-                    });
-                  }}
-                  className="p-1"
-                  aria-label="Toggle favourite"
-                >
-                  {item.favorite ? (
-                    // Filled heart
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      className="w-5 h-5 text-pink-500"
-                      fill="currentColor"
-                    >
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l8.84 8.84 8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
-                    </svg>
-                  ) : (
-                    // Outline heart
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      className="w-5 h-5 text-gray-500"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.7}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l8.84 8.84 8.84-8.84a5.5 5.5 0 0 0 0-7.78z"
-                      />
-                    </svg>
-                  )}
-                </button>
+                      const updatedFav = !item.favorite;
+
+                      setClothes((prev) =>
+                        prev.map((c) =>
+                          c.id === item.id ? { ...c, favorite: updatedFav } : c
+                        )
+                      );
+
+                      await fetch(`/api/clothes/${item.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ favorite: updatedFav }),
+                      });
+                    }}
+                    className="p-1"
+                    aria-label="Toggle favourite"
+                  >
+                    {item.favorite ? (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        className="w-5 h-5 text-pink-500"
+                        fill="currentColor"
+                      >
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l8.84 8.84 8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        className="w-5 h-5 text-gray-500"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.7}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l8.84 8.84 8.84-8.84a5.5 5.5 0 0 0 0-7.78z"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Floating Add Button*/}
       <button
@@ -419,6 +530,13 @@ export default function WardrobePage() {
       >
         <span className="leading-none">+</span>
       </button>
+
+      {/* Compare Modal */}
+      <DuplicateCompareModal
+        open={!!compareGroup}
+        group={compareGroup}
+        onClose={handleCompareClose}
+      />
     </div>
     </div>
   );

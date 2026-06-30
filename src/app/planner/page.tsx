@@ -9,7 +9,7 @@ import Button from '../components/Button';
 import OutfitSuggestionCard from '../components/OutfitSuggestionCard';
 import toast from 'react-hot-toast';
 import type { ClothingItem, OccasionKey, WeatherData, SuggestedOutfit } from '@/lib/suggestOutfits';
-import { hasCompatibleUseCases } from '@/lib/suggestOutfits';
+import { hasCompatibleUseCases, hasCompatibleSeasons } from '@/lib/suggestOutfits';
 
 type OutfitSlotKey = 'top' | 'bottom' | 'onepiece' | 'outerwear';
 
@@ -243,7 +243,7 @@ export default function PlannerPage() {
     const item = clothes.find((c) => c.id === clothingId);
     if (!item) return;
 
-    // Check use-case compatibility with all other filled slots
+    // Check use-case and season compatibility with all other filled slots
     const filled = Object.entries(slots).filter(([key, val]) => key !== slot && val !== null) as [OutfitSlotKey, ClothingItem][];
     for (const [, otherItem] of filled) {
       if (!hasCompatibleUseCases(item, otherItem)) {
@@ -251,6 +251,12 @@ export default function PlannerPage() {
         const otherCases = otherItem.use_case?.join(', ') || 'unknown';
         toast.error(
           `Incompatible combination: "${item.name}" (${itemCases}) doesn't go with "${otherItem.name}" (${otherCases})`
+        );
+        return;
+      }
+      if (!hasCompatibleSeasons(item, otherItem)) {
+        toast.error(
+          `Season mismatch: "${item.name}" (${item.season || 'All'}) doesn't go with "${otherItem.name}" (${otherItem.season || 'All'})`
         );
         return;
       }

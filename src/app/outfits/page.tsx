@@ -190,7 +190,7 @@ export default function OutfitsPage() {
   // New state for Impact Meter + Planned Outfits
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clothes, setClothes] = useState<ClothItem[]>([]);
-  const [weather, setWeather] = useState<{ temp: number; description: string; icon: string } | null>(null);
+  const [weather, setWeather] = useState<{ temp: number; description: string; icon: string; weathercode: number } | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -224,7 +224,7 @@ export default function OutfitsPage() {
     if (!session?.user?.id || loading) return;
     const fetchSuggestions = async () => {
       try {
-        const res = await fetch('/api/outfits/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const res = await fetch('/api/outfits/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weather: weather ? { temperature: weather.temp, weathercode: weather.weathercode } : null }) });
         if (res.ok) { const data = await res.json(); setSuggestions(data.suggestions || []); }
       } catch { /* silently fail */ }
     };
@@ -287,7 +287,7 @@ export default function OutfitsPage() {
               else if (code <= 77) { icon = 'weather_snowy'; description = 'Snowy'; }
               else if (code <= 86) { icon = 'weather_snowy'; description = 'Snowy'; }
               else { icon = 'thunderstorm'; description = 'Stormy'; }
-              setWeather({ temp, description, icon });
+              setWeather({ temp, description, icon, weathercode: code });
             }
           })
           .catch(() => {});

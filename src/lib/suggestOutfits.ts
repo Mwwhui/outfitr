@@ -11,6 +11,12 @@ export const INCOMPATIBLE_USE_CASES: Record<string, string[]> = {
   date: ['casual', 'sport', 'swim', 'sleep'],
 };
 
+const INCOMPATIBLE_SEASONS: Record<string, string[]> = {
+  Winter: ['Spring', 'Summer'],
+  Spring: ['Winter'],
+  Summer: ['Winter'],
+};
+
 export interface ClothingItem {
   id: string;
   name: string;
@@ -64,11 +70,21 @@ export function hasCompatibleUseCases(itemA: ClothingItem, itemB: ClothingItem):
   return true;
 }
 
+export function hasCompatibleSeasons(itemA: ClothingItem, itemB: ClothingItem): boolean {
+  const seasonA = itemA.season || '';
+  const seasonB = itemB.season || '';
+  if (!seasonA || seasonA === 'All' || !seasonB || seasonB === 'All') return true;
+  const blocked = INCOMPATIBLE_SEASONS[seasonA];
+  if (blocked && blocked.includes(seasonB)) return false;
+  return true;
+}
+
 function filterCompatibleUseCases<T extends { items: ClothingItem[] }>(expanded: T[]): T[] {
   return expanded.filter(({ items }) => {
     for (let i = 0; i < items.length; i++) {
       for (let j = i + 1; j < items.length; j++) {
         if (!hasCompatibleUseCases(items[i], items[j])) return false;
+        if (!hasCompatibleSeasons(items[i], items[j])) return false;
       }
     }
     return true;

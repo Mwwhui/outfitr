@@ -12,7 +12,8 @@ export async function GET(req: Request) {
       .from("clothes")
       .select("*")
       .is("deleted_at", null)
-      .or("status.is.null,status.eq.available")
+      // Include all active items: null, available, or pending_action (not yet acted on)
+      .or("status.is.null,status.eq.available,status.eq.pending_action")
       .order("created_at", { ascending: false });
 
     if (user_id) {

@@ -53,25 +53,42 @@ const INCOMPATIBLE_USE_CASES: Record<string, string[]> = {
   date: ["casual", "sport", "swim", "sleep"],
 };
 
-function isCompatiblePair(a: { use_case?: string[] }, b: { use_case?: string[] }): boolean {
+const INCOMPATIBLE_SEASONS: Record<string, string[]> = {
+  Winter: ['Spring', 'Summer'],
+  Spring: ['Winter'],
+  Summer: ['Winter'],
+};
+
+function isCompatiblePair(a: { use_case?: string[]; season?: string }, b: { use_case?: string[]; season?: string }): boolean {
+  // Check use_case compatibility
   const tagsA = a.use_case || [];
   const tagsB = b.use_case || [];
-  if (tagsA.length === 0 || tagsB.length === 0) return true;
-  for (const tagA of tagsA) {
-    const blocked = INCOMPATIBLE_USE_CASES[tagA];
-    if (blocked) {
-      for (const tagB of tagsB) {
-        if (blocked.includes(tagB)) return false;
+  if (tagsA.length > 0 && tagsB.length > 0) {
+    for (const tagA of tagsA) {
+      const blocked = INCOMPATIBLE_USE_CASES[tagA];
+      if (blocked) {
+        for (const tagB of tagsB) {
+          if (blocked.includes(tagB)) return false;
+        }
       }
     }
   }
+
+  // Check season compatibility
+  const seasonA = a.season || '';
+  const seasonB = b.season || '';
+  if (seasonA && seasonA !== 'All' && seasonB && seasonB !== 'All') {
+    const blockedSeasons = INCOMPATIBLE_SEASONS[seasonA];
+    if (blockedSeasons && blockedSeasons.includes(seasonB)) return false;
+  }
+
   return true;
 }
 
 // Deterministic fallback: compute DNA from outfit history stats
 function computeStatisticalDNA(
   outfitHistory: Array<{ date: string; items: Array<{ name: string; type: string; color: string }> }>,
-  wardrobe: Array<{ id: string; name: string; type: string; color: string; image_url: string | null; use_case?: string[]; wear_count?: number }>
+  wardrobe: Array<{ id: string; name: string; type: string; color: string; image_url: string | null; use_case?: string[]; wear_count?: number; season?: string }>
 ): OutfitDNA {
   // 1. Strong pairs — co-occurrence count
   const pairCounts = new Map<string, { item_a: string; item_b: string; count: number }>();
@@ -147,7 +164,7 @@ function computeStatisticalDNA(
     for (let j = i + 1; j < wardrobe.length; j++) {
       const key = [wardrobe[i].name, wardrobe[j].name].sort().join("|||");
       if (wornPairs.has(key) || wardrobe[i].type === wardrobe[j].type) continue;
-      if (!isCompatiblePair({ use_case: wardrobe[i].use_case }, { use_case: wardrobe[j].use_case })) continue;
+      if (!isCompatiblePair({ use_case: wardrobe[i].use_case, season: wardrobe[i].season }, { use_case: wardrobe[j].use_case, season: wardrobe[j].season })) continue;
       if (wardrobe[i].use_case?.includes('sleep') || wardrobe[j].use_case?.includes('sleep')) continue;
 
       let score = 0;
@@ -218,7 +235,7 @@ function computeStatisticalDNA(
           comboItems.slice(i + 1).every((itemB) => {
             const matchA = wardrobe.find((w) => w.name === itemA.name);
             const matchB = wardrobe.find((w) => w.name === itemB.name);
-            return isCompatiblePair({ use_case: matchA?.use_case }, { use_case: matchB?.use_case });
+            return isCompatiblePair({ use_case: matchA?.use_case, season: matchA?.season }, { use_case: matchB?.use_case, season: matchB?.season });
           })
         );
         if (!allCompatible) continue;
@@ -331,7 +348,7 @@ export async function POST(req: Request) {
     // Also fetch all clothes for "never tried" analysis
     const { data: allClothes } = await supabase
       .from("clothes")
-      .select("id, name, type, color, image_url, use_case, wear_count")
+      .select("id, name, type, color, season, image_url, use_case, wear_count")
       .eq("user_id", user_id)
       .is("deleted_at", null)
       .or("status.is.null,status.eq.available");
@@ -341,6 +358,7 @@ export async function POST(req: Request) {
       name: c.name,
       type: c.type,
       color: c.color || "unknown",
+      season: c.season || "All",
       image_url: c.image_url || null,
       use_case: c.use_case || [],
       wear_count: c.wear_count || 0,
@@ -355,10 +373,17 @@ CRITICAL RULES for "never_tried" and "pattern_breakers":
 - Same-use-case pairings are always allowed (e.g., casual+casual, business+business, etc.)
 - If both items have empty use_case, the pairing is allowed
 
+SEASON RULES (each item has a season tag: Winter, Spring, Summer, Autumn, or All):
+- NEVER pair Winter items with Spring or Summer items
+- NEVER pair Spring/Summer items with Winter items
+- Items tagged "All" season are compatible with everything
+- Autumn items are transitional and can pair with any season
+- If both items have empty season, the pairing is allowed
+
 OUTFIT HISTORY:
 ${JSON.stringify(outfitHistory.slice(0, 50))}
 
-FULL WARDROBE (each item has use_case tags — respect them when pairing):
+FULL WARDROBE (each item has use_case and season tags — respect them when pairing):
 ${JSON.stringify(wardrobeSummary)}
 
 Return ONLY valid JSON (no markdown, no extra text):
@@ -418,13 +443,13 @@ Return ONLY valid JSON (no markdown, no extra text):
       result = computeStatisticalDNA(outfitHistory, wardrobeSummary);
     }
 
-    // Server-side use_case filtering (safety net)
+    // Server-side use_case and season filtering (safety net)
     if (allClothes && result.never_tried?.length > 0) {
       result.never_tried = result.never_tried.filter((nt) => {
         const itemA = allClothes.find((c) => c.name === nt.item_a || c.name.toLowerCase().includes(nt.item_a.toLowerCase()));
         const itemB = allClothes.find((c) => c.name === nt.item_b || c.name.toLowerCase().includes(nt.item_b.toLowerCase()));
         if (!itemA || !itemB) return false;
-        return isCompatiblePair({ use_case: itemA.use_case || [] }, { use_case: itemB.use_case || [] });
+        return isCompatiblePair({ use_case: itemA.use_case || [], season: itemA.season }, { use_case: itemB.use_case || [], season: itemB.season });
       });
     }
 
@@ -437,7 +462,7 @@ Return ONLY valid JSON (no markdown, no extra text):
         }).filter(Boolean);
         if (items.length < 2) return false;
         return items.every((itemA, i) =>
-          items.slice(i + 1).every((itemB) => isCompatiblePair({ use_case: itemA.use_case || [] }, { use_case: itemB.use_case || [] }))
+          items.slice(i + 1).every((itemB) => isCompatiblePair({ use_case: itemA.use_case || [], season: itemA.season }, { use_case: itemB.use_case || [], season: itemB.season }))
         );
       });
     }
