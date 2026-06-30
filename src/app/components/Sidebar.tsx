@@ -140,7 +140,7 @@ function NavPill({
     >
       <span className="relative z-10 material-symbols-outlined text-lg">{item.icon}</span>
       {!collapsed && (
-        <span className="relative z-10 text-sm font-medium flex-1 text-left hidden lg:block">
+        <span className="relative z-10 text-sm font-medium flex-1 text-left">
           {item.label}
         </span>
       )}
@@ -208,8 +208,7 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
           onClick={() => onNavigate?.()}
           className="font-dancingscript font-extrabold text-2xl text-black hover:opacity-80 transition"
         >
-          {collapsed ? 'O' : <span className="hidden lg:inline">Outfitr</span>}
-          <span className="lg:hidden text-xl">O</span>
+          {collapsed ? 'O' : <span>Outfitr</span>}
         </Link>
       </div>
 
