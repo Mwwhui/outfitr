@@ -21,6 +21,7 @@
     "@vis.gl/react-google-maps": "^1.8.3",
     "@yudiel/react-qr-scanner": "^2.6.0",
     "bcrypt": "^6.0.0",
+    "framer-motion": "^12.42.1",
     "jsonwebtoken": "^9.0.2",
     "leaflet": "^1.9.4",
     "leaflet-defaulticon-compatibility": "^0.1.2",

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
@@ -39,7 +39,6 @@ const CATEGORY_ORDER: Record<string, number> = {
 export default function PlannerPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
@@ -460,117 +459,8 @@ export default function PlannerPage() {
   return (
     <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-[#163422] font-headline">Plan My Outfit</h1>
-
-          <div className="flex gap-6 border-b border-slate-200">
-          {/* Wardrobe Tab */}
-          <button
-            onClick={() => router.push('/wardrobe')}
-            className={`text-sm flex items-center gap-2 -mb-[1px] ${
-              pathname === '/wardrobe'
-                ? 'border-b-2 border-black font-semibold text-black'
-                : 'text-slate-500 hover:text-black'
-            }`}
-          >
-            {/* Closet Icon */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.8}
-            >
-              <rect x="4" y="3" width="16" height="18" rx="1.5" />
-              <line x1="12" y1="3" x2="12" y2="21" />
-              <circle cx="9" cy="12" r="0.6" />
-              <circle cx="15" cy="12" r="0.6" />
-            </svg>
-            Wardrobe
-          </button>
-
-          {/* Plan Outfit Tab */}
-          <button
-            onClick={() => router.push('/planner')}
-            className={`text-sm flex items-center gap-2 -mb-[1px] ${
-              pathname === '/planner'
-                ? 'border-b-2 border-black font-semibold text-black'
-                : 'text-slate-500 hover:text-black'
-            }`}
-          >
-            {/* Pencil Note Icon */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.8}
-            >
-              <rect x="4" y="4" width="11" height="16" rx="1.4" />
-              <line x1="7" y1="8" x2="13" y2="8" />
-              <line x1="7" y1="11" x2="12" y2="11" />
-              <path d="M15.5 9.5l3.2-3.2a1.4 1.4 0 0 1 2 2l-3.2 3.2-2.4.4.4-2.4z" />
-            </svg>
-            Plan Outfit
-          </button>
-
-          {/* Style Lab Tab */}
-          <button
-            onClick={() => router.push('/outfits')}
-            className={`text-sm flex items-center gap-2 -mb-[1px] ${
-              pathname === '/outfits'
-                ? 'border-b-2 border-black font-semibold text-black'
-                : 'text-slate-500 hover:text-black'
-            }`}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.8}
-            >
-              <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z" />
-              <path d="M18 14l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" opacity="0.6" />
-            </svg>
-            Style Lab
-          </button>
-
-          {/* Calendar Tab */}
-          <button
-            onClick={() => router.push('/calendar')}
-            className={`text-sm flex items-center gap-2 -mb-[1px] ${
-              pathname === '/calendar'
-                ? 'border-b-2 border-black font-semibold text-black'
-                : 'text-slate-500 hover:text-black'
-            }`}
-          >
-            {/* Calendar Icon */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.8}
-            >
-              <rect x="3.5" y="5" width="17" height="15" rx="2" />
-              <line x1="3.5" y1="9" x2="20.5" y2="9" />
-              <line x1="9" y1="3" x2="9" y2="7" />
-              <line x1="15" y1="3" x2="15" y2="7" />
-              <circle cx="9" cy="13" r="0.7" />
-              <circle cx="15" cy="13" r="0.7" />
-              <circle cx="9" cy="17" r="0.7" />
-              <circle cx="15" cy="17" r="0.7" />
-            </svg>
-            Calendar
-          </button>
-        </div>
+        <h1 className="text-3xl font-bold text-[#163422] font-headline">Plan My Outfit</h1>
       </div>
-    </div>
 
     <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-end gap-4">
