@@ -267,7 +267,7 @@ export default function DashboardPage() {
   const noPledges = t.pledges_total === 0;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-background">
       <div className="px-6 pt-8 pb-4 max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold text-[#163422] font-headline">Dashboard</h1>
         <p className="text-[#424843] mt-1">

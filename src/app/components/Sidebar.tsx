@@ -202,7 +202,18 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
       }`}
     >
       {/* Logo */}
-      <div className="mb-6 px-1 flex items-center justify-between">
+      <div className="mb-6 px-1 flex items-center gap-2">
+        {!mobile && (
+          <button
+            onClick={onToggleCollapse}
+            className="p-1.5 text-on-surface-variant hover:bg-surface-container rounded-lg transition shrink-0"
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <span className="material-symbols-outlined text-xl">
+              {collapsed ? 'menu' : 'menu_open'}
+            </span>
+          </button>
+        )}
         <Link
           href="/home"
           onClick={() => onNavigate?.()}
@@ -252,21 +263,6 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
           </button>
         </motion.div>
       </nav>
-
-      {/* Collapse Toggle — desktop only */}
-      {!mobile && (
-        <div className="hidden lg:flex justify-center py-2">
-          <button
-            onClick={onToggleCollapse}
-            className="p-2 text-on-surface-variant hover:bg-surface-container rounded-xl transition"
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <span className="material-symbols-outlined text-lg">
-              {collapsed ? 'chevron_right' : 'chevron_left'}
-            </span>
-          </button>
-        </div>
-      )}
 
       {/* Sign Out */}
       {!mobile && (
