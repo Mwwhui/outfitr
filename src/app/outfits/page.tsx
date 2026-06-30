@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import StyleLabImpactMeter from '../components/outfits/StyleLabImpactMeter';
 import PlannedOutfitsSidebar from '../components/outfits/PlannedOutfitsSidebar';
@@ -173,6 +173,7 @@ function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onSche
 
 export default function OutfitsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: session, status } = useSession();
 
   const [frequentCombos, setFrequentCombos] = useState<FrequentCombo[]>([]);
@@ -442,12 +443,87 @@ export default function OutfitsPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="px-6 md:px-8 lg:px-12 py-8 max-w-[1280px] mx-auto space-y-8">
-        {/* Title & Stats */}
-        <div className={`transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <h1 className="text-3xl md:text-4xl font-bold text-on-surface font-headline tracking-tight">Style Lab</h1>
-          <p className="text-sm text-on-surface-variant mt-2">
-            <span className="font-semibold">{totalOutfits} outfits worn</span> &middot; <span className="font-semibold">{uniqueCombos} unique combinations</span>
-          </p>
+        {/* Navigation header */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-on-surface font-headline tracking-tight">Style Lab</h1>
+            <p className="text-sm text-on-surface-variant mt-1">
+              <span className="font-semibold">{totalOutfits} outfits worn</span> &middot; <span className="font-semibold">{uniqueCombos} unique combinations</span>
+            </p>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-6 border-b border-slate-200">
+            <button
+              onClick={() => router.push('/wardrobe')}
+              className={`text-sm flex items-center gap-2 -mb-[1px] ${
+                pathname === '/wardrobe'
+                  ? 'border-b-2 border-black font-semibold text-black'
+                  : 'text-slate-500 hover:text-black'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                <rect x="4" y="3" width="16" height="18" rx="1.5" />
+                <line x1="12" y1="3" x2="12" y2="21" />
+                <circle cx="9" cy="12" r="0.6" />
+                <circle cx="15" cy="12" r="0.6" />
+              </svg>
+              Wardrobe
+            </button>
+
+            <button
+              onClick={() => router.push('/planner')}
+              className={`text-sm flex items-center gap-2 -mb-[1px] ${
+                pathname === '/planner'
+                  ? 'border-b-2 border-black font-semibold text-black'
+                  : 'text-slate-500 hover:text-black'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                <rect x="4" y="4" width="11" height="16" rx="1.4" />
+                <line x1="7" y1="8" x2="13" y2="8" />
+                <line x1="7" y1="11" x2="12" y2="11" />
+                <path d="M15.5 9.5l3.2-3.2a1.4 1.4 0 0 1 2 2l-3.2 3.2-2.4.4.4-2.4z" />
+              </svg>
+              Plan Outfit
+            </button>
+
+            <button
+              onClick={() => router.push('/outfits')}
+              className={`text-sm flex items-center gap-2 -mb-[1px] ${
+                pathname === '/outfits'
+                  ? 'border-b-2 border-black font-semibold text-black'
+                  : 'text-slate-500 hover:text-black'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z" />
+                <path d="M18 14l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" opacity="0.6" />
+              </svg>
+              Style Lab
+            </button>
+
+            <button
+              onClick={() => router.push('/calendar')}
+              className={`text-sm flex items-center gap-2 -mb-[1px] ${
+                pathname === '/calendar'
+                  ? 'border-b-2 border-black font-semibold text-black'
+                  : 'text-slate-500 hover:text-black'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                <rect x="3.5" y="5" width="17" height="15" rx="2" />
+                <line x1="3.5" y1="9" x2="20.5" y2="9" />
+                <line x1="9" y1="3" x2="9" y2="7" />
+                <line x1="15" y1="3" x2="15" y2="7" />
+                <circle cx="9" cy="13" r="0.7" />
+                <circle cx="15" cy="13" r="0.7" />
+                <circle cx="9" cy="17" r="0.7" />
+                <circle cx="15" cy="17" r="0.7" />
+              </svg>
+              Calendar
+            </button>
+          </div>
         </div>
 
         {/* Two-column layout */}
