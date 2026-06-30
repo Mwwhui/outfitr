@@ -473,11 +473,11 @@ export default function DashboardPage() {
         <div className="bg-white rounded-3xl shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-[#163422] font-headline">
-              Recent Activity
+              Recent Pledges
             </h3>
             {!noPledges && (
               <Link
-                href="/pre-loved"
+                href="/activity"
                 className="text-xs font-medium text-[#163422] hover:underline"
               >
                 View all →

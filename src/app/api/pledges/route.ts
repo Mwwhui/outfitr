@@ -19,7 +19,7 @@ export async function GET() {
 
     const { data: pledgesData, error: pledgesError } = await supabase
       .from('pledges')
-      .select('id, action_type, status, item_ids, partner_id, created_at')
+      .select('id, action_type, status, item_ids, partner_id, created_at, fulfilled_at, rejection_reason')
       .eq('user_id', user_id)
       .order('created_at', { ascending: false });
 
@@ -117,6 +117,8 @@ export async function GET() {
           image_url: item.image_url || null,
         })),
         created_at: pledge.created_at,
+        fulfilled_at: pledge.fulfilled_at,
+        rejection_reason: pledge.rejection_reason,
       };
     });
 
