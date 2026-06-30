@@ -649,7 +649,7 @@ export default function OutfitsPage() {
                             </div>
                           </div>
                           <button
-                            onClick={() => router.push('/planner')}
+                            onClick={() => router.push(`/planner?${itemsToPlannerParams(bentoItem.items)}`)}
                             className="bg-primary text-on-primary px-6 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition"
                           >
                             Try This

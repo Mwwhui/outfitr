@@ -3,11 +3,12 @@ import { multiColorScore, getPaletteName, pairHarmony } from './colorUtils';
 export const USE_CASE_OPTIONS = ['casual', 'business', 'sport', 'sleep', 'swim', 'date'] as const;
 
 export const INCOMPATIBLE_USE_CASES: Record<string, string[]> = {
-  sleep: ['business', 'sport', 'swim', 'date'],
-  business: ['sleep', 'swim', 'sport'],
-  sport: ['sleep', 'business'],
-  swim: ['sleep', 'business'],
-  date: ['sleep'],
+  casual: ['business', 'swim', 'sleep', 'date'],
+  business: ['casual', 'sport', 'swim', 'sleep'],
+  sport: ['business', 'swim', 'sleep', 'date'],
+  sleep: ['casual', 'business', 'sport', 'swim', 'date'],
+  swim: ['casual', 'business', 'sport', 'sleep', 'date'],
+  date: ['casual', 'sport', 'swim', 'sleep'],
 };
 
 export interface ClothingItem {
@@ -398,6 +399,15 @@ interface ComboScore {
   breakdown: ScoreBreakdown[];
 }
 
+function sleepPenalty(items: ClothingItem[]): { score: number; detail: string } {
+  const sleepCount = items.filter((i) => i.use_case?.includes('sleep')).length;
+  if (sleepCount === 0) return { score: 1.0, detail: 'No sleepwear — daytime ready' };
+  if (sleepCount === items.length) {
+    return { score: 0.0, detail: `All ${items.length} items are sleepwear — prioritising daytime outfits` };
+  }
+  return { score: 0.3, detail: `${sleepCount} sleep item${sleepCount > 1 ? 's' : ''} — daytime use cases preferred` };
+}
+
 function scoreCombo(
   items: ClothingItem[],
   occasion: OccasionKey,
@@ -419,6 +429,7 @@ function scoreCombo(
   const occPaletteResult = occasionColorFit(colors, OCCASION_PALETTES[occasion]);
   const formResult = formalityFit(items);
   const pairBoost = getPairBoost(items.map(i => i.id), pairFreq);
+  const sleepResult = sleepPenalty(items);
 
   const weighted = [
     { label: 'Color Harmony', icon: '🎨', weight: 20, value: colorResult.score, detail: colorResult.detail + '\n' + colorDetail(colors) },
@@ -438,6 +449,7 @@ function scoreCombo(
   if (pairBoost.detail) {
     weighted.push({ label: 'You Like This', icon: '❤️', weight: 5, value: pairBoost.score, detail: pairBoost.detail });
   }
+  weighted.push({ label: 'Use Case', icon: '🌙', weight: 10, value: sleepResult.score, detail: sleepResult.detail });
 
   const breakdown: ScoreBreakdown[] = weighted.map((w) => ({
     label: w.label,

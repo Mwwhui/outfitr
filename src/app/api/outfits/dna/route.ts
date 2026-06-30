@@ -45,11 +45,12 @@ function getColorFamily(color: string): string {
 }
 
 const INCOMPATIBLE_USE_CASES: Record<string, string[]> = {
-  sleep: ["business", "sport", "swim", "date"],
-  business: ["sleep", "sport", "swim"],
-  sport: ["sleep", "business"],
-  swim: ["sleep", "business"],
-  date: ["sleep"],
+  casual: ["business", "swim", "sleep", "date"],
+  business: ["casual", "sport", "swim", "sleep"],
+  sport: ["business", "swim", "sleep", "date"],
+  sleep: ["casual", "business", "sport", "swim", "date"],
+  swim: ["casual", "business", "sport", "sleep", "date"],
+  date: ["casual", "sport", "swim", "sleep"],
 };
 
 function isCompatiblePair(a: { use_case?: string[] }, b: { use_case?: string[] }): boolean {
@@ -147,6 +148,7 @@ function computeStatisticalDNA(
       const key = [wardrobe[i].name, wardrobe[j].name].sort().join("|||");
       if (wornPairs.has(key) || wardrobe[i].type === wardrobe[j].type) continue;
       if (!isCompatiblePair({ use_case: wardrobe[i].use_case }, { use_case: wardrobe[j].use_case })) continue;
+      if (wardrobe[i].use_case?.includes('sleep') || wardrobe[j].use_case?.includes('sleep')) continue;
 
       let score = 0;
       const wearA = wardrobe[i].wear_count || 0;
@@ -206,6 +208,12 @@ function computeStatisticalDNA(
             image_url: match?.image_url || null,
           };
         });
+        const hasSleep = comboItems.some((it) => {
+          const match = wardrobe.find((w) => w.name === it.name);
+          return match?.use_case?.includes('sleep');
+        });
+        if (hasSleep) continue;
+
         const allCompatible = comboItems.every((itemA, i) =>
           comboItems.slice(i + 1).every((itemB) => {
             const matchA = wardrobe.find((w) => w.name === itemA.name);
@@ -342,8 +350,9 @@ export async function POST(req: Request) {
 
 CRITICAL RULES for "never_tried" and "pattern_breakers":
 - NEVER pair items with incompatible use_case tags
-- Incompatible pairs: sleep↔business, sleep↔sport, sleep↔swim, sleep↔date, business↔sport, business↔swim, sport↔business, swim↔business
-- ONLY suggest pairings where both items share at least one compatible use_case (e.g., casual+casual, business+business, date+date, casual+date, sport+sport, etc.)
+- Incompatible pairs: sleep↔any, casual↔business, casual↔swim, casual↔date, casual↔sleep, business↔sport, business↔swim, business↔sleep, sport↔swim, sport↔date, sport↔sleep, swim↔date, swim↔sleep, date↔casual, date↔sport, date↔swim, date↔sleep
+- ALLOWED cross-use-case exceptions only: casual↔sport, business↔date
+- Same-use-case pairings are always allowed (e.g., casual+casual, business+business, etc.)
 - If both items have empty use_case, the pairing is allowed
 
 OUTFIT HISTORY:
