@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
   const { data: clothes, error: clothesError } = await supabase
     .from('clothes')
-    .select('id, name, type, color, season, image_url, favorite, wear_count')
+    .select('id, name, type, color, season, image_url, favorite, wear_count, use_case')
     .eq('user_id', userId)
     .is('deleted_at', null)
     .or('status.is.null,status.eq.available');

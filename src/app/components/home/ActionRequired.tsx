@@ -29,7 +29,7 @@ const ACTION_COLORS: Record<string, string> = {
   recycle: 'text-blue-600',
 };
 
-const STEPS = ['submitted', 'accepted', 'fulfilled'] as const;
+const STEPS = ['pending', 'accepted', 'fulfilled'] as const;
 
 const STATUS_NEXT: Record<string, string> = {
   pending: 'Waiting for partner to accept',
@@ -99,19 +99,24 @@ export default function ActionRequired({
       )}
 
       {/* Status Timeline */}
-      <div className="flex items-center gap-1 mb-3">
+      <div className="flex items-center mb-3">
         {STEPS.map((step, i) => {
           const isActive = i <= currentStep && currentStep >= 0;
           const isCurrent = i === currentStep && currentStep >= 0;
           return (
-            <div key={step} className="flex items-center flex-1">
-              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                isCurrent ? 'bg-primary ring-2 ring-primary/30' :
+            <div key={step} className="flex-1 flex justify-center items-center relative">
+              {i > 0 && (
+                <div className={`absolute right-1/2 left-0 top-1/2 -translate-y-1/2 h-0.5 ${
+                  i - 1 < currentStep && currentStep >= 0 ? 'bg-primary' : 'bg-surface-variant'
+                }`} />
+              )}
+              <div className={`w-2.5 h-2.5 rounded-full shrink-0 relative z-10 ${
+                isCurrent ? 'bg-primary scale-125' :
                 isActive ? 'bg-primary' :
                 'bg-surface-variant'
               }`} />
               {i < STEPS.length - 1 && (
-                <div className={`flex-1 h-0.5 mx-1 ${
+                <div className={`absolute left-1/2 right-0 top-1/2 -translate-y-1/2 h-0.5 ${
                   i < currentStep && currentStep >= 0 ? 'bg-primary' : 'bg-surface-variant'
                 }`} />
               )}
@@ -119,9 +124,9 @@ export default function ActionRequired({
           );
         })}
       </div>
-      <div className="flex justify-between mb-3">
+      <div className="flex mb-3">
         {STEPS.map((step, i) => (
-          <span key={step} className={`text-[10px] capitalize ${
+          <span key={step} className={`flex-1 text-[10px] capitalize text-center ${
             i === currentStep && currentStep >= 0 ? 'text-primary font-semibold' : 'text-on-surface-variant'
           }`}>
             {step}
@@ -135,10 +140,10 @@ export default function ActionRequired({
       </div>
 
       <Link
-        href="/pre-loved"
+        href="/activity"
         className="mt-3 flex items-center justify-center gap-1 text-xs font-medium text-primary hover:underline py-1"
       >
-        View on Pre-Loved
+        View on Activities
         <span className="material-symbols-outlined text-xs">open_in_new</span>
       </Link>
     </div>

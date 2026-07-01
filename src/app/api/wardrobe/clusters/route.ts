@@ -25,6 +25,7 @@ interface RawItem {
   material: string | null;
   purchase_date: string | null;
   created_at: string;
+  status: string | null;
 }
 
 interface ClusterItem {
@@ -34,6 +35,7 @@ interface ClusterItem {
   image_url: string | null;
   wear_count: number;
   price: number;
+  status?: string | null;
 }
 
 interface ClusterInsight {
@@ -44,6 +46,12 @@ interface ClusterInsight {
   typeBreakdown: { type: string; count: number; percentage: number }[];
 }
 
+interface DuplicateGroup {
+  type: string;
+  color: string;
+  items: ClusterItem[];
+}
+
 interface ClusterGroup {
   id: number;
   label: string;
@@ -51,6 +59,7 @@ interface ClusterGroup {
   size: number;
   insight: ClusterInsight;
   items: ClusterItem[];
+  groups?: DuplicateGroup[];
 }
 
 interface ClusterResponse {
@@ -170,7 +179,7 @@ export async function GET() {
     const { data: clothes, error } = await supabase
       .from('clothes')
       .select(
-        'id, name, type, color, season, image_url, price, wear_count, unused_score, unused, brand, material, purchase_date, created_at',
+        'id, name, type, color, season, image_url, price, wear_count, unused_score, unused, brand, material, purchase_date, created_at, status',
       )
       .eq('user_id', userId)
       .is('deleted_at', null)
@@ -365,18 +374,25 @@ export async function GET() {
     }
 
     const duplicateItems: ClusterItem[] = [];
-    for (const group of typeColorGroups.values()) {
+    const duplicateGroups: DuplicateGroup[] = [];
+    for (const [key, group] of typeColorGroups.entries()) {
       if (group.length >= 2) {
-        for (const item of group) {
-          duplicateItems.push({
-            id: item.id,
-            name: item.name,
-            type: item.type,
-            image_url: item.image_url,
-            wear_count: item.wear_count ?? 0,
-            price: item.price ?? 0,
-          });
-        }
+        const groupItems: ClusterItem[] = group.map((item) => ({
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          image_url: item.image_url,
+          wear_count: item.wear_count ?? 0,
+          price: item.price ?? 0,
+          status: item.status,
+        }));
+        duplicateItems.push(...groupItems);
+        const [, color] = key.split('::');
+        duplicateGroups.push({
+          type: group[0].type,
+          color,
+          items: groupItems,
+        });
       }
     }
 
@@ -407,6 +423,7 @@ export async function GET() {
           typeBreakdown,
         },
         items: duplicateItems,
+        groups: duplicateGroups,
       });
     }
 

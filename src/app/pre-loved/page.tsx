@@ -68,6 +68,12 @@ export default function PreLovedPage() {
   const [wardrobeItems, setWardrobeItems] = useState<ClothesItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
 
+  // Pending action items (from duplicate comparison)
+  const [pendingItems, setPendingItems] = useState<ClothesItem[]>([]);
+  const [loadingPending, setLoadingPending] = useState(true);
+  const [showPendingSection, setShowPendingSection] = useState(false);
+  const [pendingActionType, setPendingActionType] = useState<DisposalMethod | null>(null);
+
   const recommendations = useMemo(() => {
     const map: Record<string, ReturnType<typeof recommendDisposal>> = {};
     for (const item of wardrobeItems) {
@@ -77,6 +83,21 @@ export default function PreLovedPage() {
   }, [wardrobeItems]);
 
   const recCounts = useMemo(() => countRecommendations(wardrobeItems), [wardrobeItems]);
+
+  const pendingRecommendations = useMemo(() => {
+    const map: Record<string, ReturnType<typeof recommendDisposal>> = {};
+    for (const item of pendingItems) {
+      map[item.id] = recommendDisposal(item);
+    }
+    return map;
+  }, [pendingItems]);
+
+  const handlePendingActionSelect = (action: DisposalMethod) => {
+    setPendingActionType(action);
+    setShowPendingSection(true);
+    // Also set the active category to filter partners
+    setActiveCategory(action);
+  };
 
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -119,9 +140,23 @@ export default function PreLovedPage() {
     if (status !== "authenticated" || !session?.user?.id) return;
     fetch(`/api/clothes?user_id=${session.user.id}`)
       .then(r => r.json())
-      .then(data => setWardrobeItems(Array.isArray(data) ? data : []))
+      .then(data => {
+        if (Array.isArray(data)) {
+          const pending: ClothesItem[] = [];
+          const wardrobe: ClothesItem[] = [];
+          for (const item of data) {
+            if ((item as Record<string, unknown>).status === 'pending_action') {
+              pending.push(item);
+            } else {
+              wardrobe.push(item);
+            }
+          }
+          setWardrobeItems(wardrobe);
+          setPendingItems(pending);
+        }
+      })
       .catch(err => console.error("Error fetching wardrobe items:", err))
-      .finally(() => setLoadingItems(false));
+      .finally(() => { setLoadingItems(false); setLoadingPending(false); });
   }, [status, session]);
 
   const handleConfirmPledge = useCallback(
@@ -136,6 +171,8 @@ export default function PreLovedPage() {
         toast.error(err.error || 'Failed to submit pledge');
         return;
       }
+      // Remove pledged items from pending list
+      setPendingItems((prev) => prev.filter((item) => !itemIds.includes(item.id)));
       toast.success('Pledge submitted! Check your email for confirmation.');
     },
     [],
@@ -195,9 +232,26 @@ export default function PreLovedPage() {
           setActiveCategory={setActiveCategory}
         />
 
-        {wardrobeItems.length > 0 && activeCategory !== 'diy' && (
+        {activeCategory !== 'diy' && (
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm font-medium text-[#163422] mr-1">Smart insights:</p>
+            {pendingItems.length > 0 && (
+              <button
+                onClick={() => setShowPendingSection(!showPendingSection)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
+                  showPendingSection
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : 'bg-white text-amber-700 border-amber-200 hover:border-amber-300'
+                }`}
+              >
+                <span className="mr-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-3 h-3 inline" fill="currentColor">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                </span>
+                {pendingItems.length} from duplicates
+              </button>
+            )}
             {(['sell', 'donate', 'recycle'] as DisposalMethod[]).map((method) => {
               const count = recCounts[method];
               if (count === 0) return null;
@@ -220,6 +274,68 @@ export default function PreLovedPage() {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Pending Action Items Inline Section */}
+        {showPendingSection && pendingItems.length > 0 && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-amber-900">
+                  {pendingItems.length} item{pendingItems.length !== 1 ? 's' : ''} from duplicates
+                </h3>
+                <p className="text-xs text-amber-600 mt-0.5">Choose an action to find nearby partners</p>
+              </div>
+              <button
+                onClick={() => { setShowPendingSection(false); setPendingActionType(null); }}
+                className="text-amber-400 hover:text-amber-600 transition"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M18 6L6 18" />
+                  <path d="M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Items horizontal scroll */}
+            <div className="flex gap-3 overflow-x-auto pb-3">
+              {pendingItems.map((item) => (
+                <div key={item.id} className="shrink-0 w-24">
+                  <div className="aspect-[3/4] rounded-xl overflow-hidden bg-white mb-1.5 shadow-sm">
+                    {(item as Record<string, unknown>).image_url ? (
+                      <img
+                        src={(item as Record<string, unknown>).image_url as string}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-amber-300">
+                        No Image
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-medium text-amber-900 truncate">{item.name}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-2 mt-3">
+              {(['donate', 'sell', 'recycle'] as DisposalMethod[]).map((action) => (
+                <button
+                  key={action}
+                  onClick={() => handlePendingActionSelect(action)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-semibold transition ${
+                    pendingActionType === action && activeCategory === action
+                      ? 'bg-[#0f172a] text-white'
+                      : 'bg-white text-amber-800 border border-amber-200 hover:border-amber-300'
+                  }`}
+                >
+                  {action === 'sell' ? 'Sell & Trade' : action.charAt(0).toUpperCase() + action.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -267,10 +383,10 @@ export default function PreLovedPage() {
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         partner={selectedPartner}
-        items={wardrobeItems}
-        loading={loadingItems}
+        items={showPendingSection ? pendingItems : wardrobeItems}
+        loading={showPendingSection ? loadingPending : loadingItems}
         onConfirm={handleConfirmPledge}
-        recommendations={recommendations}
+        recommendations={showPendingSection ? pendingRecommendations : recommendations}
       />
     </div>
   );
