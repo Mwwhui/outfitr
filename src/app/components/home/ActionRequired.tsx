@@ -140,10 +140,10 @@ export default function ActionRequired({
       </div>
 
       <Link
-        href="/pre-loved"
+        href="/activity"
         className="mt-3 flex items-center justify-center gap-1 text-xs font-medium text-primary hover:underline py-1"
       >
-        View on Pre-Loved
+        View on Activities
         <span className="material-symbols-outlined text-xs">open_in_new</span>
       </Link>
     </div>
