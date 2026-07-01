@@ -7,6 +7,7 @@ import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
 import OutfitSuggestionCard from '../components/OutfitSuggestionCard';
+import TryOnPanel from '../components/TryOnPanel';
 import toast from 'react-hot-toast';
 import type { ClothingItem, OccasionKey, WeatherData, SuggestedOutfit } from '@/lib/suggestOutfits';
 import { hasCompatibleUseCases, hasCompatibleSeasons } from '@/lib/suggestOutfits';
@@ -59,6 +60,7 @@ export default function PlannerPage() {
 
   const [slots, setSlots] = useState<SlotsState>(EMPTY_SLOTS);
   const [urlReady, setUrlReady] = useState(false);
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
 
   // Suggestion panel state
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -154,6 +156,10 @@ export default function PlannerPage() {
 
     if (status === 'authenticated') {
       fetchClothes();
+      fetch('/api/user/profile')
+        .then((r) => r.json())
+        .then((data) => setUserPhotoUrl(data.user?.profile_image_url ?? null))
+        .catch(() => {});
     }
   }, [status]);
 
@@ -458,11 +464,11 @@ export default function PlannerPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
+      <div className="px-6 pt-8 pb-4 max-w-[1500px] mx-auto">
         <h1 className="text-3xl font-bold text-[#163422] font-headline">Plan My Outfit</h1>
       </div>
 
-    <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
+    <div className="px-6 pb-16 max-w-[1500px] mx-auto space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-end gap-4">
         {/* Date picker */}
         <div>
@@ -524,8 +530,8 @@ export default function PlannerPage() {
         </div>
       </div>
 
-      {/* MAIN LAYOUT: wardrobe left, slots right */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-6">
+      {/* MAIN LAYOUT: wardrobe left, slots center, try-on right */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)] gap-6">
         {/* LEFT: WARDROBE SIDEBAR */}
         <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 max-h-[80vh] overflow-hidden">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 font-headline">
@@ -672,6 +678,15 @@ export default function PlannerPage() {
             </Button>
           </div>
         </section>
+
+        {/* RIGHT: TRY-ON PREVIEW */}
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <TryOnPanel
+            slots={slots}
+            userPhotoUrl={userPhotoUrl}
+            onPhotoUploaded={setUserPhotoUrl}
+          />
+        </aside>
 
         {/* ── Inline Suggestion Panel ── */}
         {showSuggestions && (

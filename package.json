@@ -16,6 +16,7 @@
     "@fullcalendar/daygrid": "^6.1.20",
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/react": "^6.1.20",
+    "@gradio/client": "^2.3.0",
     "@imgly/background-removal": "^1.7.0",
     "@supabase/supabase-js": "^2.78.0",
     "@vis.gl/react-google-maps": "^1.8.3",

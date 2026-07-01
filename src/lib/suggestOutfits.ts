@@ -3,12 +3,12 @@ import { multiColorScore, getPaletteName, pairHarmony } from './colorUtils';
 export const USE_CASE_OPTIONS = ['casual', 'business', 'sport', 'sleep', 'swim', 'date'] as const;
 
 export const INCOMPATIBLE_USE_CASES: Record<string, string[]> = {
-  casual: ['business', 'swim', 'sleep', 'date'],
+  casual: ['business', 'swim', 'sleep'],
   business: ['casual', 'sport', 'swim', 'sleep'],
   sport: ['business', 'swim', 'sleep', 'date'],
   sleep: ['casual', 'business', 'sport', 'swim', 'date'],
   swim: ['casual', 'business', 'sport', 'sleep', 'date'],
-  date: ['casual', 'sport', 'swim', 'sleep'],
+  date: ['sport', 'swim', 'sleep'],
 };
 
 const INCOMPATIBLE_SEASONS: Record<string, string[]> = {

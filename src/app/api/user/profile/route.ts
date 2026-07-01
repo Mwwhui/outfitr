@@ -13,7 +13,7 @@ export async function GET() {
     const supabase = supabaseServer();
     const { data, error } = await supabase
       .from("users")
-      .select("id, username, email, first_name, last_name, dob, nationality, gender, contact_no, role, created_at, updated_at")
+      .select("id, username, email, first_name, last_name, dob, nationality, gender, contact_no, role, profile_image_url, created_at, updated_at")
       .eq("id", session.user.id)
       .single();
 
@@ -36,7 +36,7 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const allowedFields = ["username", "first_name", "last_name", "dob", "nationality", "gender", "contact_no"];
+    const allowedFields = ["username", "first_name", "last_name", "dob", "nationality", "gender", "contact_no", "profile_image_url"];
 
     const updates: Record<string, unknown> = {};
     for (const field of allowedFields) {
@@ -54,7 +54,7 @@ export async function PATCH(req: Request) {
       .from("users")
       .update(updates)
       .eq("id", session.user.id)
-      .select("id, username, email, first_name, last_name, dob, nationality, gender, contact_no, role, created_at, updated_at")
+      .select("id, username, email, first_name, last_name, dob, nationality, gender, contact_no, role, profile_image_url, created_at, updated_at")
       .single();
 
     if (error) {
