@@ -116,12 +116,21 @@ function itemsToPlannerParams(items: Array<{ id: string; type: string }>): strin
 
 function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onScheduled: () => void }) {
   const [scheduling, setScheduling] = useState(false);
-  const [confirmDay, setConfirmDay] = useState<number | null>(null);
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [showModal, setShowModal] = useState(false);
   const days = ['M', 'T', 'W', 'T', 'F'];
   const dayIndices = [1, 2, 3, 4, 5];
 
+  const toggleDay = (dayIndex: number) => {
+    setSelectedDays((prev) =>
+      prev.includes(dayIndex)
+        ? prev.filter((d) => d !== dayIndex)
+        : [...prev, dayIndex],
+    );
+  };
+
   const handleConfirm = async () => {
-    if (confirmDay === null) return;
+    if (selectedDays.length === 0) return;
     setScheduling(true);
     try {
       const slots: Record<string, { id: string; name: string }> = {};
@@ -135,36 +144,55 @@ function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onSche
           : null;
         if (key) slots[key] = { id: item.id, name: item.name };
       }
-      await fetch('/api/outfit_plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: getNextWeekday(confirmDay), timeSlot: 'day', slots, name: items.map((i) => i.name).join(' + ') }),
-      });
+      const name = items.map((i) => i.name).join(' + ');
+      await Promise.all(selectedDays.map((dayIndex) =>
+        fetch('/api/outfit_plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: getNextWeekday(dayIndex), timeSlot: 'day', slots, name }),
+        }).then((res) => {
+          if (!res.ok) throw new Error('Failed to schedule');
+        }),
+      ));
       onScheduled();
-    } catch { /* silently fail */ } finally { setScheduling(false); setConfirmDay(null); }
+    } catch { /* silently fail */ } finally { setScheduling(false); setShowModal(false); setSelectedDays([]); }
   };
 
   return (
     <>
       <div className="mt-3 p-3 bg-surface-container-lowest border border-outline-variant rounded-lg">
-        <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-2">Quick Add to Next Week</p>
+        <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-2">Schedule Weekly</p>
         <div className="flex justify-between gap-1">
           {days.map((day, i) => (
-            <button key={i} onClick={() => setConfirmDay(dayIndices[i])} disabled={scheduling}
-              className="flex-1 py-1 rounded border border-outline-variant text-sm hover:bg-primary hover:text-on-primary transition-colors disabled:opacity-50">
+            <button key={i} onClick={() => toggleDay(dayIndices[i])} disabled={scheduling}
+              className={`flex-1 py-1 rounded border text-sm transition-colors disabled:opacity-50 ${
+                selectedDays.includes(dayIndices[i])
+                  ? 'bg-primary text-on-primary border-primary'
+                  : 'border-outline-variant hover:bg-primary hover:text-on-primary'
+              }`}>
               {day}
             </button>
           ))}
         </div>
+        {selectedDays.length > 0 && (
+          <button
+            onClick={() => setShowModal(true)}
+            disabled={scheduling}
+            className="mt-2 w-full bg-primary text-on-primary text-sm py-1.5 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
+          >
+            Schedule {selectedDays.length > 1 ? `${selectedDays.length} days` : ''}
+          </button>
+        )}
       </div>
       <ConfirmModal
-        open={confirmDay !== null}
+        open={showModal}
         title="Schedule Outfit"
-        message={`Schedule "${items.map((i) => i.name).join(' + ')}" to ${days[dayIndices.indexOf(confirmDay as number)]}?`}
-        confirmLabel="Schedule"
+        message={`Schedule "${items.map((i) => i.name).join(' + ')}" to ${selectedDays.map((d) => days[dayIndices.indexOf(d)]).join(', ')}?`}
+        confirmLabel={selectedDays.length > 1 ? `Schedule to ${selectedDays.length} days` : 'Schedule'}
         cancelLabel="Cancel"
+        confirmVariant="primary"
         onConfirm={handleConfirm}
-        onCancel={() => setConfirmDay(null)}
+        onCancel={() => { setShowModal(false); setSelectedDays([]); }}
         loading={scheduling}
       />
     </>
@@ -565,8 +593,6 @@ export default function OutfitsPage() {
                 <h2 className="text-xl font-bold text-on-surface font-headline mb-6">Common Combinations</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {frequentCombos.map((combo) => {
-                    const lastDay = new Date(combo.last_worn).getDay();
-                    const isWeekend = lastDay === 0 || lastDay === 6;
                     const showPicker = schedulingCombo === combo.key;
                     const badge = combo.frequency >= 10 ? 'High Rotation' : combo.frequency >= 5 ? 'Regular' : null;
 
@@ -589,7 +615,7 @@ export default function OutfitsPage() {
                           className="w-full border border-primary text-primary text-sm py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-primary hover:text-on-primary transition-colors"
                         >
                           <span className="material-symbols-outlined text-sm">calendar_month</span>
-                          {isWeekend ? 'Schedule to Weekdays' : 'Schedule to Weekend'}
+                          Schedule Weekly
                         </button>
                         {showPicker && (
                           <MiniCalendarPicker items={combo.items} onScheduled={() => { setSchedulingCombo(null); refreshPlans(); }} />

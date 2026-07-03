@@ -8,6 +8,7 @@ interface Props {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  confirmVariant?: 'primary' | 'secondary' | 'danger';
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
@@ -17,8 +18,9 @@ export default function ConfirmModal({
   open,
   title,
   message,
-  confirmLabel = 'Delete',
+  confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
+  confirmVariant = 'danger',
   onConfirm,
   onCancel,
   loading = false,
@@ -39,14 +41,14 @@ export default function ConfirmModal({
             {cancelLabel}
           </Button>
           <Button
-            variant="danger"
+            variant={confirmVariant}
             onClick={onConfirm}
             disabled={loading}
           >
             {loading ? (
               <span className="flex items-center gap-1.5">
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Deleting...
+                Saving...
               </span>
             ) : (
               confirmLabel

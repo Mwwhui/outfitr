@@ -270,7 +270,7 @@ export default function PreLovedPage() {
                       : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  {labels[method]} {count} best to {method}
+                  {labels[method]} {count}
                 </button>
               );
             })}

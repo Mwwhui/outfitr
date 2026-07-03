@@ -13,9 +13,9 @@ export interface ClothesItem {
 }
 
 const BADGE_LABELS_METHOD: Record<DisposalMethod, string> = {
-  donate: 'Best for Donate',
-  sell: 'Best for Sell',
-  recycle: 'Best for Recycle',
+  donate: 'Best to donate',
+  sell: 'Best to sell',
+  recycle: 'Best to recycle',
 };
 
 const METHOD_COLORS: Record<DisposalMethod, string> = {
@@ -72,7 +72,7 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
     const method = partner.type as DisposalMethod;
     if (rec.method === method) return null;
     if (rec.scores[method] >= 40) return null;
-    return `Better suited for ${BADGE_LABELS_METHOD[rec.method].replace('Best for ', '').toLowerCase()}`;
+    return `Better suited for ${BADGE_LABELS_METHOD[rec.method].replace('Best to ', '')}`;
   };
 
   return (
