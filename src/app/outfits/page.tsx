@@ -215,6 +215,9 @@ export default function OutfitsPage() {
   const [schedulingCombo, setSchedulingCombo] = useState<string | null>(null);
   const [totalItems, setTotalItems] = useState(0);
 
+  const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
+  const [filterMode, setFilterMode] = useState<'all' | 'favorites'>('favorites');
+
   // New state for Impact Meter + Planned Outfits
   const [plans, setPlans] = useState<Plan[]>([]);
   const [clothes, setClothes] = useState<ClothItem[]>([]);
@@ -269,6 +272,19 @@ export default function OutfitsPage() {
       if (res.ok) setDna(await res.json());
     } catch { /* silently fail */ } finally { setLoadingDna(false); }
   };
+
+  // Load favorite combos from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('outfit_favorites');
+      if (stored) setFavoriteKeys(new Set(JSON.parse(stored)));
+    } catch {}
+  }, []);
+
+  // Persist favorite combos
+  useEffect(() => {
+    localStorage.setItem('outfit_favorites', JSON.stringify([...favoriteKeys]));
+  }, [favoriteKeys]);
 
   // Fetch planned outfits
   useEffect(() => {
@@ -442,6 +458,19 @@ export default function OutfitsPage() {
       .catch(() => {});
   };
 
+  const toggleFavorite = (key: string) => {
+    setFavoriteKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const visibleCombos = filterMode === 'favorites'
+    ? frequentCombos.filter((c) => favoriteKeys.has(c.key))
+    : frequentCombos;
+
   const handleQuickSwap = async (planId: string, date: string) => {
     await fetch(`/api/outfit_plans/${planId}`, { method: 'DELETE' });
     setPlans((prev) => prev.filter((p) => p.id !== planId));
@@ -591,14 +620,44 @@ export default function OutfitsPage() {
             {/* Common Combinations */}
             {frequentCombos.length > 0 && (
               <section className={`transition-all duration-700 delay-200 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-                <h2 className="text-xl font-bold text-on-surface font-headline mb-6">Common Combinations</h2>
+                <div className="flex items-center gap-2 mb-6">
+                  <h2 className="text-xl font-bold text-on-surface font-headline">Common Combinations</h2>
+                  <div className="flex ml-auto gap-1 bg-surface-container-high rounded-lg p-0.5">
+                    <button
+                      onClick={() => setFilterMode('all')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'all' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      All ({frequentCombos.length})
+                    </button>
+                    <button
+                      onClick={() => setFilterMode('favorites')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'favorites' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      Favorites ({frequentCombos.filter((c) => favoriteKeys.has(c.key)).length})
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {frequentCombos.map((combo) => {
+                  {visibleCombos.map((combo) => {
                     const showPicker = schedulingCombo === combo.key;
                     const badge = combo.frequency >= 10 ? 'High Rotation' : combo.frequency >= 5 ? 'Regular' : null;
 
                     return (
-                      <div key={combo.key} className="group bg-surface-bright border border-outline-variant p-4 rounded-xl hover:shadow-lg transition-all duration-300">
+                      <div key={combo.key} className="group bg-surface-bright border border-outline-variant p-4 rounded-xl hover:shadow-lg transition-all duration-300 relative">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleFavorite(combo.key); }}
+                          className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-white transition z-10"
+                        >
+                          <span className={`material-symbols-outlined text-sm ${
+                            favoriteKeys.has(combo.key) ? 'text-red-500' : 'text-gray-400'
+                          }`} style={{ fontVariationSettings: favoriteKeys.has(combo.key) ? "'FILL' 1" : "'FILL' 0" }}>
+                            favorite
+                          </span>
+                        </button>
                         <ComboImageGrid items={combo.items} />
                         <div className="flex justify-between items-start mb-4 mt-4">
                           <div>
