@@ -222,7 +222,7 @@ function getMatchingItems(types: string[], wardrobe: WardrobeItem[]): WardrobeIt
 
 export default function DiyTutorials() {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState<'guides' | 'videos'>('guides');
+  const [activeTab, setActiveTab] = useState<'guides' | 'videos' | 'saved'>('guides');
   const [expandedTutorial, setExpandedTutorial] = useState<number | null>(null);
 
   // Wardrobe
@@ -244,6 +244,19 @@ export default function DiyTutorials() {
 
   // Celebration confetti
   const [celebrating, setCelebrating] = useState<number | null>(null);
+
+  // Saved videos
+  const [savedVideos, setSavedVideos] = useState<Record<string, VideoResult>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = localStorage.getItem('diy_saved_videos');
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+
+  // Pagination
+  const [pageTokens, setPageTokens] = useState<Record<string, string | null>>({});
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Fetch wardrobe
   useEffect(() => {
@@ -273,8 +286,61 @@ export default function DiyTutorials() {
     return () => clearTimeout(t);
   }, [celebrating]);
 
-  const doSearch = useCallback(async (q: string) => {
+  const doSearch = useCallback(async (q: string, append = false) => {
     setQuery(q);
+
+    if (q === 'all') {
+      setVideos([]);
+      setPageTokens({});
+      const queries = SEARCH_TOPICS.map((t) => t.query);
+      try {
+        const results = await Promise.all(
+          queries.map((query) =>
+            fetch(`/api/diy/search?q=${encodeURIComponent(query)}`).then((r) =>
+              r.ok ? r.json() : { videos: [] },
+            ),
+          ),
+        );
+        const allVideos = results.flatMap((r) => r.videos || []);
+        const newTokens: Record<string, string | null> = {};
+        queries.forEach((query, i) => {
+          newTokens[query] = results[i]?.nextPageToken || null;
+        });
+        if (allVideos.length > 0) {
+          setVideos(allVideos.slice(0, 20));
+          setPageTokens(newTokens);
+          return;
+        }
+      } catch {
+        // fall through
+      }
+      // Fallback: merge curated all
+      const curated = queries.flatMap((query) => CURATED_VIDEOS[query] || []);
+      setVideos(curated.slice(0, 20));
+      return;
+    }
+
+    if (append) {
+      const token = pageTokens[q];
+      if (!token) return;
+      setLoadingMore(true);
+      try {
+        const res = await fetch(`/api/diy/search?q=${encodeURIComponent(q)}&pageToken=${token}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.videos?.length > 0) {
+            setVideos((prev) => [...prev, ...data.videos]);
+            setPageTokens((prev) => ({ ...prev, [q]: data.nextPageToken || null }));
+          }
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setLoadingMore(false);
+      }
+      return;
+    }
+
     setVideos([]);
     try {
       const res = await fetch(`/api/diy/search?q=${encodeURIComponent(q)}`);
@@ -282,6 +348,7 @@ export default function DiyTutorials() {
         const data = await res.json();
         if (data.videos?.length > 0) {
           setVideos(data.videos);
+          setPageTokens((prev) => ({ ...prev, [q]: data.nextPageToken || null }));
           return;
         }
       }
@@ -289,38 +356,14 @@ export default function DiyTutorials() {
       // fall through to curated
     }
     setVideos(CURATED_VIDEOS[q] || []);
-  }, []);
+    setPageTokens((prev) => ({ ...prev, [q]: null }));
+  }, [pageTokens]);
 
   // Auto-search on video tab switch
   useEffect(() => {
-    if (activeTab !== 'videos' || wardrobeLoading || wardrobe.length === 0 || query !== '') return;
-
-    const typeCount = new Map<string, number>();
-    for (const item of wardrobe) {
-      const type = item.type || 'Other';
-      typeCount.set(type, (typeCount.get(type) || 0) + 1);
-    }
-    const topType = [...typeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-
-    const queryMap: Record<string, string> = {
-      tops: 't-shirt upcycling',
-      't-shirt': 't-shirt upcycling',
-      shirt: 'shirt upcycling',
-      blouse: 'shirt upcycling',
-      bottoms: 'jeans upcycling',
-      jeans: 'jeans upcycling',
-      denim: 'jeans upcycling',
-      sweater: 'sweater upcycling',
-      knitwear: 'sweater upcycling',
-      dress: 'dress upcycling',
-      'one-piece': 'dress upcycling',
-    };
-
-    const entry = Object.entries(queryMap).find(([key]) =>
-      topType.toLowerCase().includes(key),
-    );
-    doSearch(entry ? entry[1] : 't-shirt upcycling');
-  }, [activeTab, wardrobeLoading, wardrobe.length, query, doSearch]);
+    if (activeTab !== 'videos' || query !== '') return;
+    doSearch('all');
+  }, [activeTab, doSearch, query]);
 
   const toggleSaved = (id: number) => {
     setSaved((prev) => {
@@ -356,6 +399,22 @@ export default function DiyTutorials() {
     });
   };
 
+  const toggleSavedVideo = (id: string, video: VideoResult) => {
+    setSavedVideos((prev) => {
+      const next = { ...prev };
+      if (next[id]) delete next[id];
+      else next[id] = video;
+      localStorage.setItem('diy_saved_videos', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const loadMore = useCallback(() => {
+    if (query && query !== 'all' && pageTokens[query]) {
+      doSearch(query, true);
+    }
+  }, [query, pageTokens, doSearch]);
+
   const filteredTutorials = DIY_TUTORIALS.filter((t) => {
     if (showSavedOnly && !saved.has(t.id)) return false;
     if (showCompletedOnly && !completed.has(t.id)) return false;
@@ -369,6 +428,7 @@ export default function DiyTutorials() {
   const tabs = [
     { key: 'guides' as const, label: 'Written Guides' },
     { key: 'videos' as const, label: 'Video Tutorials' },
+    { key: 'saved' as const, label: `Saved (${saved.size + Object.keys(savedVideos).length})` },
   ];
 
   return (
@@ -703,6 +763,21 @@ export default function DiyTutorials() {
       {activeTab === 'videos' && (
         <div>
           <div className="flex flex-wrap gap-2 mb-5">
+            <button
+              onClick={() => doSearch('all')}
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-full border transition ${
+                query === 'all'
+                  ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                  : 'bg-white text-on-surface-variant/60 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              All
+              {!wardrobeLoading && (
+                <span className="text-[10px] opacity-60">
+                  {SEARCH_TOPICS.reduce((s, t) => s + countMatching(t.matchTypes, wardrobe), 0)}
+                </span>
+              )}
+            </button>
             {SEARCH_TOPICS.map((topic) => {
               const matchedCount = countMatching(topic.matchTypes, wardrobe);
               return (
@@ -724,16 +799,87 @@ export default function DiyTutorials() {
             })}
           </div>
 
-          {query === '' ? (
-            <div className="text-center py-12 text-on-surface-variant/60">
-              <span className="material-symbols-outlined text-4xl mb-2">video_library</span>
-              <p className="text-sm font-medium">Choose a topic above</p>
-              <p className="text-xs mt-1">
-                Find video tutorials based on what&apos;s in your wardrobe
-              </p>
+          <DiyVideoGrid
+            videos={videos}
+            loading={false}
+            savedVideoIds={new Set(Object.keys(savedVideos))}
+            onToggleSave={toggleSavedVideo}
+            onLoadMore={query !== 'all' && pageTokens[query] ? loadMore : undefined}
+            hasMore={query !== 'all' && !!pageTokens[query]}
+            loadingMore={loadingMore}
+          />
+        </div>
+      )}
+
+      {/* ──────── Saved Tab ──────── */}
+      {activeTab === 'saved' && (
+        <div>
+          {/* Saved written guides */}
+          {saved.size > 0 && (
+            <div className="mb-8">
+              <h4 className="text-sm font-bold text-[#163422] mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm">book</span>
+                Written Guides ({saved.size})
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                {DIY_TUTORIALS.filter((t) => saved.has(t.id)).map((tutorial) => {
+                  const matchedCount = countMatching(tutorial.matchTypes, wardrobe);
+                  const isCompleted = completed.has(tutorial.id);
+                  return (
+                    <div
+                      key={tutorial.id}
+                      className={`break-inside-avoid bg-white rounded-2xl border hover:shadow-md transition-shadow overflow-hidden ${
+                        isCompleted ? 'border-green-300' : 'border-gray-200'
+                      }`}
+                    >
+                      <div
+                        className={`bg-gradient-to-br ${tutorial.gradient} px-4 py-3`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{tutorial.emoji}</span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[#0f172a] text-sm leading-snug">
+                              {tutorial.title}
+                              {isCompleted && <span className="ml-1 text-green-600">✓</span>}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] bg-white/70 text-gray-600 px-1.5 py-0.5 rounded-full">
+                                {tutorial.difficulty} · {tutorial.time}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          ) : (
-            <DiyVideoGrid videos={videos} loading={false} />
+          )}
+
+          {/* Saved videos */}
+          {Object.keys(savedVideos).length > 0 && (
+            <div>
+              <h4 className="text-sm font-bold text-[#163422] mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm">smart_display</span>
+                Videos ({Object.keys(savedVideos).length})
+              </h4>
+              <DiyVideoGrid
+                videos={Object.values(savedVideos)}
+                loading={false}
+                savedVideoIds={new Set(Object.keys(savedVideos))}
+                onToggleSave={toggleSavedVideo}
+              />
+            </div>
+          )}
+
+          {/* Empty state */}
+          {saved.size === 0 && Object.keys(savedVideos).length === 0 && (
+            <div className="text-center py-12 text-on-surface-variant/60">
+              <span className="material-symbols-outlined text-4xl mb-2">bookmark</span>
+              <p className="text-sm font-medium">No saved items yet</p>
+              <p className="text-xs mt-1">Bookmark written guides or videos to find them here</p>
+            </div>
           )}
         </div>
       )}

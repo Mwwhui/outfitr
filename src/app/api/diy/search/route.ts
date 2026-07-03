@@ -10,8 +10,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Missing query param ?q=' }, { status: 400 });
   }
 
+  const pageToken = searchParams.get('pageToken') || '';
   const normalized = q.toLowerCase().trim();
-  const cacheKey = `search_${normalized}`;
+  const cacheKey = `search_${normalized}_${pageToken}`;
 
   const cached = SEARCH_CACHE.get(cacheKey);
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
@@ -32,6 +33,9 @@ export async function GET(req: Request) {
     url.searchParams.set('videoEmbeddable', 'true');
     url.searchParams.set('relevanceLanguage', 'en');
     url.searchParams.set('key', apiKey);
+    if (pageToken) {
+      url.searchParams.set('pageToken', pageToken);
+    }
 
     const res = await fetch(url.toString());
     if (!res.ok) {
@@ -53,6 +57,7 @@ export async function GET(req: Request) {
     const result = {
       videos,
       totalResults: data.pageInfo?.totalResults || 0,
+      nextPageToken: data.nextPageToken || null,
     };
 
     SEARCH_CACHE.set(cacheKey, { data: result, ts: Date.now() });

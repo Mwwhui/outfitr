@@ -14,6 +14,11 @@ export interface VideoResult {
 interface DiyVideoGridProps {
   videos: VideoResult[];
   loading: boolean;
+  savedVideoIds?: Set<string>;
+  onToggleSave?: (id: string, video: VideoResult) => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
 }
 
 function isYouTubeId(id: string): boolean {
@@ -33,7 +38,15 @@ const GRADIENTS = [
   'from-teal-200 to-lime-200',
 ];
 
-export default function DiyVideoGrid({ videos, loading }: DiyVideoGridProps) {
+export default function DiyVideoGrid({
+  videos,
+  loading,
+  savedVideoIds,
+  onToggleSave,
+  onLoadMore,
+  hasMore,
+  loadingMore,
+}: DiyVideoGridProps) {
   const [activeVideo, setActiveVideo] = useState<VideoResult | null>(null);
 
   const handleClick = (video: VideoResult) => {
@@ -42,6 +55,11 @@ export default function DiyVideoGrid({ videos, loading }: DiyVideoGridProps) {
     } else {
       openYouTubeSearch(video.id);
     }
+  };
+
+  const handleSave = (e: React.MouseEvent, video: VideoResult) => {
+    e.stopPropagation();
+    onToggleSave?.(video.id, video);
   };
 
   if (loading) {
@@ -73,52 +91,89 @@ export default function DiyVideoGrid({ videos, loading }: DiyVideoGridProps) {
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {videos.map((video, i) => (
-          <button
-            key={video.id}
-            onClick={() => handleClick(video)}
-            className="rounded-2xl overflow-hidden bg-white border border-gray-200 hover:border-[#0f172a] transition-colors text-left group"
-          >
-            <div className="aspect-video relative overflow-hidden">
-              {video.thumbnail ? (
-                <img
-                  src={video.thumbnail}
-                  alt={video.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                />
-              ) : (
-                <div className={`w-full h-full bg-gradient-to-br ${GRADIENTS[i % GRADIENTS.length]} flex flex-col items-center justify-center gap-2 p-4`}>
-                  <span className="material-symbols-outlined text-5xl text-white/70">smart_display</span>
-                  {!isYouTubeId(video.id) && (
-                    <>
-                      <p className="text-xs text-white/80 font-medium text-center leading-tight line-clamp-2 max-w-full">
-                        {video.title}
-                      </p>
-                      <span className="text-[10px] text-white/60 font-semibold px-2 py-0.5 rounded-full bg-white/20 mt-1">
-                        Search YouTube
-                      </span>
-                    </>
-                  )}
+        {videos.map((video, i) => {
+          const isSaved = savedVideoIds?.has(video.id);
+          return (
+            <button
+              key={`${video.id}-${i}`}
+              onClick={() => handleClick(video)}
+              className="rounded-2xl overflow-hidden bg-white border border-gray-200 hover:border-[#0f172a] transition-colors text-left group relative"
+            >
+              <div className="aspect-video relative overflow-hidden">
+                {video.thumbnail ? (
+                  <img
+                    src={video.thumbnail}
+                    alt={video.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className={`w-full h-full bg-gradient-to-br ${GRADIENTS[i % GRADIENTS.length]} flex flex-col items-center justify-center gap-2 p-4`}>
+                    <span className="material-symbols-outlined text-5xl text-white/70">smart_display</span>
+                    {!isYouTubeId(video.id) && (
+                      <>
+                        <p className="text-xs text-white/80 font-medium text-center leading-tight line-clamp-2 max-w-full">
+                          {video.title}
+                        </p>
+                        <span className="text-[10px] text-white/60 font-semibold px-2 py-0.5 rounded-full bg-white/20 mt-1">
+                          Search YouTube
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                    <span className="material-symbols-outlined text-2xl text-[#0f172a]">play_arrow</span>
+                  </div>
                 </div>
-              )}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                  <span className="material-symbols-outlined text-2xl text-[#0f172a]">play_arrow</span>
-                </div>
+
+                {/* Save button */}
+                {onToggleSave && (
+                  <div
+                    onClick={(e) => handleSave(e, video)}
+                    className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 flex items-center justify-center transition-colors cursor-pointer z-10"
+                  >
+                    <span className={`material-symbols-outlined text-sm ${
+                      isSaved ? 'text-amber-300' : 'text-white/80'
+                    }`}>
+                      {isSaved ? 'bookmark' : 'bookmark_border'}
+                    </span>
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="p-4">
-              <p className="text-sm font-semibold text-[#0f172a] line-clamp-2 leading-snug">
-                {video.title}
-              </p>
-              <p className="text-xs text-on-surface-variant/60 mt-1.5">
-                {isYouTubeId(video.id) ? video.channelTitle : 'Watch on YouTube →'}
-              </p>
-            </div>
-          </button>
-        ))}
+              <div className="p-4">
+                <p className="text-sm font-semibold text-[#0f172a] line-clamp-2 leading-snug">
+                  {video.title}
+                </p>
+                <p className="text-xs text-on-surface-variant/60 mt-1.5">
+                  {isYouTubeId(video.id) ? video.channelTitle : 'Watch on YouTube →'}
+                </p>
+              </div>
+            </button>
+          );
+        })}
       </div>
+
+      {/* Load more */}
+      {hasMore && onLoadMore && (
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-[#0f172a] hover:border-gray-300 hover:shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loadingMore ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-[#0f172a] border-t-transparent rounded-full animate-spin" />
+                Loading...
+              </span>
+            ) : (
+              'Load more'
+            )}
+          </button>
+        </div>
+      )}
 
       <AnimatePresence>
         {activeVideo && (
