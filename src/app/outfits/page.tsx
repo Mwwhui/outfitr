@@ -216,7 +216,8 @@ export default function OutfitsPage() {
   const [totalItems, setTotalItems] = useState(0);
 
   const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
-  const [filterMode, setFilterMode] = useState<'all' | 'favorites'>('favorites');
+  const [archivedKeys, setArchivedKeys] = useState<Set<string>>(new Set());
+  const [filterMode, setFilterMode] = useState<'all' | 'favorites' | 'archived'>('favorites');
 
   // New state for Impact Meter + Planned Outfits
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -285,6 +286,19 @@ export default function OutfitsPage() {
   useEffect(() => {
     localStorage.setItem('outfit_favorites', JSON.stringify([...favoriteKeys]));
   }, [favoriteKeys]);
+
+  // Load archived combos from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('outfit_archived');
+      if (stored) setArchivedKeys(new Set(JSON.parse(stored)));
+    } catch {}
+  }, []);
+
+  // Persist archived combos
+  useEffect(() => {
+    localStorage.setItem('outfit_archived', JSON.stringify([...archivedKeys]));
+  }, [archivedKeys]);
 
   // Fetch planned outfits
   useEffect(() => {
@@ -467,9 +481,20 @@ export default function OutfitsPage() {
     });
   };
 
+  const toggleArchive = (key: string) => {
+    setArchivedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const visibleCombos = filterMode === 'favorites'
     ? frequentCombos.filter((c) => favoriteKeys.has(c.key))
-    : frequentCombos;
+    : filterMode === 'archived'
+      ? frequentCombos.filter((c) => archivedKeys.has(c.key))
+      : frequentCombos.filter((c) => !archivedKeys.has(c.key));
 
   const handleQuickSwap = async (planId: string, date: string) => {
     await fetch(`/api/outfit_plans/${planId}`, { method: 'DELETE' });
@@ -624,20 +649,28 @@ export default function OutfitsPage() {
                   <h2 className="text-xl font-bold text-on-surface font-headline">Common Combinations</h2>
                   <div className="flex ml-auto gap-1 bg-surface-container-high rounded-lg p-0.5">
                     <button
-                      onClick={() => setFilterMode('all')}
-                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
-                        filterMode === 'all' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
-                      }`}
-                    >
-                      All ({frequentCombos.length})
-                    </button>
-                    <button
                       onClick={() => setFilterMode('favorites')}
                       className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
                         filterMode === 'favorites' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
                       }`}
                     >
                       Favorites ({frequentCombos.filter((c) => favoriteKeys.has(c.key)).length})
+                    </button>
+                    <button
+                      onClick={() => setFilterMode('all')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'all' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      All ({frequentCombos.filter((c) => !archivedKeys.has(c.key)).length})
+                    </button>
+                    <button
+                      onClick={() => setFilterMode('archived')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'archived' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      Archive ({frequentCombos.filter((c) => archivedKeys.has(c.key)).length})
                     </button>
                   </div>
                 </div>
@@ -680,6 +713,12 @@ export default function OutfitsPage() {
                         {showPicker && (
                           <MiniCalendarPicker items={combo.items} onScheduled={() => { setSchedulingCombo(null); refreshPlans(); }} />
                         )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleArchive(combo.key); }}
+                          className="absolute top-3 left-3 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-gray-500 transition-all z-10"
+                        >
+                          <span className="material-symbols-outlined text-sm">archive</span>
+                        </button>
                       </div>
                     );
                   })}
