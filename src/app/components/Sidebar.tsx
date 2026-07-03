@@ -74,15 +74,11 @@ function usePledgeBadges() {
 
   const fetchCounts = useCallback(async () => {
     try {
-      const res = await fetch('/api/pledges');
+      const res = await fetch('/api/home/alerts');
       if (!res.ok) return;
       const data = await res.json();
-      const pledges = data.pledges || [];
-      const active = pledges.filter(
-        (p: { status: string }) => p.status === 'pending' || p.status === 'accepted'
-      ).length;
-      setPrelovedCount(active);
-      setActivityCount(pledges.length);
+      setPrelovedCount((data.pledges_pending || 0) + (data.pledges_accepted || 0));
+      setActivityCount(data.pledges_total || 0);
     } catch {
       // silently fail
     }
