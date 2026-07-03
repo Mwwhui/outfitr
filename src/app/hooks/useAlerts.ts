@@ -118,6 +118,7 @@ export function useAlerts() {
   const costPerWearNotifiedRef = useRef(false);
   const lastStreakMilestoneRef = useRef(0);
   const prevAlertIdsRef = useRef<Set<string>>(new Set());
+  const lastFetchRef = useRef(0);
 
   // Seen IDs stored in localStorage so persistent alerts (same content-hash)
   // don't reappear as unread after the user has viewed them.
@@ -404,19 +405,26 @@ export function useAlerts() {
 
       setAlerts(items);
       setHasLoaded(true);
+      lastFetchRef.current = Date.now();
     } catch {
       setHasLoaded(true);
+      lastFetchRef.current = Date.now();
     }
   }, []);
 
   useEffect(() => {
     fetchAlerts();
 
-    const interval = setInterval(fetchAlerts, 60000);
+    const interval = setInterval(fetchAlerts, 300000);
 
-    const handleFocus = () => fetchAlerts();
+    const handleFocus = () => {
+      if (Date.now() - lastFetchRef.current < 60000) return;
+      fetchAlerts();
+    };
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') fetchAlerts();
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastFetchRef.current < 60000) return;
+      fetchAlerts();
     };
 
     window.addEventListener('focus', handleFocus);

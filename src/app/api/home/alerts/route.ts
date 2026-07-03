@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { supabaseServer } from '@/lib/supabase/server';
 
+const ALERTS_CACHE = new Map<string, { data: unknown; ts: number }>();
+const ALERTS_CACHE_TTL = 30 * 1000;
+
 // GET /api/home/alerts
 export async function GET() {
   try {
@@ -10,6 +13,11 @@ export async function GET() {
     const user_id = session?.user?.id;
     if (!user_id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const cached = ALERTS_CACHE.get(user_id);
+    if (cached && Date.now() - cached.ts < ALERTS_CACHE_TTL) {
+      return NextResponse.json(cached.data);
     }
 
     const supabase = supabaseServer();
@@ -85,7 +93,7 @@ export async function GET() {
       : 1;
     const monthsActive = Math.round(daysSinceFirstItem / 30);
 
-    return NextResponse.json({
+    const result = {
       pledges_pending: pending,
       pledges_accepted: accepted,
       pledges_total: (pledges || []).length,
@@ -93,7 +101,11 @@ export async function GET() {
       items_added_30d: itemsAdded30d,
       total_items: totalCount,
       months_active: Math.max(1, monthsActive),
-    });
+    };
+
+    ALERTS_CACHE.set(user_id, { data: result, ts: Date.now() });
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('API /api/home/alerts crashed:', error);
     return NextResponse.json(
