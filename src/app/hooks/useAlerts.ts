@@ -117,6 +117,7 @@ export function useAlerts() {
   const prevAcceptedRef = useRef<number>(0);
   const costPerWearNotifiedRef = useRef(false);
   const lastStreakMilestoneRef = useRef(0);
+  const prevAlertIdsRef = useRef<Set<string>>(new Set());
 
   // Seen IDs stored in localStorage so persistent alerts (same content-hash)
   // don't reappear as unread after the user has viewed them.
@@ -384,6 +385,22 @@ export function useAlerts() {
       // Priority sort: error → warning → success → info
       const severityOrder: Record<string, number> = { error: 0, warning: 1, success: 2, info: 3 };
       items.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+      // Push notifications for new critical alerts
+      const currentIds = new Set(items.map((a) => a.id));
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const prevIds = prevAlertIdsRef.current;
+        for (const alert of items) {
+          if (!prevIds.has(alert.id) && (alert.severity === 'error' || alert.severity === 'warning')) {
+            new Notification('Outfitr', {
+              body: alert.message,
+              icon: '/favicon.ico',
+              tag: alert.id,
+            });
+          }
+        }
+      }
+      prevAlertIdsRef.current = currentIds;
 
       setAlerts(items);
       setHasLoaded(true);

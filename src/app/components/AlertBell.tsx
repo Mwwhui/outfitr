@@ -99,7 +99,12 @@ export default function AlertBell({ variant = 'sidebar' }: AlertBellProps) {
       });
     }
     setIsOpen((prev) => {
-      if (!prev) markRead();
+      if (!prev) {
+        markRead();
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }
       return !prev;
     });
   }, [calcPanelLeft, markRead]);
@@ -152,8 +157,9 @@ export default function AlertBell({ variant = 'sidebar' }: AlertBellProps) {
     prevUnreadCount.current = unreadCount;
   }, [unreadCount, hasLoaded]);
 
-  const handleAction = (href: string) => {
+  const handleAction = (href: string, id: string) => {
     setIsOpen(false);
+    dismissAlert(id);
     router.push(href);
   };
 
@@ -270,7 +276,7 @@ export default function AlertBell({ variant = 'sidebar' }: AlertBellProps) {
                         className={`group flex items-start gap-3 px-5 py-3.5 hover:bg-surface-container/40 transition cursor-pointer border-b border-outline-variant/20 last:border-b-0 ${
                           read ? 'opacity-50' : ''
                         }`}
-                        onClick={() => handleAction(alert.actionHref)}
+                        onClick={() => handleAction(alert.actionHref, alert.id)}
                       >
                         <span
                           className={`material-symbols-outlined text-lg mt-0.5 shrink-0 ${getSeverityColor(
