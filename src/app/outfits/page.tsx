@@ -118,8 +118,9 @@ function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onSche
   const [scheduling, setScheduling] = useState(false);
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const days = ['M', 'T', 'W', 'T', 'F'];
-  const dayIndices = [1, 2, 3, 4, 5];
+  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const dayIndices = [1, 2, 3, 4, 5, 6, 0];
+  const dayLabels: Record<number, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 0: 'Sun' };
 
   const toggleDay = (dayIndex: number) => {
     setSelectedDays((prev) =>
@@ -133,7 +134,7 @@ function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onSche
     if (selectedDays.length === 0) return;
     setScheduling(true);
     try {
-      const slots: Record<string, { id: string; name: string }> = {};
+      const slots: Record<string, { id: string; name: string; image_url: string | null; color: string | null; type: string }> = {};
       for (const item of items) {
         const key = item.type === 'Tops' ? 'top'
           : item.type === 'Bottoms' ? 'bottom'
@@ -142,7 +143,7 @@ function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onSche
           : item.type === 'Shoes' ? 'shoes'
           : item.type === 'Accessories' ? 'accessories'
           : null;
-        if (key) slots[key] = { id: item.id, name: item.name };
+        if (key) slots[key] = { id: item.id, name: item.name, image_url: item.image_url, color: item.color, type: item.type };
       }
       const name = items.map((i) => i.name).join(' + ');
       await Promise.all(selectedDays.map((dayIndex) =>
@@ -180,15 +181,15 @@ function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onSche
             disabled={scheduling}
             className="mt-2 w-full bg-primary text-on-primary text-sm py-1.5 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
           >
-            Schedule {selectedDays.length > 1 ? `${selectedDays.length} days` : ''}
+            Schedule Weekly
           </button>
         )}
       </div>
       <ConfirmModal
         open={showModal}
         title="Schedule Outfit"
-        message={`Schedule "${items.map((i) => i.name).join(' + ')}" to ${selectedDays.map((d) => days[dayIndices.indexOf(d)]).join(', ')}?`}
-        confirmLabel={selectedDays.length > 1 ? `Schedule to ${selectedDays.length} days` : 'Schedule'}
+        message={`Schedule "${items.map((i) => i.name).join(' + ')}" to ${selectedDays.map((d) => dayLabels[d]).join(', ')}?`}
+        confirmLabel={selectedDays.length > 1 ? `Schedule ${selectedDays.length} days` : 'Schedule'}
         cancelLabel="Cancel"
         confirmVariant="primary"
         onConfirm={handleConfirm}
