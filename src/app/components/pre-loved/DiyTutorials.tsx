@@ -43,7 +43,11 @@ const DIY_TUTORIALS = [
     title: 'Sweater into a Pillow Cover',
     difficulty: 'Medium',
     time: '30 min',
-    materials: ['Old sweater', 'Needle & thread or sewing machine', 'Pillow insert'],
+    materials: [
+      'Old sweater',
+      'Needle & thread or sewing machine',
+      'Pillow insert',
+    ],
     matchTypes: ['Tops', 'Sweater', 'Knitwear', 'Cardigan'],
     steps: [
       'Cut the sweater body into two equal rectangles slightly larger than your pillow.',
@@ -123,7 +127,12 @@ const DIY_TUTORIALS = [
     title: 'Tie-Dye Old Basics',
     difficulty: 'Easy',
     time: '45 min',
-    materials: ['Old white/light shirt', 'Fabric dye', 'Rubber bands', 'Plastic bag'],
+    materials: [
+      'Old white/light shirt',
+      'Fabric dye',
+      'Rubber bands',
+      'Plastic bag',
+    ],
     matchTypes: ['Tops', 'T-shirt', 'Tank Top', 'Shirt', 'Socks'],
     steps: [
       'Wet the shirt and wring out excess water.',
@@ -139,38 +148,134 @@ const DIY_TUTORIALS = [
 
 const CURATED_VIDEOS: Record<string, VideoResult[]> = {
   't-shirt upcycling': [
-    { id: 't-shirt-upcycling', title: 'T-Shirt Upcycling Ideas', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
-    { id: 't-shirt-to-bag', title: 'No-Sew T-Shirt Tote Bag', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
+    {
+      id: 't-shirt-upcycling',
+      title: 'T-Shirt Upcycling Ideas',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
+    {
+      id: 't-shirt-to-bag',
+      title: 'No-Sew T-Shirt Tote Bag',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
   ],
   'jeans upcycling': [
-    { id: 'jeans-upcycling', title: 'Creative Jeans Upcycling', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
-    { id: 'denim-shorts-diy', title: 'DIY Distressed Denim Shorts', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
+    {
+      id: 'jeans-upcycling',
+      title: 'Creative Jeans Upcycling',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
+    {
+      id: 'denim-shorts-diy',
+      title: 'DIY Distressed Denim Shorts',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
   ],
   'sweater upcycling': [
-    { id: 'sweater-upcycling', title: 'Sweater Upcycling Projects', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
-    { id: 'sweater-pillow', title: 'Sweater to Pillow Cover', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
+    {
+      id: 'sweater-upcycling',
+      title: 'Sweater Upcycling Projects',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
+    {
+      id: 'sweater-pillow',
+      title: 'Sweater to Pillow Cover',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
   ],
   'shirt upcycling': [
-    { id: 'shirt-upcycling', title: 'Button-Up Shirt Upcycling', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
-    { id: 'shirt-apron', title: 'Shirt to Apron DIY', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
+    {
+      id: 'shirt-upcycling',
+      title: 'Button-Up Shirt Upcycling',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
+    {
+      id: 'shirt-apron',
+      title: 'Shirt to Apron DIY',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
   ],
   'dress upcycling': [
-    { id: 'dress-upcycling', title: 'Dress Upcycling Ideas', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
-    { id: 'dress-to-skirt', title: 'Dress to Skirt Refashion', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
+    {
+      id: 'dress-upcycling',
+      title: 'Dress Upcycling Ideas',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
+    {
+      id: 'dress-to-skirt',
+      title: 'Dress to Skirt Refashion',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
   ],
   'fabric scrap DIY': [
-    { id: 'scrap-fabric-diy', title: 'Fabric Scrap Projects', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
-    { id: 'zero-waste-diy', title: 'Zero Waste Fabric DIYs', channelTitle: 'YouTube', thumbnail: '', publishedAt: '' },
+    {
+      id: 'scrap-fabric-diy',
+      title: 'Fabric Scrap Projects',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
+    {
+      id: 'zero-waste-diy',
+      title: 'Zero Waste Fabric DIYs',
+      channelTitle: 'YouTube',
+      thumbnail: '',
+      publishedAt: '',
+    },
   ],
 };
 
 const SEARCH_TOPICS = [
-  { label: 'T-shirts', query: 't-shirt upcycling', matchTypes: ['Tops', 'T-shirt', 'Tank Top'] },
-  { label: 'Jeans', query: 'jeans upcycling', matchTypes: ['Bottoms', 'Jeans', 'Denim'] },
-  { label: 'Sweaters', query: 'sweater upcycling', matchTypes: ['Tops', 'Sweater', 'Knitwear', 'Cardigan'] },
-  { label: 'Shirts', query: 'shirt upcycling', matchTypes: ['Tops', 'Shirt', 'Blouse', 'Button-up'] },
-  { label: 'Dresses', query: 'dress upcycling', matchTypes: ['One-Piece', 'Dress', 'Jumpsuit'] },
-  { label: 'Accessories', query: 'fabric scrap DIY', matchTypes: ['Tops', 'Bottoms', 'One-Piece'] },
+  {
+    label: 'T-shirts',
+    query: 't-shirt upcycling',
+    matchTypes: ['Tops', 'T-shirt', 'Tank Top'],
+  },
+  {
+    label: 'Jeans',
+    query: 'jeans upcycling',
+    matchTypes: ['Bottoms', 'Jeans', 'Denim'],
+  },
+  {
+    label: 'Sweaters',
+    query: 'sweater upcycling',
+    matchTypes: ['Tops', 'Sweater', 'Knitwear', 'Cardigan'],
+  },
+  {
+    label: 'Shirts',
+    query: 'shirt upcycling',
+    matchTypes: ['Tops', 'Shirt', 'Blouse', 'Button-up'],
+  },
+  {
+    label: 'Dresses',
+    query: 'dress upcycling',
+    matchTypes: ['One-Piece', 'Dress', 'Jumpsuit'],
+  },
+  {
+    label: 'Accessories',
+    query: 'fabric scrap DIY',
+    matchTypes: ['Tops', 'Bottoms', 'One-Piece'],
+  },
 ];
 
 interface WardrobeItem {
@@ -214,7 +319,10 @@ function countMatching(types: string[], wardrobe: WardrobeItem[]): number {
   ).length;
 }
 
-function getMatchingItems(types: string[], wardrobe: WardrobeItem[]): WardrobeItem[] {
+function getMatchingItems(
+  types: string[],
+  wardrobe: WardrobeItem[],
+): WardrobeItem[] {
   return wardrobe.filter((item) =>
     types.some((t) => item.type?.toLowerCase().includes(t.toLowerCase())),
   );
@@ -222,7 +330,9 @@ function getMatchingItems(types: string[], wardrobe: WardrobeItem[]): WardrobeIt
 
 export default function DiyTutorials() {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState<'guides' | 'videos' | 'saved'>('guides');
+  const [activeTab, setActiveTab] = useState<'guides' | 'videos' | 'saved'>(
+    'guides',
+  );
   const [expandedTutorial, setExpandedTutorial] = useState<number | null>(null);
 
   // Wardrobe
@@ -235,27 +345,36 @@ export default function DiyTutorials() {
 
   // Saves / completion
   const [saved, setSaved] = useState<Set<number>>(() => loadSet('diy_saved'));
-  const [completed, setCompleted] = useState<Set<number>>(() => loadSet('diy_completed'));
+  const [completed, setCompleted] = useState<Set<number>>(() =>
+    loadSet('diy_completed'),
+  );
   const [showSavedOnly, setShowSavedOnly] = useState(false);
   const [showCompletedOnly, setShowCompletedOnly] = useState(false);
 
   // Step progress
-  const [stepProgress, setStepProgress] = useState<Record<number, number[]>>(loadStepProgress);
+  const [stepProgress, setStepProgress] =
+    useState<Record<number, number[]>>(loadStepProgress);
 
   // Celebration confetti
   const [celebrating, setCelebrating] = useState<number | null>(null);
 
   // Saved videos
-  const [savedVideos, setSavedVideos] = useState<Record<string, VideoResult>>(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const raw = localStorage.getItem('diy_saved_videos');
-      return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
-  });
+  const [savedVideos, setSavedVideos] = useState<Record<string, VideoResult>>(
+    () => {
+      if (typeof window === 'undefined') return {};
+      try {
+        const raw = localStorage.getItem('diy_saved_videos');
+        return raw ? JSON.parse(raw) : {};
+      } catch {
+        return {};
+      }
+    },
+  );
 
   // Pagination
-  const [pageTokens, setPageTokens] = useState<Record<string, string | null>>({});
+  const [pageTokens, setPageTokens] = useState<Record<string, string | null>>(
+    {},
+  );
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Fetch wardrobe
@@ -286,78 +405,89 @@ export default function DiyTutorials() {
     return () => clearTimeout(t);
   }, [celebrating]);
 
-  const doSearch = useCallback(async (q: string, append = false) => {
-    setQuery(q);
+  const doSearch = useCallback(
+    async (q: string, append = false) => {
+      setQuery(q);
 
-    if (q === 'all') {
-      setVideos([]);
-      setPageTokens({});
-      const queries = SEARCH_TOPICS.map((t) => t.query);
-      try {
-        const results = await Promise.all(
-          queries.map((query) =>
-            fetch(`/api/diy/search?q=${encodeURIComponent(query)}`).then((r) =>
-              r.ok ? r.json() : { videos: [] },
+      if (q === 'all') {
+        setVideos([]);
+        setPageTokens({});
+        const queries = SEARCH_TOPICS.map((t) => t.query);
+        try {
+          const results = await Promise.all(
+            queries.map((query) =>
+              fetch(`/api/diy/search?q=${encodeURIComponent(query)}`).then(
+                (r) => (r.ok ? r.json() : { videos: [] }),
+              ),
             ),
-          ),
-        );
-        const allVideos = results.flatMap((r) => r.videos || []);
-        const newTokens: Record<string, string | null> = {};
-        queries.forEach((query, i) => {
-          newTokens[query] = results[i]?.nextPageToken || null;
-        });
-        if (allVideos.length > 0) {
-          setVideos(allVideos.slice(0, 20));
-          setPageTokens(newTokens);
-          return;
+          );
+          const allVideos = results.flatMap((r) => r.videos || []);
+          const newTokens: Record<string, string | null> = {};
+          queries.forEach((query, i) => {
+            newTokens[query] = results[i]?.nextPageToken || null;
+          });
+          if (allVideos.length > 0) {
+            setVideos(allVideos.slice(0, 20));
+            setPageTokens(newTokens);
+            return;
+          }
+        } catch {
+          // fall through
         }
-      } catch {
-        // fall through
+        // Fallback: merge curated all
+        const curated = queries.flatMap((query) => CURATED_VIDEOS[query] || []);
+        setVideos(curated.slice(0, 20));
+        return;
       }
-      // Fallback: merge curated all
-      const curated = queries.flatMap((query) => CURATED_VIDEOS[query] || []);
-      setVideos(curated.slice(0, 20));
-      return;
-    }
 
-    if (append) {
-      const token = pageTokens[q];
-      if (!token) return;
-      setLoadingMore(true);
+      if (append) {
+        const token = pageTokens[q];
+        if (!token) return;
+        setLoadingMore(true);
+        try {
+          const res = await fetch(
+            `/api/diy/search?q=${encodeURIComponent(q)}&pageToken=${token}`,
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.videos?.length > 0) {
+              setVideos((prev) => [...prev, ...data.videos]);
+              setPageTokens((prev) => ({
+                ...prev,
+                [q]: data.nextPageToken || null,
+              }));
+            }
+          }
+        } catch {
+          // silently fail
+        } finally {
+          setLoadingMore(false);
+        }
+        return;
+      }
+
+      setVideos([]);
       try {
-        const res = await fetch(`/api/diy/search?q=${encodeURIComponent(q)}&pageToken=${token}`);
+        const res = await fetch(`/api/diy/search?q=${encodeURIComponent(q)}`);
         if (res.ok) {
           const data = await res.json();
           if (data.videos?.length > 0) {
-            setVideos((prev) => [...prev, ...data.videos]);
-            setPageTokens((prev) => ({ ...prev, [q]: data.nextPageToken || null }));
+            setVideos(data.videos);
+            setPageTokens((prev) => ({
+              ...prev,
+              [q]: data.nextPageToken || null,
+            }));
+            return;
           }
         }
       } catch {
-        // silently fail
-      } finally {
-        setLoadingMore(false);
+        // fall through to curated
       }
-      return;
-    }
-
-    setVideos([]);
-    try {
-      const res = await fetch(`/api/diy/search?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.videos?.length > 0) {
-          setVideos(data.videos);
-          setPageTokens((prev) => ({ ...prev, [q]: data.nextPageToken || null }));
-          return;
-        }
-      }
-    } catch {
-      // fall through to curated
-    }
-    setVideos(CURATED_VIDEOS[q] || []);
-    setPageTokens((prev) => ({ ...prev, [q]: null }));
-  }, [pageTokens]);
+      setVideos(CURATED_VIDEOS[q] || []);
+      setPageTokens((prev) => ({ ...prev, [q]: null }));
+    },
+    [pageTokens],
+  );
 
   // Auto-search on video tab switch
   useEffect(() => {
@@ -428,13 +558,18 @@ export default function DiyTutorials() {
   const tabs = [
     { key: 'guides' as const, label: 'Written Guides' },
     { key: 'videos' as const, label: 'Video Tutorials' },
-    { key: 'saved' as const, label: `Saved (${saved.size + Object.keys(savedVideos).length})` },
+    {
+      key: 'saved' as const,
+      label: `Saved (${saved.size + Object.keys(savedVideos).length})`,
+    },
   ];
 
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-[#163422]">DIY Upcycling Tutorials</h3>
+        <h3 className="text-xl font-bold text-[#163422]">
+          DIY Upcycling Tutorials
+        </h3>
         {activeTab === 'guides' && wardrobe.length > 0 && (
           <p className="text-xs text-on-surface-variant/60">
             {wardrobe.length} items in wardrobe
@@ -463,7 +598,10 @@ export default function DiyTutorials() {
         <div>
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <button
-              onClick={() => { setShowSavedOnly(false); setShowCompletedOnly(false); }}
+              onClick={() => {
+                setShowSavedOnly(false);
+                setShowCompletedOnly(false);
+              }}
               className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
                 !showSavedOnly && !showCompletedOnly
                   ? 'bg-[#0f172a] text-white border-[#0f172a]'
@@ -473,45 +611,68 @@ export default function DiyTutorials() {
               All ({DIY_TUTORIALS.length})
             </button>
             <button
-              onClick={() => { setShowSavedOnly(true); setShowCompletedOnly(false); }}
+              onClick={() => {
+                setShowSavedOnly(true);
+                setShowCompletedOnly(false);
+              }}
               className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition flex items-center gap-1 ${
                 showSavedOnly
                   ? 'bg-[#0f172a] text-white border-[#0f172a]'
                   : 'bg-white text-on-surface-variant/60 border-gray-200 hover:border-gray-300'
               }`}
             >
-              <span className="material-symbols-outlined text-sm">bookmark</span>
+              <span className="material-symbols-outlined text-sm">
+                bookmark
+              </span>
               Saved ({saved.size})
             </button>
             <button
-              onClick={() => { setShowSavedOnly(false); setShowCompletedOnly(true); }}
+              onClick={() => {
+                setShowSavedOnly(false);
+                setShowCompletedOnly(true);
+              }}
               className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition flex items-center gap-1 ${
                 showCompletedOnly
                   ? 'bg-[#0f172a] text-white border-[#0f172a]'
                   : 'bg-white text-on-surface-variant/60 border-gray-200 hover:border-gray-300'
               }`}
             >
-              <span className="material-symbols-outlined text-sm">check_circle</span>
+              <span className="material-symbols-outlined text-sm">
+                check_circle
+              </span>
               Done ({completed.size})
             </button>
           </div>
 
           {filteredTutorials.length === 0 ? (
             <div className="text-center py-12 text-on-surface-variant/60">
-              <span className="material-symbols-outlined text-4xl mb-2">bookmark</span>
+              <span className="material-symbols-outlined text-4xl mb-2">
+                bookmark
+              </span>
               <p className="text-sm font-medium">No saved tutorials</p>
-              <p className="text-xs mt-1">Bookmark tutorials to find them here</p>
+              <p className="text-xs mt-1">
+                Bookmark tutorials to find them here
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
               {filteredTutorials.map((tutorial) => {
-                const matchedCount = countMatching(tutorial.matchTypes, wardrobe);
-                const matchingItems = getMatchingItems(tutorial.matchTypes, wardrobe);
+                const matchedCount = countMatching(
+                  tutorial.matchTypes,
+                  wardrobe,
+                );
+                const matchingItems = getMatchingItems(
+                  tutorial.matchTypes,
+                  wardrobe,
+                );
                 const isSaved = saved.has(tutorial.id);
                 const isCompleted = completed.has(tutorial.id);
                 const completedSteps = stepProgress[tutorial.id] || [];
                 const totalSteps = tutorial.steps.length;
-                const progressPct = totalSteps > 0 ? Math.round((completedSteps.length / totalSteps) * 100) : 0;
+                const progressPct =
+                  totalSteps > 0
+                    ? Math.round((completedSteps.length / totalSteps) * 100)
+                    : 0;
                 const isCelebrating = celebrating === tutorial.id;
 
                 return (
@@ -530,15 +691,21 @@ export default function DiyTutorials() {
                         )
                       }
                     >
-                      <div className={`bg-gradient-to-br ${tutorial.gradient} px-5 pt-5 pb-4`}>
+                      <div
+                        className={`bg-gradient-to-br ${tutorial.gradient} px-5 pt-5 pb-4`}
+                      >
                         <div className="flex items-start justify-between">
                           <span className="text-4xl">{tutorial.emoji}</span>
                           <div className="flex items-center gap-1.5">
                             {isSaved && (
-                              <span className="material-symbols-outlined text-sm text-amber-600">bookmark</span>
+                              <span className="material-symbols-outlined text-sm text-amber-600">
+                                bookmark
+                              </span>
                             )}
                             {isCompleted && (
-                              <span className="material-symbols-outlined text-sm text-green-600">check_circle</span>
+                              <span className="material-symbols-outlined text-sm text-green-600">
+                                check_circle
+                              </span>
                             )}
                             <span className="text-gray-400 text-base">
                               {expandedTutorial === tutorial.id ? '▲' : '▼'}
@@ -571,7 +738,10 @@ export default function DiyTutorials() {
                           {/* Action buttons */}
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={(e) => { e.stopPropagation(); toggleSaved(tutorial.id); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSaved(tutorial.id);
+                              }}
                               className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
                                 isSaved
                                   ? 'bg-amber-50 text-amber-700 border-amber-200'
@@ -584,7 +754,10 @@ export default function DiyTutorials() {
                               {isSaved ? 'Saved' : 'Save'}
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); toggleCompleted(tutorial.id); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCompleted(tutorial.id);
+                              }}
                               className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
                                 isCompleted
                                   ? 'bg-green-50 text-green-700 border-green-200'
@@ -592,7 +765,9 @@ export default function DiyTutorials() {
                               }`}
                             >
                               <span className="material-symbols-outlined text-sm">
-                                {isCompleted ? 'check_circle' : 'radio_button_unchecked'}
+                                {isCompleted
+                                  ? 'check_circle'
+                                  : 'radio_button_unchecked'}
                               </span>
                               {isCompleted ? 'Done' : 'Mark done'}
                             </button>
@@ -648,7 +823,9 @@ export default function DiyTutorials() {
                                   )}
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                  {matchingItems.length} item{matchingItems.length > 1 ? 's' : ''} fit this tutorial
+                                  {matchingItems.length} item
+                                  {matchingItems.length > 1 ? 's' : ''} fit this
+                                  tutorial
                                 </p>
                               </div>
                             </div>
@@ -683,9 +860,14 @@ export default function DiyTutorials() {
                                 return (
                                   <li key={i}>
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); toggleStep(tutorial.id, i); }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleStep(tutorial.id, i);
+                                      }}
                                       className={`w-full flex items-start gap-2.5 text-left p-2 rounded-xl transition ${
-                                        done ? 'bg-green-50/50' : 'hover:bg-gray-50'
+                                        done
+                                          ? 'bg-green-50/50'
+                                          : 'hover:bg-gray-50'
                                       }`}
                                     >
                                       <span
@@ -696,16 +878,22 @@ export default function DiyTutorials() {
                                         }`}
                                       >
                                         {done ? (
-                                          <span className="material-symbols-outlined text-sm">check</span>
+                                          <span className="material-symbols-outlined text-sm">
+                                            check
+                                          </span>
                                         ) : (
                                           i + 1
                                         )}
                                       </span>
                                       <span
                                         className={`text-sm leading-snug transition ${
-                                          done ? 'text-gray-400 line-through' : 'text-gray-700'
+                                          done
+                                            ? 'text-gray-400 line-through'
+                                            : 'text-gray-700'
                                         }`}
-                                        dangerouslySetInnerHTML={{ __html: step }}
+                                        dangerouslySetInnerHTML={{
+                                          __html: step,
+                                        }}
                                       />
                                     </button>
                                   </li>
@@ -716,7 +904,8 @@ export default function DiyTutorials() {
                             {progressPct === 100 && !isCompleted && (
                               <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
                                 <p className="text-xs font-semibold text-green-700">
-                                  All steps done! Mark this tutorial as complete above.
+                                  All steps done! Mark this tutorial as complete
+                                  above.
                                 </p>
                               </div>
                             )}
@@ -731,7 +920,10 @@ export default function DiyTutorials() {
                                     <span
                                       key={emoji}
                                       className="text-xl animate-bounce"
-                                      style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.6s' }}
+                                      style={{
+                                        animationDelay: `${i * 0.15}s`,
+                                        animationDuration: '0.6s',
+                                      }}
                                     >
                                       {emoji}
                                     </span>
@@ -743,7 +935,8 @@ export default function DiyTutorials() {
                                   You saved an item from landfill! 🌍
                                 </p>
                                 <p className="text-[11px] text-green-600 mt-0.5">
-                                  ~2.5 kg CO₂e saved by extending this garment&apos;s life
+                                  ~2.5 kg CO₂e saved by extending this
+                                  garment&apos;s life
                                 </p>
                               </div>
                             </div>
@@ -774,7 +967,10 @@ export default function DiyTutorials() {
               All
               {!wardrobeLoading && (
                 <span className="text-[10px] opacity-60">
-                  {SEARCH_TOPICS.reduce((s, t) => s + countMatching(t.matchTypes, wardrobe), 0)}
+                  {SEARCH_TOPICS.reduce(
+                    (s, t) => s + countMatching(t.matchTypes, wardrobe),
+                    0,
+                  )}
                 </span>
               )}
             </button>
@@ -792,7 +988,9 @@ export default function DiyTutorials() {
                 >
                   {topic.label}
                   {!wardrobeLoading && (
-                    <span className="text-[10px] opacity-60">{matchedCount}</span>
+                    <span className="text-[10px] opacity-60">
+                      {matchedCount}
+                    </span>
                   )}
                 </button>
               );
@@ -804,7 +1002,9 @@ export default function DiyTutorials() {
             loading={false}
             savedVideoIds={new Set(Object.keys(savedVideos))}
             onToggleSave={toggleSavedVideo}
-            onLoadMore={query !== 'all' && pageTokens[query] ? loadMore : undefined}
+            onLoadMore={
+              query !== 'all' && pageTokens[query] ? loadMore : undefined
+            }
             hasMore={query !== 'all' && !!pageTokens[query]}
             loadingMore={loadingMore}
           />
@@ -822,37 +1022,44 @@ export default function DiyTutorials() {
                 Written Guides ({saved.size})
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                {DIY_TUTORIALS.filter((t) => saved.has(t.id)).map((tutorial) => {
-                  const matchedCount = countMatching(tutorial.matchTypes, wardrobe);
-                  const isCompleted = completed.has(tutorial.id);
-                  return (
-                    <div
-                      key={tutorial.id}
-                      className={`break-inside-avoid bg-white rounded-2xl border hover:shadow-md transition-shadow overflow-hidden ${
-                        isCompleted ? 'border-green-300' : 'border-gray-200'
-                      }`}
-                    >
+                {DIY_TUTORIALS.filter((t) => saved.has(t.id)).map(
+                  (tutorial) => {
+                    const matchedCount = countMatching(
+                      tutorial.matchTypes,
+                      wardrobe,
+                    );
+                    const isCompleted = completed.has(tutorial.id);
+                    return (
                       <div
-                        className={`bg-gradient-to-br ${tutorial.gradient} px-4 py-3`}
+                        key={tutorial.id}
+                        className={`break-inside-avoid bg-white rounded-2xl border hover:shadow-md transition-shadow overflow-hidden ${
+                          isCompleted ? 'border-green-300' : 'border-gray-200'
+                        }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-2xl">{tutorial.emoji}</span>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-[#0f172a] text-sm leading-snug">
-                              {tutorial.title}
-                              {isCompleted && <span className="ml-1 text-green-600">✓</span>}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] bg-white/70 text-gray-600 px-1.5 py-0.5 rounded-full">
-                                {tutorial.difficulty} · {tutorial.time}
-                              </span>
+                        <div
+                          className={`bg-gradient-to-br ${tutorial.gradient} px-4 py-3`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl">{tutorial.emoji}</span>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-[#0f172a] text-sm leading-snug">
+                                {tutorial.title}
+                                {isCompleted && (
+                                  <span className="ml-1 text-green-600">✓</span>
+                                )}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] bg-white/70 text-gray-600 px-1.5 py-0.5 rounded-full">
+                                  {tutorial.difficulty} · {tutorial.time}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  },
+                )}
               </div>
             </div>
           )}
@@ -861,7 +1068,9 @@ export default function DiyTutorials() {
           {Object.keys(savedVideos).length > 0 && (
             <div>
               <h4 className="text-sm font-bold text-[#163422] mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm">smart_display</span>
+                <span className="material-symbols-outlined text-sm">
+                  smart_display
+                </span>
                 Videos ({Object.keys(savedVideos).length})
               </h4>
               <DiyVideoGrid
@@ -876,9 +1085,13 @@ export default function DiyTutorials() {
           {/* Empty state */}
           {saved.size === 0 && Object.keys(savedVideos).length === 0 && (
             <div className="text-center py-12 text-on-surface-variant/60">
-              <span className="material-symbols-outlined text-4xl mb-2">bookmark</span>
+              <span className="material-symbols-outlined text-4xl mb-2">
+                bookmark
+              </span>
               <p className="text-sm font-medium">No saved items yet</p>
-              <p className="text-xs mt-1">Bookmark written guides or videos to find them here</p>
+              <p className="text-xs mt-1">
+                Bookmark written guides or videos to find them here
+              </p>
             </div>
           )}
         </div>
