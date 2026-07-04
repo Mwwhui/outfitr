@@ -236,7 +236,7 @@ export function useAlerts() {
 
       weatherAlerts.forEach((w) => {
         items.push({
-          id: makeId('weather', w.message + w.severity),
+          id: makeId('weather', w.message + 'warning'),
           type: 'weather',
           icon: w.icon,
           message: w.message,
