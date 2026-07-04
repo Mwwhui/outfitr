@@ -284,15 +284,16 @@ export default function OutfitsPage() {
   >('favorites');
   const [dnaLoaded, setDnaLoaded] = useState(false);
 
-  const { data: freqData, isLoading: combosLoading } = useFrequentCombos(10);
+  const { data: freqData, isLoading: combosLoading } = useFrequentCombos(session?.user?.id, 10);
   const {
     data: dna,
     refetch: refetchDna,
     isLoading: dnaLoading,
     fetchStatus: dnaFetchStatus,
-  } = useOutfitDNA();
-  const { data: weatherResult } = useWeather();
+  } = useOutfitDNA(session?.user?.id);
+  const { data: weatherResult } = useWeather(status === 'authenticated');
   const { data: plans = [], refetch: refetchPlans } = useOutfitPlans(
+    session?.user?.id,
     new Date().toISOString().slice(0, 10),
     new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
   );
@@ -341,6 +342,7 @@ export default function OutfitsPage() {
   }, [weatherResult]);
 
   const { data: suggestionsData } = useOutfitSuggestions(
+    session?.user?.id,
     weather
       ? {
           temperature: weather.temp,

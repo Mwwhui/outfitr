@@ -56,9 +56,9 @@ export interface PartnerPledge {
   items: PartnerPledgeItem[];
 }
 
-export const partnerPledgesOptions = (status?: string) =>
+export const partnerPledgesOptions = (userId?: string, status?: string) =>
   queryOptions({
-    queryKey: ['partner-pledges', status],
+    queryKey: ['partner-pledges', userId, status],
     queryFn: async (): Promise<PartnerPledge[]> => {
       const params = status ? `?status=${status}` : '';
       const res = await fetch(`/api/partner/pledges${params}`);
@@ -67,9 +67,10 @@ export const partnerPledgesOptions = (status?: string) =>
     },
     staleTime: 60 * 1000,
     retry: 1,
+    enabled: !!userId,
     placeholderData: (previous) => previous,
   });
 
-export function usePartnerPledges(status?: string) {
-  return useQuery(partnerPledgesOptions(status));
+export function usePartnerPledges(userId?: string, status?: string) {
+  return useQuery(partnerPledgesOptions(userId, status));
 }

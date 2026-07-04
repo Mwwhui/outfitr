@@ -135,9 +135,10 @@ export function useMonthlyInsights(userId?: string) {
 export const outfitSuggestOptions = (
   occasion: string,
   weather: { temperature?: number; weathercode?: number } | null,
+  userId?: string,
 ) =>
   queryOptions({
-    queryKey: ['outfit-suggest', occasion, weather?.temperature ?? 'no-weather'],
+    queryKey: ['outfit-suggest', userId, occasion, weather?.temperature ?? 'no-weather'],
     queryFn: async (): Promise<OutfitSuggestion | null> => {
       const res = await fetch('/api/outfits/suggest', {
         method: 'POST',
@@ -154,7 +155,7 @@ export const outfitSuggestOptions = (
       return data.suggestions?.[0] || null;
     },
     staleTime: 30 * 60 * 1000,
-    enabled: !!occasion,
+    enabled: !!userId && !!occasion,
     retry: 1,
     placeholderData: (previous) => previous,
   });
@@ -162,8 +163,9 @@ export const outfitSuggestOptions = (
 export function useOutfitSuggestion(
   occasion: string,
   weather: { temperature?: number; weathercode?: number } | null,
+  userId?: string,
 ) {
-  return useQuery(outfitSuggestOptions(occasion, weather));
+  return useQuery(outfitSuggestOptions(occasion, weather, userId));
 }
 
 export const pledgesOptions = (userId?: string) =>

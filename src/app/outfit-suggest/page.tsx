@@ -8,7 +8,7 @@ import { useWeather } from '@/hooks/queries/weather';
 import { useClothes } from '@/hooks/queries/wardrobe';
 import Loader from '../components/Loader';
 import OutfitSuggestionCard from '../components/OutfitSuggestionCard';
-import type { SuggestedOutfit } from '@/lib/suggestOutfits';
+import type { ClothingItem, SuggestedOutfit } from '@/lib/suggestOutfits';
 import type { WeatherData } from '@/hooks/queries/weather';
 
 type OccasionKey = 'casual' | 'business' | 'formal' | 'sport' | 'date';
@@ -31,13 +31,13 @@ function weatherEmoji(code: number): string {
 }
 
 interface SlotsState {
-  top: any;
-  bottom: any;
-  onepiece: any;
-  outerwear: any;
+  top: ClothingItem | null;
+  bottom: ClothingItem | null;
+  onepiece: ClothingItem | null;
+  outerwear: ClothingItem | null;
 }
 
-function clothingToSlots(items: any[]): SlotsState {
+function clothingToSlots(items: ClothingItem[]): SlotsState {
   const slots: SlotsState = { top: null, bottom: null, onepiece: null, outerwear: null };
   for (const item of items) {
     if (item.type === 'Tops') slots.top = item;

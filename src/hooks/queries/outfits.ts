@@ -27,9 +27,9 @@ export interface FrequentResponse {
   unique_combos: number;
 }
 
-export const frequentCombosOptions = (limit = 10) =>
+export const frequentCombosOptions = (userId?: string, limit = 10) =>
   queryOptions({
-    queryKey: ['frequent-combos', limit],
+    queryKey: ['frequent-combos', userId, limit],
     queryFn: async (): Promise<FrequentResponse> => {
       const res = await fetch(`/api/outfits/frequent?limit=${limit}`);
       if (!res.ok) throw new Error('Failed to fetch frequent combos');
@@ -37,11 +37,12 @@ export const frequentCombosOptions = (limit = 10) =>
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
+    enabled: !!userId,
     placeholderData: (previous) => previous,
   });
 
-export function useFrequentCombos(limit = 10) {
-  return useQuery(frequentCombosOptions(limit));
+export function useFrequentCombos(userId?: string, limit = 10) {
+  return useQuery(frequentCombosOptions(userId, limit));
 }
 
 export interface OutfitDNA {
@@ -63,9 +64,9 @@ export interface OutfitDNA {
   style_summary: string;
 }
 
-export const outfitDnaOptions = () =>
+export const outfitDnaOptions = (userId?: string) =>
   queryOptions({
-    queryKey: ['outfit-dna'],
+    queryKey: ['outfit-dna', userId],
     queryFn: async (): Promise<OutfitDNA> => {
       const res = await fetch('/api/outfits/dna', { method: 'POST', body: '{}' });
       if (!res.ok) throw new Error('Failed to fetch outfit DNA');
@@ -73,11 +74,12 @@ export const outfitDnaOptions = () =>
     },
     staleTime: 7 * 24 * 60 * 60 * 1000,
     retry: 1,
+    enabled: !!userId,
     placeholderData: (previous) => previous,
   });
 
-export function useOutfitDNA() {
-  return useQuery(outfitDnaOptions());
+export function useOutfitDNA(userId?: string) {
+  return useQuery(outfitDnaOptions(userId));
 }
 
 export interface SuggestionItem {
@@ -108,9 +110,9 @@ export interface SuggestWeather {
   weathercode: number;
 }
 
-export const outfitSuggestionsOptions = (weather?: SuggestWeather | null) =>
+export const outfitSuggestionsOptions = (userId?: string, weather?: SuggestWeather | null) =>
   queryOptions({
-    queryKey: ['outfit-suggestions', weather],
+    queryKey: ['outfit-suggestions', userId, weather],
     queryFn: async (): Promise<SuggestionsResponse> => {
       const res = await fetch('/api/outfits/suggest', {
         method: 'POST',
@@ -122,10 +124,10 @@ export const outfitSuggestionsOptions = (weather?: SuggestWeather | null) =>
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
-    enabled: !!weather,
+    enabled: !!userId && !!weather,
     placeholderData: (previous) => previous,
   });
 
-export function useOutfitSuggestions(weather?: SuggestWeather | null) {
-  return useQuery(outfitSuggestionsOptions(weather));
+export function useOutfitSuggestions(userId?: string, weather?: SuggestWeather | null) {
+  return useQuery(outfitSuggestionsOptions(userId, weather));
 }

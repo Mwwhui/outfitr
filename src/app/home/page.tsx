@@ -66,8 +66,8 @@ export default function HomePage() {
   const router = useRouter();
 
   // Hooks
-  const { data: weatherData, isLoading: weatherLoading } = useWeather();
-  const { data: calendar, isLoading: calendarLoading } = useCalendarEvents();
+  const { data: weatherData, isLoading: weatherLoading } = useWeather(status === 'authenticated');
+  const { data: calendar, isLoading: calendarLoading } = useCalendarEvents(session?.user?.id);
   const {
     data: insights,
     isLoading: insightsLoading,
@@ -95,6 +95,7 @@ export default function HomePage() {
   const { data: outfit } = useOutfitSuggestion(
     detectedOccasion,
     weatherData?.current ?? null,
+    session?.user?.id,
   );
   const { data: pledgesData } = usePledges(session?.user?.id);
   const { data: sustainability } = useSustainabilityStory(session?.user?.id);

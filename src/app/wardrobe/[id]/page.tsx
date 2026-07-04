@@ -39,7 +39,7 @@ export default function EditWardrobePage() {
   const userId = session?.user?.id;
   const formInitRef = useRef(false);
 
-  const { data: item, isLoading: itemLoading } = useItem(id);
+  const { data: item, isLoading: itemLoading } = useItem(id, userId);
   const { data: categories = [] } = useCategories();
   const { data: brandSuggestions = [] } = useSuggestions('brands', userId);
   const { data: locationSuggestions = [] } = useSuggestions(
@@ -189,7 +189,7 @@ export default function EditWardrobePage() {
 
     setSaving(false);
     queryClient.invalidateQueries({ queryKey: ['clothes', userId] });
-    queryClient.invalidateQueries({ queryKey: ['item', id] });
+    queryClient.invalidateQueries({ queryKey: ['item', userId, id] });
     router.push('/wardrobe');
   };
 

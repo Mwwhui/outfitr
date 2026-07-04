@@ -127,9 +127,9 @@ export interface ItemDetail {
   deleted_at?: string | null;
 }
 
-export const itemOptions = (id?: string) =>
+export const itemOptions = (id?: string, userId?: string) =>
   queryOptions({
-    queryKey: ['item', id],
+    queryKey: ['item', userId, id],
     queryFn: async (): Promise<ItemDetail> => {
       const res = await fetch(`/api/clothes/${id}`);
       if (!res.ok) throw new Error('Failed to fetch item');
@@ -137,12 +137,12 @@ export const itemOptions = (id?: string) =>
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
-    enabled: !!id,
+    enabled: !!id && !!userId,
     placeholderData: (previous) => previous,
   });
 
-export function useItem(id?: string) {
-  return useQuery(itemOptions(id));
+export function useItem(id?: string, userId?: string) {
+  return useQuery(itemOptions(id, userId));
 }
 
 export interface SimilarItem {

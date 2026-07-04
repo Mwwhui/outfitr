@@ -137,6 +137,7 @@ export default function CalendarPage() {
 
   const queryClient = useQueryClient();
   const { data: plans, isLoading: plansLoading } = useOutfitPlans(
+    session?.user?.id,
     gridStart,
     gridEnd,
   );
@@ -148,7 +149,7 @@ export default function CalendarPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
-  const { data: googleConnected } = useGoogleStatus(status === 'authenticated');
+  const { data: googleConnected } = useGoogleStatus(session?.user?.id, status === 'authenticated');
   const isGoogleConnected = googleConnected ?? false;
 
   // Redirect if not logged in

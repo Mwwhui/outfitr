@@ -123,7 +123,7 @@ export default function PlannerPage() {
     setUrlReady(true);
   }, [searchParams]);
 
-  const { data: outfitPlans } = useOutfitPlans(selectedDate, selectedDate);
+  const { data: outfitPlans } = useOutfitPlans(session?.user?.id, selectedDate, selectedDate);
 
   useEffect(() => {
     if (!urlReady) return;

@@ -23,7 +23,7 @@ export default function PartnerDashboard() {
 
   const [activeTab, setActiveTab] = useState<Tab>('pending');
 
-  const { data: pledges = [], isLoading, refetch } = usePartnerPledges(activeTab !== 'all' ? activeTab : undefined);
+  const { data: pledges = [], isLoading, refetch } = usePartnerPledges(session?.user?.id, activeTab !== 'all' ? activeTab : undefined);
 
   if (status === 'unauthenticated') {
     router.push('/auth/login');

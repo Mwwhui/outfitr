@@ -218,8 +218,8 @@ export default function Sidebar({
   };
 
   const handleLogout = async () => {
-    queryClient.clear();
     await signOut({ redirect: false });
+    queryClient.clear();
     router.push('/auth/login');
     onNavigate?.();
   };

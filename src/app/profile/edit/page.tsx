@@ -51,7 +51,7 @@ export default function EditProfilePage() {
         contact_no: u.contact_no || "",
       };
     },
-    enabled: status === "authenticated",
+    enabled: status === "authenticated" && !!session?.user?.id,
     staleTime: 5 * 60 * 1000,
     retry: 1,
     placeholderData: (previous) => previous,

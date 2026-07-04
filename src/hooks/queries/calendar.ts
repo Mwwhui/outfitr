@@ -26,9 +26,9 @@ export interface OutfitPlanRow {
   name?: string | null;
 }
 
-export const outfitPlansOptions = (from?: string, to?: string) =>
+export const outfitPlansOptions = (userId?: string, from?: string, to?: string) =>
   queryOptions({
-    queryKey: ['outfit-plans', from, to],
+    queryKey: ['outfit-plans', userId, from, to],
     queryFn: async (): Promise<OutfitPlanRow[]> => {
       const res = await fetch(`/api/outfit_plans?from=${from}&to=${to}`);
       if (!res.ok) {
@@ -40,17 +40,17 @@ export const outfitPlansOptions = (from?: string, to?: string) =>
     },
     staleTime: 60 * 1000,
     retry: 1,
-    enabled: !!from && !!to,
+    enabled: !!userId && !!from && !!to,
     placeholderData: (previous) => previous,
   });
 
-export function useOutfitPlans(from?: string, to?: string) {
-  return useQuery(outfitPlansOptions(from, to));
+export function useOutfitPlans(userId?: string, from?: string, to?: string) {
+  return useQuery(outfitPlansOptions(userId, from, to));
 }
 
-export function useGoogleStatus(enabled = true) {
+export function useGoogleStatus(userId?: string, enabled = true) {
   return useQuery({
-    queryKey: ['google-status'],
+    queryKey: ['google-status', userId],
     queryFn: async (): Promise<boolean> => {
       try {
         const res = await fetch('/api/integrations/google/status');
@@ -68,11 +68,11 @@ export function useGoogleStatus(enabled = true) {
   });
 }
 
-export function useCalendarEvents() {
+export function useCalendarEvents(userId?: string) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   return useQuery({
-    queryKey: ['calendar', today],
+    queryKey: ['calendar', userId, today],
     queryFn: async (): Promise<CalendarResult> => {
       try {
         const statusRes = await fetch('/api/integrations/google/status');
@@ -103,6 +103,7 @@ export function useCalendarEvents() {
     },
     staleTime: 60 * 1000,
     retry: 1,
+    enabled: !!userId,
     placeholderData: (previous) => previous,
   });
 }
