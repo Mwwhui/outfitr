@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import Loader from '../../components/Loader';
 
 interface PledgeItem {
@@ -313,10 +314,12 @@ export default function PledgeDetailPage() {
                     className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100"
                   >
                     {item.image_url ? (
-                      <img
+                      <Image
                         src={item.image_url}
                         alt={item.name}
-                        className="w-10 h-10 rounded-lg object-cover shrink-0"
+                        width={40}
+                        height={40}
+                        className="rounded-lg object-cover shrink-0"
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center text-xs text-gray-400 shrink-0">

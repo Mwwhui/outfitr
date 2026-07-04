@@ -1,31 +1,22 @@
 'use client';
 
-import {
-  JSXElementConstructor,
-  Key,
-  ReactElement,
-  ReactNode,
-  ReactPortal,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import toast from 'react-hot-toast';
+import {
+  useOutfitPlans,
+  useGoogleStatus,
+  type OutfitPlanRow,
+} from '@/hooks/queries/calendar';
+import { useDeleteOutfitPlan } from '@/hooks/mutations/outfitPlans';
 import Loader from '../components/Loader';
 import GoogleCalendarConnectCard from '../components/GoogleCalendarConnectCard';
 import GoogleEventsPanel from '../components/GoogleEventsPanel';
 import ConfirmModal from '../components/ConfirmModal';
 
 type TimeSlot = 'day' | 'night';
-
-type OutfitPlanRow = {
-  id?: string;
-  date: string; // "YYYY-MM-DD"
-  time_slot: TimeSlot;
-  slots: Record<string, any>; // saved JSONB
-};
 
 function pad2(n: number) {
   return String(n).padStart(2, '0');
@@ -90,10 +81,11 @@ function TooltipSlotGroup({
             className="relative aspect-[3/4] rounded-lg overflow-hidden bg-slate-100"
           >
             {item.image_url ? (
-              <img
+              <Image
+                fill
                 src={item.image_url}
                 alt={item.name}
-                className="w-full h-full object-cover"
+                className="object-cover"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-slate-400 text-[10px]">
@@ -131,8 +123,25 @@ export default function CalendarPage() {
   const [viewMonth, setViewMonth] = useState<Date>(() =>
     startOfMonth(new Date()),
   );
-  const [loading, setLoading] = useState(true);
-  const [plans, setPlans] = useState<OutfitPlanRow[]>([]);
+  const gridStart = useMemo(() => {
+    const first = startOfMonth(viewMonth);
+    const gs = new Date(first);
+    gs.setDate(first.getDate() - mondayIndex(first.getDay()));
+    return toISODate(gs);
+  }, [viewMonth]);
+
+  const gridEnd = useMemo(() => {
+    const last = endOfMonth(viewMonth);
+    const ge = new Date(last);
+    ge.setDate(last.getDate() + (6 - mondayIndex(last.getDay())));
+    return toISODate(ge);
+  }, [viewMonth]);
+
+  const { data: plans, isLoading: plansLoading } = useOutfitPlans(
+    session?.user?.id,
+    gridStart,
+    gridEnd,
+  );
   const [selectedDate, setSelectedDate] = useState<string>(() =>
     toISODate(new Date()),
   );
@@ -141,63 +150,23 @@ export default function CalendarPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
-  const [googleConnected, setGoogleConnected] = useState(false);
-
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-    fetch('/api/integrations/google/status')
-      .then((r) => (r.ok ? r.json() : { connected: false }))
-      .then((j) => setGoogleConnected(Boolean(j.connected)))
-      .catch(() => setGoogleConnected(false));
-  }, [status]);
+  const { data: googleConnected } = useGoogleStatus(
+    session?.user?.id,
+    status === 'authenticated',
+  );
+  const isGoogleConnected = googleConnected ?? false;
+  const deletePlan = useDeleteOutfitPlan(session?.user?.id);
 
   // Redirect if not logged in
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/auth/login');
   }, [status, router]);
 
-  // Fetch plans for the current month range
-  useEffect(() => {
-    async function loadMonthPlans() {
-      if (status !== 'authenticated') return;
-
-      setLoading(true);
-      try {
-        // Build range: from grid start to grid end so badges always show
-        const first = startOfMonth(viewMonth);
-        const last = endOfMonth(viewMonth);
-
-        const gridStart = new Date(first);
-        gridStart.setDate(first.getDate() - mondayIndex(first.getDay()));
-
-        const gridEnd = new Date(last);
-        gridEnd.setDate(last.getDate() + (6 - mondayIndex(last.getDay())));
-
-        const from = toISODate(gridStart);
-        const to = toISODate(gridEnd);
-
-        const res = await fetch(`/api/outfit_plans?from=${from}&to=${to}`);
-        if (!res.ok) {
-          console.error('Failed to load outfit plans:', await res.text());
-          setPlans([]);
-          return;
-        }
-        const data = await res.json();
-        setPlans(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error('Error loading outfit plans:', e);
-        setPlans([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadMonthPlans();
-  }, [viewMonth, status]);
+  // Fetch plans for the current month range (handled by useOutfitPlans above)
 
   const planMap = useMemo(() => {
     const m = new Map<string, { day?: OutfitPlanRow; night?: OutfitPlanRow }>();
-    for (const p of plans) {
+    for (const p of plans || []) {
       const key = p.date;
       if (!m.has(key)) m.set(key, {});
       const entry = m.get(key)!;
@@ -242,14 +211,9 @@ export default function CalendarPage() {
   const handleDeletePlan = async (planId: string) => {
     setDeletingPlanId(planId);
     try {
-      const res = await fetch(`/api/outfit_plans/${planId}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('Failed to delete');
-      setPlans((prev) => prev.filter((p) => p.id !== planId));
+      await deletePlan.mutateAsync(planId);
       toast.success('Outfit deleted');
-    } catch (e) {
-      console.error('Delete outfit plan failed:', e);
+    } catch {
       toast.error('Failed to delete outfit');
     } finally {
       setDeletingPlanId(null);
@@ -264,7 +228,9 @@ export default function CalendarPage() {
   return (
     <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-[#163422] font-headline">Calendar</h1>
+        <h1 className="text-3xl font-bold text-[#163422] font-headline">
+          Calendar
+        </h1>
       </div>
 
       <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
@@ -307,7 +273,7 @@ export default function CalendarPage() {
             </div>
 
             {/* Grid */}
-            {loading ? (
+            {plansLoading ? (
               <div className="py-10">
                 <Loader message="Loading outfits..." />
               </div>
@@ -373,11 +339,15 @@ export default function CalendarPage() {
                       </div>
 
                       {entry && (hasDay || hasNight) && (
-                        <div className={`absolute bottom-full mb-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 hidden group-hover:block pointer-events-none ${
-                          d.getDay() <= 2 ? 'left-0'
-                          : d.getDay() === 0 || d.getDay() >= 6 ? 'right-0'
-                          : 'left-1/2 -translate-x-1/2'
-                        }`}>
+                        <div
+                          className={`absolute bottom-full mb-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 hidden group-hover:block pointer-events-none ${
+                            d.getDay() <= 2
+                              ? 'left-0'
+                              : d.getDay() === 0 || d.getDay() >= 6
+                                ? 'right-0'
+                                : 'left-1/2 -translate-x-1/2'
+                          }`}
+                        >
                           {entry.day && (
                             <TooltipSlotGroup
                               label="☀ Day"
@@ -406,7 +376,7 @@ export default function CalendarPage() {
           <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
             {/* Google Calendar connect + toggle */}
             <GoogleCalendarConnectCard
-              connected={googleConnected}
+              connected={isGoogleConnected}
               enabled={showGoogleEvents}
               onToggle={setShowGoogleEvents}
             />
@@ -560,7 +530,7 @@ export default function CalendarPage() {
                 <GoogleEventsPanel
                   date={selectedDate}
                   enabled={showGoogleEvents}
-                  connected={googleConnected}
+                  connected={isGoogleConnected}
                 />
 
                 {/* Planner CTA */}

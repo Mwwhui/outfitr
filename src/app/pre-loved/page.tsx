@@ -5,6 +5,10 @@ import toast from 'react-hot-toast';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
+import { usePartners } from '@/hooks/queries/partners';
+import { useClothes } from '@/hooks/queries/wardrobe';
+import { useCreatePledge } from '@/hooks/mutations/pledges';
 // Sub-components
 import ActionCategoryCards, {
   ActionCategory,
@@ -13,16 +17,25 @@ import DiyTutorials from '../components/pre-loved/DiyTutorials';
 import PartnerDirectory, {
   Partner,
 } from '../components/pre-loved/PartnerDirectory';
-import PartnerDrawer, { ClothesItem } from '../components/pre-loved/PartnerDrawer';
-import { recommendDisposal, countRecommendations, DisposalMethod } from '@/lib/disposalRecommender';
+import PartnerDrawer, {
+  ClothesItem,
+} from '../components/pre-loved/PartnerDrawer';
+import {
+  recommendDisposal,
+  countRecommendations,
+  DisposalMethod,
+} from '@/lib/disposalRecommender';
 
 const DynamicLeafletMap = dynamic(
   () => import('../components/pre-loved/LeafletMap'),
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex items-center justify-center bg-gray-50 text-gray-400">
-        Loading map module...
+      <div className="w-full h-full bg-surface-variant rounded-2xl animate-pulse flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+          <div className="h-3 bg-surface-variant rounded w-32" />
+        </div>
       </div>
     ),
   },
@@ -59,20 +72,32 @@ export default function PreLovedPage() {
   const [sortBy, setSortBy] = useState<'distance' | 'name'>('distance');
 
   // Data States
-  const [partners, setPartners] = useState<Partner[]>([]);
-  const [loadingPartners, setLoadingPartners] = useState(true);
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(
     null,
   );
   const [loadingLocation, setLoadingLocation] = useState(true);
-  const [wardrobeItems, setWardrobeItems] = useState<ClothesItem[]>([]);
-  const [loadingItems, setLoadingItems] = useState(true);
-
-  // Pending action items (from duplicate comparison)
-  const [pendingItems, setPendingItems] = useState<ClothesItem[]>([]);
-  const [loadingPending, setLoadingPending] = useState(true);
   const [showPendingSection, setShowPendingSection] = useState(false);
-  const [pendingActionType, setPendingActionType] = useState<DisposalMethod | null>(null);
+  const [pendingActionType, setPendingActionType] =
+    useState<DisposalMethod | null>(null);
+
+  const { data: partners = [], isLoading: loadingPartners } = usePartners();
+  const { data: allClothes = [], isLoading: clothesLoading } = useClothes(
+    session?.user?.id,
+  );
+  const createPledge = useCreatePledge(session?.user?.id);
+
+  const wardrobeItems: ClothesItem[] = useMemo(
+    () => allClothes.filter((c: any) => c.status !== 'pending_action'),
+    [allClothes],
+  );
+
+  const pendingItems: ClothesItem[] = useMemo(
+    () =>
+      allClothes.filter(
+        (c: any) => (c as Record<string, unknown>).status === 'pending_action',
+      ),
+    [allClothes],
+  );
 
   const recommendations = useMemo(() => {
     const map: Record<string, ReturnType<typeof recommendDisposal>> = {};
@@ -82,7 +107,10 @@ export default function PreLovedPage() {
     return map;
   }, [wardrobeItems]);
 
-  const recCounts = useMemo(() => countRecommendations(wardrobeItems), [wardrobeItems]);
+  const recCounts = useMemo(
+    () => countRecommendations(wardrobeItems),
+    [wardrobeItems],
+  );
 
   const pendingRecommendations = useMemo(() => {
     const map: Record<string, ReturnType<typeof recommendDisposal>> = {};
@@ -95,11 +123,11 @@ export default function PreLovedPage() {
   const handlePendingActionSelect = (action: DisposalMethod) => {
     setPendingActionType(action);
     setShowPendingSection(true);
-    // Also set the active category to filter partners
     setActiveCategory(action);
   };
 
   useEffect(() => {
+    if (!loadingLocation) return;
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -118,62 +146,18 @@ export default function PreLovedPage() {
       setUserLoc({ lat: 3.0061, lng: 101.6169 });
       setLoadingLocation(false);
     }
-  }, []);
-
-  useEffect(() => {
-    const fetchPartners = async () => {
-      try {
-        const res = await fetch('/api/partners');
-        if (!res.ok) throw new Error('Failed to fetch partners');
-        const data = await res.json();
-        setPartners(data as Partner[]);
-      } catch (error) {
-        console.error('Error fetching partners:', error);
-      } finally {
-        setLoadingPartners(false);
-      }
-    };
-    fetchPartners();
-  }, []);
-
-  useEffect(() => {
-    if (status !== "authenticated" || !session?.user?.id) return;
-    fetch(`/api/clothes?user_id=${session.user.id}`)
-      .then(r => r.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          const pending: ClothesItem[] = [];
-          const wardrobe: ClothesItem[] = [];
-          for (const item of data) {
-            if ((item as Record<string, unknown>).status === 'pending_action') {
-              pending.push(item);
-            } else {
-              wardrobe.push(item);
-            }
-          }
-          setWardrobeItems(wardrobe);
-          setPendingItems(pending);
-        }
-      })
-      .catch(err => console.error("Error fetching wardrobe items:", err))
-      .finally(() => { setLoadingItems(false); setLoadingPending(false); });
-  }, [status, session]);
+  }, [loadingLocation]);
 
   const handleConfirmPledge = useCallback(
     async (itemIds: string[], partnerId: string, actionType: string) => {
-      const res = await fetch('/api/pledges', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ partnerId, itemIds, actionType }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to submit pledge');
-        return;
+      try {
+        await createPledge.mutateAsync({ partnerId, itemIds, actionType });
+        toast.success('Pledge submitted! Check your email for confirmation.');
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : 'Failed to submit pledge',
+        );
       }
-      // Remove pledged items from pending list
-      setPendingItems((prev) => prev.filter((item) => !itemIds.includes(item.id)));
-      toast.success('Pledge submitted! Check your email for confirmation.');
     },
     [],
   );
@@ -220,7 +204,9 @@ export default function PreLovedPage() {
   return (
     <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
-        <h2 className="text-3xl font-bold text-[#163422] font-headline">Pre-Loved</h2>
+        <h2 className="text-3xl font-bold text-[#163422] font-headline">
+          Pre-Loved
+        </h2>
         <p className="text-[#424843] mt-1">
           Give your unused items a second life.
         </p>
@@ -234,7 +220,9 @@ export default function PreLovedPage() {
 
         {activeCategory !== 'diy' && (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm font-medium text-[#163422] mr-1">Smart insights:</p>
+            <p className="text-sm font-medium text-[#163422] mr-1">
+              Smart insights:
+            </p>
             {pendingItems.length > 0 && (
               <button
                 onClick={() => setShowPendingSection(!showPendingSection)}
@@ -245,35 +233,42 @@ export default function PreLovedPage() {
                 }`}
               >
                 <span className="mr-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-3 h-3 inline" fill="currentColor">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    className="w-3 h-3 inline"
+                    fill="currentColor"
+                  >
                     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                   </svg>
                 </span>
                 {pendingItems.length} from duplicates
               </button>
             )}
-            {(['sell', 'donate', 'recycle'] as DisposalMethod[]).map((method) => {
-              const count = recCounts[method];
-              if (count === 0) return null;
-              const labels: Record<DisposalMethod, string> = {
-                sell: 'Best to sell',
-                donate: 'Best to donate',
-                recycle: 'Best to recycle',
-              };
-              return (
-                <button
-                  key={method}
-                  onClick={() => setActiveCategory(method)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
-                    activeCategory === method
-                      ? 'bg-[#0f172a] text-white border-[#0f172a]'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  {labels[method]} {count}
-                </button>
-              );
-            })}
+            {(['sell', 'donate', 'recycle'] as DisposalMethod[]).map(
+              (method) => {
+                const count = recCounts[method];
+                if (count === 0) return null;
+                const labels: Record<DisposalMethod, string> = {
+                  sell: 'Best to sell',
+                  donate: 'Best to donate',
+                  recycle: 'Best to recycle',
+                };
+                return (
+                  <button
+                    key={method}
+                    onClick={() => setActiveCategory(method)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${
+                      activeCategory === method
+                        ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {labels[method]} {count}
+                  </button>
+                );
+              },
+            )}
           </div>
         )}
 
@@ -283,15 +278,29 @@ export default function PreLovedPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-amber-900">
-                  {pendingItems.length} item{pendingItems.length !== 1 ? 's' : ''} from duplicates
+                  {pendingItems.length} item
+                  {pendingItems.length !== 1 ? 's' : ''} from duplicates
                 </h3>
-                <p className="text-xs text-amber-600 mt-0.5">Choose an action to find nearby partners</p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Choose an action to find nearby partners
+                </p>
               </div>
               <button
-                onClick={() => { setShowPendingSection(false); setPendingActionType(null); }}
+                onClick={() => {
+                  setShowPendingSection(false);
+                  setPendingActionType(null);
+                }}
                 className="text-amber-400 hover:text-amber-600 transition"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
                   <path d="M18 6L6 18" />
                   <path d="M6 6l12 12" />
                 </svg>
@@ -302,12 +311,15 @@ export default function PreLovedPage() {
             <div className="flex gap-3 overflow-x-auto pb-3">
               {pendingItems.map((item) => (
                 <div key={item.id} className="shrink-0 w-24">
-                  <div className="aspect-[3/4] rounded-xl overflow-hidden bg-white mb-1.5 shadow-sm">
+                  <div className="aspect-[3/4] rounded-xl overflow-hidden bg-white mb-1.5 shadow-sm relative">
                     {(item as Record<string, unknown>).image_url ? (
-                      <img
-                        src={(item as Record<string, unknown>).image_url as string}
+                      <Image
+                        fill
+                        src={
+                          (item as Record<string, unknown>).image_url as string
+                        }
                         alt={item.name}
-                        className="w-full h-full object-cover"
+                        className="object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-xs text-amber-300">
@@ -315,26 +327,32 @@ export default function PreLovedPage() {
                       </div>
                     )}
                   </div>
-                  <p className="text-[11px] font-medium text-amber-900 truncate">{item.name}</p>
+                  <p className="text-[11px] font-medium text-amber-900 truncate">
+                    {item.name}
+                  </p>
                 </div>
               ))}
             </div>
 
             {/* Action buttons */}
             <div className="flex gap-2 mt-3">
-              {(['donate', 'sell', 'recycle'] as DisposalMethod[]).map((action) => (
-                <button
-                  key={action}
-                  onClick={() => handlePendingActionSelect(action)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-semibold transition ${
-                    pendingActionType === action && activeCategory === action
-                      ? 'bg-[#0f172a] text-white'
-                      : 'bg-white text-amber-800 border border-amber-200 hover:border-amber-300'
-                  }`}
-                >
-                  {action === 'sell' ? 'Sell & Trade' : action.charAt(0).toUpperCase() + action.slice(1)}
-                </button>
-              ))}
+              {(['donate', 'sell', 'recycle'] as DisposalMethod[]).map(
+                (action) => (
+                  <button
+                    key={action}
+                    onClick={() => handlePendingActionSelect(action)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-semibold transition ${
+                      pendingActionType === action && activeCategory === action
+                        ? 'bg-[#0f172a] text-white'
+                        : 'bg-white text-amber-800 border border-amber-200 hover:border-amber-300'
+                    }`}
+                  >
+                    {action === 'sell'
+                      ? 'Sell & Trade'
+                      : action.charAt(0).toUpperCase() + action.slice(1)}
+                  </button>
+                ),
+              )}
             </div>
           </div>
         )}
@@ -384,9 +402,11 @@ export default function PreLovedPage() {
         onClose={() => setDrawerOpen(false)}
         partner={selectedPartner}
         items={showPendingSection ? pendingItems : wardrobeItems}
-        loading={showPendingSection ? loadingPending : loadingItems}
+        loading={clothesLoading}
         onConfirm={handleConfirmPledge}
-        recommendations={showPendingSection ? pendingRecommendations : recommendations}
+        recommendations={
+          showPendingSection ? pendingRecommendations : recommendations
+        }
       />
     </div>
   );

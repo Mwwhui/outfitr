@@ -5,7 +5,9 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import Image from 'next/image';
 import toast from 'react-hot-toast';
+import { useUpdatePledgeStatus } from '@/hooks/mutations/pledges';
 import type { IDetectedBarcode, IScannerError } from '@yudiel/react-qr-scanner';
 
 const Scanner = dynamic(
@@ -59,10 +61,21 @@ export default function PartnerScanPage() {
   const [pendingPledgeId, setPendingPledgeId] = useState<string | null>(null);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [preview, setPreview] = useState<PledgePreview | null>(null);
-  const [expandedImage, setExpandedImage] = useState<PledgePreviewItem | null>(null);
+  const [expandedImage, setExpandedImage] = useState<PledgePreviewItem | null>(
+    null,
+  );
+  const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
 
   const processingRef = useRef(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const zoomRef = useRef({ scale: 1, x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0, zoomX: 0, zoomY: 0 });
+  const pinchRef = useRef<{ startDistance: number; startScale: number } | null>(
+    null,
+  );
+  const fulfillMutation = useUpdatePledgeStatus(session?.user?.id);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/auth/login');
@@ -83,6 +96,39 @@ export default function PartnerScanPage() {
   useEffect(() => {
     return () => {
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const reset = { scale: 1, x: 0, y: 0 };
+    zoomRef.current = reset;
+    setZoom(reset);
+  }, [expandedImage]);
+
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      const newZoom = {
+        scale: zoomRef.current.scale,
+        x: dragStartRef.current.zoomX + dx,
+        y: dragStartRef.current.zoomY + dy,
+      };
+      zoomRef.current = newZoom;
+      setZoom(newZoom);
+    };
+
+    const handleUp = () => {
+      isDraggingRef.current = false;
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
     };
   }, []);
 
@@ -153,18 +199,11 @@ export default function PartnerScanPage() {
     setPhase('processing');
 
     try {
-      const res = await fetch(`/api/partner/pledges/${pendingPledgeId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'fulfill', token: pendingToken }),
+      await fulfillMutation.mutateAsync({
+        id: pendingPledgeId,
+        action: 'fulfill',
+        token: pendingToken,
       });
-
-      if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: 'Request failed' }));
-        throw new Error(err.error || `Error ${res.status}`);
-      }
 
       setPhase('success');
       toast.success('Pledge fulfilled!');
@@ -176,7 +215,7 @@ export default function PartnerScanPage() {
       setPhase('error');
       resetTimerRef.current = setTimeout(resetScanner, 3000);
     }
-  }, [pendingPledgeId, pendingToken, resetScanner]);
+  }, [pendingPledgeId, pendingToken, fulfillMutation, resetScanner]);
 
   const handleError = useCallback((error: IScannerError) => {
     console.error('Scanner error:', error);
@@ -200,9 +239,7 @@ export default function PartnerScanPage() {
         setCameraError('Camera does not meet the required constraints.');
         break;
       case 'insecure-context':
-        setCameraError(
-          'Camera access requires a secure connection (HTTPS).',
-        );
+        setCameraError('Camera access requires a secure connection (HTTPS).');
         break;
       case 'unsupported':
         setCameraError(
@@ -210,9 +247,7 @@ export default function PartnerScanPage() {
         );
         break;
       default:
-        setCameraError(
-          `Camera error: ${error.message || 'Unknown error'}`,
-        );
+        setCameraError(`Camera error: ${error.message || 'Unknown error'}`);
     }
     setPhase('error');
   }, []);
@@ -229,10 +264,177 @@ export default function PartnerScanPage() {
       day: 'numeric',
     });
 
+  const clampScale = (s: number) => Math.min(5, Math.max(1, s));
+
+  const updateZoom = useCallback(
+    (newZoom: { scale: number; x: number; y: number }) => {
+      zoomRef.current = newZoom;
+      setZoom(newZoom);
+    },
+    [],
+  );
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const container = e.currentTarget;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const current = zoomRef.current;
+      const ratio = 1 - e.deltaY * 0.002;
+      const newScale = clampScale(current.scale * ratio);
+      const actualRatio = newScale / current.scale;
+
+      updateZoom({
+        scale: newScale,
+        x: current.x * actualRatio + mouseX * (1 - actualRatio),
+        y: current.y * actualRatio + mouseY * (1 - actualRatio),
+      });
+    },
+    [updateZoom],
+  );
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoomRef.current.scale <= 1) return;
+    e.preventDefault();
+    setIsDragging(true);
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      zoomX: zoomRef.current.x,
+      zoomY: zoomRef.current.y,
+    };
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const distance = Math.hypot(
+        t1.clientX - t2.clientX,
+        t1.clientY - t2.clientY,
+      );
+      pinchRef.current = {
+        startDistance: distance,
+        startScale: zoomRef.current.scale,
+      };
+    } else if (e.touches.length === 1) {
+      isDraggingRef.current = true;
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        zoomX: zoomRef.current.x,
+        zoomY: zoomRef.current.y,
+      };
+    }
+  }, []);
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 2 && pinchRef.current) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const distance = Math.hypot(
+          t1.clientX - t2.clientX,
+          t1.clientY - t2.clientY,
+        );
+        const newScale = clampScale(
+          pinchRef.current.startScale *
+            (distance / pinchRef.current.startDistance),
+        );
+        const current = zoomRef.current;
+        const actualRatio = newScale / current.scale;
+
+        const midX = (t1.clientX + t2.clientX) / 2;
+        const midY = (t1.clientY + t2.clientY) / 2;
+        const container = e.currentTarget as HTMLElement;
+        const rect = container.getBoundingClientRect();
+        const cx = midX - rect.left;
+        const cy = midY - rect.top;
+
+        updateZoom({
+          scale: newScale,
+          x: current.x * actualRatio + cx * (1 - actualRatio),
+          y: current.y * actualRatio + cy * (1 - actualRatio),
+        });
+      } else if (e.touches.length === 1 && isDraggingRef.current) {
+        const dx = e.touches[0].clientX - dragStartRef.current.x;
+        const dy = e.touches[0].clientY - dragStartRef.current.y;
+        updateZoom({
+          scale: zoomRef.current.scale,
+          x: dragStartRef.current.zoomX + dx,
+          y: dragStartRef.current.zoomY + dy,
+        });
+      }
+    },
+    [updateZoom],
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    pinchRef.current = null;
+    isDraggingRef.current = false;
+    setIsDragging(false);
+  }, []);
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const current = zoomRef.current;
+      if (current.scale > 1.5) {
+        updateZoom({ scale: 1, x: 0, y: 0 });
+      } else {
+        const container = e.currentTarget.parentElement;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const newScale = 3;
+        const ratio = newScale / current.scale;
+        updateZoom({
+          scale: newScale,
+          x: current.x * ratio + mouseX * (1 - ratio),
+          y: current.y * ratio + mouseY * (1 - ratio),
+        });
+      }
+    },
+    [updateZoom],
+  );
+
+  const zoomIn = useCallback(() => {
+    const current = zoomRef.current;
+    const newScale = clampScale(current.scale + 0.5);
+    const ratio = newScale / current.scale;
+    updateZoom({
+      scale: newScale,
+      x: current.x * ratio,
+      y: current.y * ratio,
+    });
+  }, [updateZoom]);
+
+  const zoomOut = useCallback(() => {
+    const current = zoomRef.current;
+    const newScale = clampScale(current.scale - 0.5);
+    const ratio = newScale / current.scale;
+    updateZoom({
+      scale: newScale,
+      x: current.x * ratio,
+      y: current.y * ratio,
+    });
+  }, [updateZoom]);
+
+  const resetZoom = useCallback(() => {
+    updateZoom({ scale: 1, x: 0, y: 0 });
+  }, [updateZoom]);
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#163422] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin" />
       </div>
     );
   }
@@ -269,9 +471,7 @@ export default function PartnerScanPage() {
             {cameraError ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6 text-center">
                 <div className="text-5xl mb-4">📷</div>
-                <p className="text-lg font-semibold mb-1">
-                  Camera Unavailable
-                </p>
+                <p className="text-lg font-semibold mb-1">Camera Unavailable</p>
                 <p className="text-sm text-gray-300 mb-5 max-w-sm">
                   {cameraError}
                 </p>
@@ -427,10 +627,12 @@ export default function PartnerScanPage() {
                                       onClick={() => setExpandedImage(item)}
                                       className="shrink-0"
                                     >
-                                      <img
+                                      <Image
                                         src={item.image_url}
                                         alt={item.name}
-                                        className="w-8 h-8 rounded-lg object-cover cursor-pointer hover:ring-2 hover:ring-white/50 transition"
+                                        width={32}
+                                        height={32}
+                                        className="rounded-lg object-cover cursor-pointer hover:ring-2 hover:ring-white/50 transition"
                                       />
                                     </button>
                                   ) : (
@@ -440,9 +642,7 @@ export default function PartnerScanPage() {
                                       </span>
                                     </div>
                                   )}
-                                  <span className="truncate">
-                                    {item.name}
-                                  </span>
+                                  <span className="truncate">{item.name}</span>
                                   {item.brand && (
                                     <span className="text-white/40 text-xs truncate">
                                       · {item.brand}
@@ -462,7 +662,9 @@ export default function PartnerScanPage() {
                             <span>⏱️</span>
                             <span>
                               Pledged {daysSince(preview.created_at)} day
-                              {daysSince(preview.created_at) !== 1 ? 's' : ''}{' '}
+                              {daysSince(preview.created_at) !== 1
+                                ? 's'
+                                : ''}{' '}
                               ago
                             </span>
                             {daysSince(preview.created_at) > 30 && (
@@ -520,12 +722,8 @@ export default function PartnerScanPage() {
                             />
                           </svg>
                         </div>
-                        <p className="text-xl font-bold">
-                          Pledge Fulfilled!
-                        </p>
-                        <p className="text-sm text-gray-300 mt-1">
-                          {userName}
-                        </p>
+                        <p className="text-xl font-bold">Pledge Fulfilled!</p>
+                        <p className="text-sm text-gray-300 mt-1">{userName}</p>
                         <p className="text-xs text-gray-400 mt-1">
                           Ready for next scan...
                         </p>
@@ -542,9 +740,7 @@ export default function PartnerScanPage() {
           <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
             <span className="text-xl flex-shrink-0 mt-0.5">⚠️</span>
             <div>
-              <p className="text-sm font-semibold text-red-800">
-                Scan Failed
-              </p>
+              <p className="text-sm font-semibold text-red-800">Scan Failed</p>
               <p className="text-sm text-red-700 mt-0.5">{errorMessage}</p>
             </div>
           </div>
@@ -582,28 +778,79 @@ export default function PartnerScanPage() {
       {expandedImage && (
         <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6"
-          onClick={() => setExpandedImage(null)}
+          onClick={() => { setExpandedImage(null); resetZoom(); }}
         >
           <button
             type="button"
-            onClick={() => setExpandedImage(null)}
-            className="absolute top-4 right-4 text-white/70 hover:text-white text-3xl leading-none"
+            onClick={() => { setExpandedImage(null); resetZoom(); }}
+            className="absolute top-4 right-4 z-20 text-white/70 hover:text-white text-3xl leading-none"
           >
             ✕
           </button>
-          <div className="max-w-full max-h-full flex flex-col items-center">
+
+          {/* Zoom controls bar */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-black/60 backdrop-blur-md rounded-full px-4 py-2">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); zoomOut(); }}
+              className="text-white/70 hover:text-white text-lg leading-none w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center transition"
+            >
+              −
+            </button>
+            <span className="text-white text-xs font-medium w-10 text-center tabular-nums">
+              {Math.round(zoom.scale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); zoomIn(); }}
+              className="text-white/70 hover:text-white text-lg leading-none w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center transition"
+            >
+              +
+            </button>
+            <div className="w-px h-4 bg-white/20" />
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); resetZoom(); }}
+              className="text-white/50 hover:text-white text-xs font-medium transition"
+            >
+              Reset
+            </button>
+          </div>
+
+          {/* Image area */}
+          <div
+            className="w-full h-full flex items-center justify-center overflow-hidden select-none"
+            onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onDoubleClick={handleDoubleClick}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={expandedImage.image_url!}
               alt={expandedImage.name}
-              className="max-w-full max-h-[75vh] rounded-xl object-contain"
+              draggable={false}
+              className={`max-w-full max-h-full object-contain rounded-xl pointer-events-none ${
+                isDragging ? 'cursor-grabbing' : 'cursor-grab'
+              }`}
+              style={{
+                transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`,
+                transition: isDragging
+                  ? 'none'
+                  : 'transform 0.15s ease-out',
+              }}
             />
-            <p className="text-white text-sm mt-3 font-medium">
-              {expandedImage.name}
-              {expandedImage.brand && (
-                <span className="text-white/50"> · {expandedImage.brand}</span>
-              )}
-            </p>
           </div>
+
+          <p className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 text-white text-sm font-medium pointer-events-none">
+            {expandedImage.name}
+            {expandedImage.brand && (
+              <span className="text-white/50"> · {expandedImage.brand}</span>
+            )}
+          </p>
         </div>
       )}
     </div>

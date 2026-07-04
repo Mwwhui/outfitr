@@ -1,3 +1,5 @@
+'use client';
+import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import { Partner } from './PartnerDirectory';
 import { ScoredItem, DisposalMethod } from '@/lib/disposalRecommender';
@@ -30,11 +32,23 @@ interface Props {
   partner: Partner | null;
   items: ClothesItem[];
   loading: boolean;
-  onConfirm: (itemIds: string[], partnerId: string, actionType: string) => Promise<void>;
+  onConfirm: (
+    itemIds: string[],
+    partnerId: string,
+    actionType: string,
+  ) => Promise<void>;
   recommendations?: Record<string, ScoredItem>;
 }
 
-export default function PartnerDrawer({ isOpen, onClose, partner, items, loading, onConfirm, recommendations }: Props) {
+export default function PartnerDrawer({
+  isOpen,
+  onClose,
+  partner,
+  items,
+  loading,
+  onConfirm,
+  recommendations,
+}: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const badgeLabels: Record<string, string> = {
@@ -115,19 +129,23 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
           <div className="space-y-3">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                <div className="w-8 h-8 border-2 border-[#0f172a] border-t-transparent rounded-full animate-spin mb-3" />
+                <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin mb-3" />
                 <p className="text-sm">Loading your wardrobe...</p>
               </div>
             ) : sortedItems.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <p className="text-sm mb-1">Your wardrobe is empty</p>
-                <p className="text-xs">Add some items first to pledge them here.</p>
+                <p className="text-xs">
+                  Add some items first to pledge them here.
+                </p>
               </div>
             ) : (
               sortedItems.map((item) => {
                 const rec = recommendations?.[item.id];
                 const isSelected = selectedIds.includes(item.id);
-                const mismatchHint = isSelected ? getMismatchHint(item.id) : null;
+                const mismatchHint = isSelected
+                  ? getMismatchHint(item.id)
+                  : null;
                 return (
                   <label
                     key={item.id}
@@ -137,15 +155,18 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
                         : 'border-gray-200 hover:border-gray-300 bg-white/80'
                     }`}
                   >
-                    <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0 flex items-center justify-center text-2xl overflow-hidden">
+                    <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0 flex items-center justify-center text-2xl overflow-hidden relative">
                       {item.image_url ? (
-                        <img
+                        <Image
+                          fill
                           src={item.image_url}
                           alt={item.name}
-                          className="w-full h-full object-cover"
+                          className="object-cover"
                         />
                       ) : (
-                        <span className="text-gray-400 text-sm font-medium">No img</span>
+                        <span className="text-gray-400 text-sm font-medium">
+                          No img
+                        </span>
                       )}
                     </div>
                     <div className="flex-1 flex flex-col justify-center min-w-0">
@@ -154,7 +175,9 @@ export default function PartnerDrawer({ isOpen, onClose, partner, items, loading
                           {item.name}
                         </p>
                         {rec && (
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md uppercase tracking-wide shrink-0 ${METHOD_COLORS[rec.method]}`}>
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md uppercase tracking-wide shrink-0 ${METHOD_COLORS[rec.method]}`}
+                          >
                             {BADGE_LABELS_METHOD[rec.method]}
                           </span>
                         )}

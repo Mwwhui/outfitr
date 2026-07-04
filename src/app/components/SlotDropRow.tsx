@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 
 import React from 'react';
 
@@ -6,7 +7,7 @@ export interface ClothingItem {
   id: string;
   name: string;
   type: string;
-  image_url?: string;
+  image_url: string | null;
   favorite?: boolean;
   use_case?: string[];
 }
@@ -51,10 +52,11 @@ export default function SlotDropRow({
 
       {item && (
         <div className="relative w-full h-full group">
-          <img
+          <Image
+            fill
             src={item.image_url || ''}
             alt={item.name}
-            className="w-full h-full object-cover rounded-2xl"
+            className="object-cover rounded-2xl"
           />
 
           <button
@@ -65,12 +67,19 @@ export default function SlotDropRow({
           </button>
 
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 rounded-b-2xl">
-            <p className="text-white text-xs font-medium truncate">{item.name}</p>
+            <p className="text-white text-xs font-medium truncate">
+              {item.name}
+            </p>
             <p className="text-white/70 text-[10px] truncate">{label}</p>
             {item.use_case && item.use_case.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {item.use_case.map((uc) => (
-                  <span key={uc} className="text-[8px] uppercase tracking-wider text-white/60 bg-white/10 rounded px-1 py-[1px]">{uc}</span>
+                  <span
+                    key={uc}
+                    className="text-[8px] uppercase tracking-wider text-white/60 bg-white/10 rounded px-1 py-[1px]"
+                  >
+                    {uc}
+                  </span>
                 ))}
               </div>
             )}

@@ -80,6 +80,7 @@ export function useCameraScanner(): CameraScannerReturn {
   const prevFrameRef = useRef<ImageData | null>(null);
   const stableRefFrameRef = useRef<ImageData | null>(null);
   const pollAttemptRef = useRef(0);
+  const fetchFailCountRef = useRef(0);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const lastFrameRef = useRef<HTMLCanvasElement | null>(null);
   const lastDetectionsRef = useRef<DetectedItem[] | null>(null);
@@ -254,7 +255,7 @@ export function useCameraScanner(): CameraScannerReturn {
 
   // Scanning loop
   useEffect(() => {
-    if (!scanning || !videoRef.current || !cameraStream) return;
+    if (!scanning || !videoRef.current || !cameraStreamRef.current) return;
     let active = true;
     pollAttemptRef.current = 0;
     let noItemCycles = 0;
@@ -285,17 +286,34 @@ export function useCameraScanner(): CameraScannerReturn {
       }
 
       let data;
+      const apiUrl = `${process.env.NEXT_PUBLIC_YOLO_API_URL}/detect`;
       try {
         const blob = await canvasToBlob(captureCanvas, 0.5);
         const fd = new FormData();
         fd.append('file', blob, 'scan.jpg');
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_YOLO_API_URL}/detect`,
-          { method: 'POST', body: fd, signal: abortController.signal },
-        );
+        const res = await fetch(apiUrl, {
+          method: 'POST', body: fd,
+          signal: AbortSignal.any([
+            abortController.signal,
+            AbortSignal.timeout(25000),
+          ]),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          console.error('[YOLO scan] HTTP error', res.status, text);
+          throw new Error(`HTTP ${res.status}`);
+        }
         data = await res.json();
         pollAttemptRef.current = 0;
-      } catch {
+        fetchFailCountRef.current = 0;
+      } catch (err) {
+        console.error('[YOLO scan] fetch failed', err, 'URL:', apiUrl);
+        fetchFailCountRef.current++;
+        if (fetchFailCountRef.current >= 1) {
+          setCameraError('Detection service unavailable — try again later or upload from gallery');
+          stopCamera();
+          return;
+        }
         pollAttemptRef.current++;
         schedule(POLL_BASE);
         return;
@@ -429,7 +447,7 @@ export function useCameraScanner(): CameraScannerReturn {
       abortController.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanning, cameraStream]);
+  }, [scanning]);
 
   // Countdown timer
   useEffect(() => {

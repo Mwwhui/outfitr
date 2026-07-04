@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 
 import { useState } from 'react';
 import RejectModal from './RejectModal';
@@ -54,7 +55,12 @@ interface Props {
   onFulfill?: (id: string, token: string) => void;
 }
 
-export default function PledgeCard({ pledge, onAccept, onReject, onFulfill }: Props) {
+export default function PledgeCard({
+  pledge,
+  onAccept,
+  onReject,
+  onFulfill,
+}: Props) {
   const [showReject, setShowReject] = useState(false);
   const actionLabel = ACTION_LABELS[pledge.action_type] || pledge.action_type;
 
@@ -109,10 +115,12 @@ export default function PledgeCard({ pledge, onAccept, onReject, onFulfill }: Pr
               className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2"
             >
               {item.image_url ? (
-                <img
+                <Image
                   src={item.image_url}
                   alt={item.name}
-                  className="w-8 h-8 rounded-lg object-cover"
+                  width={32}
+                  height={32}
+                  className="rounded-lg object-cover"
                 />
               ) : (
                 <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center text-xs text-gray-400">

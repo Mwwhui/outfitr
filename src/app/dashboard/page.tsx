@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  dashboardStatsOptions,
+  useDashboardStats,
+} from '@/hooks/queries/dashboard';
+import { clustersOptions, useClusters } from '@/hooks/queries/wardrobe';
 import KpiCard from '../components/dashboard/KpiCard';
 import CategoryChart from '../components/dashboard/CategoryChart';
 import PledgeTimeline from '../components/dashboard/PledgeTimeline';
@@ -14,121 +20,6 @@ import WardrobeValueCard from '../components/dashboard/WardrobeValueCard';
 import WornItemsCard from '../components/dashboard/WornItemsCard';
 import WardrobeClustersCard from '../components/dashboard/WardrobeClustersCard';
 import WearingHabitsChart from '../components/dashboard/WearingHabitsChart';
-
-interface DashboardTotals {
-  items: number;
-  items_this_month: number;
-  pledges_total: number;
-  pledges_pending: number;
-  pledges_accepted: number;
-  pledges_fulfilled: number;
-  pledges_rejected: number;
-  fulfilled_change_pct: number;
-  sustainability_rate: number;
-}
-
-interface CategoryItem {
-  name: string;
-  count: number;
-  color: string;
-}
-
-interface BrandItem {
-  name: string;
-  count: number;
-  color: string;
-}
-
-interface MonthlyPoint {
-  month: string;
-  count: number;
-}
-
-interface PledgeMonthPoint {
-  month: string;
-  pending: number;
-  accepted: number;
-  fulfilled: number;
-}
-
-interface StatusItem {
-  status: string;
-  count: number;
-}
-
-interface ActionTypeItem {
-  type: string;
-  count: number;
-}
-
-interface ActivityItem {
-  pledge_id: string;
-  partner_name: string;
-  action_type: string;
-  status: string;
-  item_count: number;
-  created_at: string;
-}
-
-interface ImpactByAction {
-  donate: { count: number; co2_kg: number; water_l: number; money: number };
-  sell: { count: number; co2_kg: number; water_l: number; money: number };
-  recycle: { count: number; co2_kg: number; water_l: number; money: number };
-}
-
-interface ImpactData {
-  co2_saved_kg: number;
-  water_saved_l: number;
-  items_diverted: number;
-  equivalent_trees: number;
-  money_saved: number;
-  by_action: ImpactByAction;
-}
-
-interface WardrobeValue {
-  total_value: number;
-  average_value: number;
-  items_with_price: number;
-  items_without_price: number;
-  total_wears: number;
-  cost_per_wear: number;
-  replacement_saved: number;
-}
-
-interface WearMonthPoint {
-  month: string;
-  wears: number;
-  items_worn: number;
-}
-
-interface WornItem {
-  id: string;
-  name: string;
-  type: string;
-  wear_count: number;
-  image_url?: string | null;
-}
-
-interface DashboardData {
-  totals: DashboardTotals;
-  categories: CategoryItem[];
-  brands: BrandItem[];
-  materials: CategoryItem[];
-  items_over_time: MonthlyPoint[];
-  pledges_over_time: PledgeMonthPoint[];
-  status_breakdown: StatusItem[];
-  action_types: ActionTypeItem[];
-  recent_activity: ActivityItem[];
-  impact: ImpactData;
-  wardrobe: WardrobeValue;
-  most_worn: WornItem[];
-  least_worn: WornItem[];
-  wears_over_time: WearMonthPoint[];
-  wearing_insight: string;
-  this_month_wears: number;
-  last_month_wears: number;
-  wear_change_pct: number;
-}
 
 function SkeletonCard({ className }: { className?: string }) {
   return (
@@ -147,7 +38,7 @@ function ChartSkeleton() {
     <div className="bg-white rounded-3xl shadow-sm p-5 animate-pulse">
       <div className="h-3 bg-gray-100 rounded w-1/4 mb-6" />
       <div className="h-48 bg-gray-50 rounded-xl flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-300 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin" />
       </div>
     </div>
   );
@@ -156,73 +47,41 @@ function ChartSkeleton() {
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [clusterData, setClusterData] = useState<{
-    clusters: {
-      id: number;
-      label: string;
-      color: string;
-      size: number;
-      insight: {
-        totalValue: number;
-        avgWear: number;
-        avgPrice: number;
-        wearVsAverage: number;
-        typeBreakdown: { type: string; count: number; percentage: number }[];
-      };
-    }[];
-  } | null>(null);
-  const [loadingClusters, setLoadingClusters] = useState(true);
-  const [clusterError, setClusterError] = useState(false);
+  const queryClient = useQueryClient();
 
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useDashboardStats(session?.user?.id);
+  const {
+    data: clusterData,
+    isLoading: clustersLoading,
+    error: clustersError,
+  } = useClusters(session?.user?.id);
+
+  // Fire-and-forget: score unused items for accurate dashboard stats
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    const userId = session?.user?.id;
+    fetch('/api/clothes/score-unused', { method: 'POST' })
+      .catch(() => {})
+      .finally(() => {
+        queryClient.invalidateQueries(dashboardStatsOptions(userId));
+        if (userId) {
+          queryClient.invalidateQueries({ queryKey: ['clothes', userId] });
+        }
+      });
+  }, [status, queryClient, session?.user?.id]);
+
+  // Auth guard
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login');
-      return;
     }
-    if (status !== 'authenticated') return;
-
-    setLoading(true);
-    setError(null);
-    setLoadingClusters(true);
-    setClusterError(false);
-
-    fetch('/api/clothes/score-unused', { method: 'POST' })
-      .catch(() => {})
-      .then(() => fetch('/api/dashboard/stats'))
-      .then(async (res) => {
-        if (!res.ok) {
-          const err = await res
-            .json()
-            .catch(() => ({ error: 'Failed to load' }));
-          throw new Error(err.error || 'Failed to load dashboard');
-        }
-        return res.json();
-      })
-      .then((json) => {
-        setData(json as DashboardData);
-        setLoading(false);
-      })
-      .catch((err: Error) => {
-        setError(err.message);
-        setLoading(false);
-      });
-
-    fetch('/api/wardrobe/clusters')
-      .then((r) => r.json())
-      .then((json) => {
-        setClusterData(json);
-        setLoadingClusters(false);
-      })
-      .catch(() => {
-        setClusterError(true);
-        setLoadingClusters(false);
-      });
   }, [status, router]);
 
-  if (status === 'loading' || loading) {
+  if (status === 'loading' || statsLoading) {
     return (
       <div className="min-h-screen">
         <div className="px-6 pt-8 pb-4 max-w-6xl mx-auto">
@@ -230,8 +89,8 @@ export default function DashboardPage() {
           <div className="h-4 bg-gray-100 rounded w-60 animate-pulse" />
         </div>
         <div className="px-6 pb-16 max-w-6xl mx-auto space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
@@ -251,7 +110,7 @@ export default function DashboardPage() {
 
   if (status === 'unauthenticated') return null;
 
-  if (error) {
+  if (statsError && !stats) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center max-w-md">
@@ -259,7 +118,7 @@ export default function DashboardPage() {
           <h2 className="text-xl font-bold text-[#0f172a] mb-2 font-headline">
             Could not load dashboard
           </h2>
-          <p className="text-sm text-gray-500 mb-6">{error}</p>
+          <p className="text-sm text-gray-500 mb-6">{statsError.message}</p>
           <button
             onClick={() => window.location.reload()}
             className="bg-black text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
@@ -271,16 +130,29 @@ export default function DashboardPage() {
     );
   }
 
-  const t = data!.totals;
+  if (!stats) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-5xl mb-4">📊</div>
+          <h2 className="text-xl font-bold text-[#0f172a] mb-2 font-headline">
+            Loading dashboard…
+          </h2>
+        </div>
+      </div>
+    );
+  }
 
+  const t = stats.totals;
   const emptyWardrobe = t.items === 0;
-
   const noPledges = t.pledges_total === 0;
 
   return (
     <div className="min-h-screen bg-background">
       <div className="px-6 pt-8 pb-4 max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-[#163422] font-headline">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-[#163422] font-headline">
+          Dashboard
+        </h1>
         <p className="text-[#424843] mt-1">
           Your wardrobe analytics at a glance
         </p>
@@ -387,29 +259,29 @@ export default function DashboardPage() {
         </div>
 
         {!emptyWardrobe && (
-          <WardrobeValueCard data={data!.wardrobe} totalItems={t.items} />
+          <WardrobeValueCard data={stats.wardrobe} totalItems={t.items} />
         )}
 
         <WearingHabitsChart
-          data={data!.wears_over_time}
-          thisMonthWears={data!.this_month_wears}
-          lastMonthWears={data!.last_month_wears}
-          changePct={data!.wear_change_pct}
-          insight={data!.wearing_insight}
+          data={stats.wears_over_time}
+          thisMonthWears={stats.this_month_wears}
+          lastMonthWears={stats.last_month_wears}
+          changePct={stats.wear_change_pct}
+          insight={stats.wearing_insight}
           totalItems={t.items}
         />
 
         {!emptyWardrobe && (
           <WornItemsCard
-            mostWorn={data!.most_worn}
-            leastWorn={data!.least_worn}
+            mostWorn={stats.most_worn}
+            leastWorn={stats.least_worn}
           />
         )}
 
         <ImpactCard
           sustainabilityRate={t.sustainability_rate}
           totalItems={t.items}
-          impact={data!.impact}
+          impact={stats.impact}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -418,7 +290,7 @@ export default function DashboardPage() {
               <h3 className="text-sm font-semibold text-[#163422] mb-4 font-headline">
                 Wardrobe by Category
               </h3>
-              <CategoryChart data={data?.categories || []} />
+              <CategoryChart data={stats.categories || []} />
             </div>
           )}
           <div
@@ -443,7 +315,7 @@ export default function DashboardPage() {
                 No pledge activity yet
               </div>
             ) : (
-              <PledgeTimeline data={data?.pledges_over_time || []} />
+              <PledgeTimeline data={stats.pledges_over_time || []} />
             )}
           </div>
         </div>
@@ -454,35 +326,24 @@ export default function DashboardPage() {
               <h3 className="text-sm font-semibold text-[#163422] mb-4 font-headline">
                 Items Added Over Time
               </h3>
-              <ItemsAddedChart data={data?.items_over_time || []} />
+              <ItemsAddedChart data={stats.items_over_time || []} />
             </div>
             <div className="bg-white rounded-3xl shadow-sm p-5">
               <h3 className="text-sm font-semibold text-[#163422] mb-4 font-headline">
                 Top Brands
               </h3>
-              <TopBrandsChart data={data?.brands || []} />
+              <TopBrandsChart data={stats.brands || []} />
             </div>
           </div>
         )}
 
         {!emptyWardrobe && (
           <WardrobeClustersCard
-            data={clusterData}
-            loading={loadingClusters}
-            error={clusterError}
+            data={clusterData ?? null}
+            loading={clustersLoading}
+            error={!!clustersError}
             onRefresh={() => {
-              setLoadingClusters(true);
-              setClusterError(false);
-              fetch('/api/wardrobe/clusters')
-                .then((r) => r.json())
-                .then((json) => {
-                  setClusterData(json);
-                  setLoadingClusters(false);
-                })
-                .catch(() => {
-                  setClusterError(true);
-                  setLoadingClusters(false);
-                });
+              queryClient.invalidateQueries(clustersOptions(session?.user?.id));
             }}
             onViewCluster={(clusterId) =>
               router.push(`/wardrobe?cluster=${clusterId}`)

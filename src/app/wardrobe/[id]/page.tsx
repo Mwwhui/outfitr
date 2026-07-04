@@ -1,43 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
+import {
+  useItem,
+  type ItemDetail,
+  useCategories,
+  useSuggestions,
+  useSimilarItems,
+} from '@/hooks/queries/wardrobe';
+import {
+  useUpdateClothing,
+  useDeleteClothing,
+} from '@/hooks/mutations/clothing';
 import ConfirmModal from '../../components/ConfirmModal';
 
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-  textColor: string;
-}
-
-type Clothes = {
-  id: string;
-  user_id: string;
-  name: string;
-  type: string; // category of item
-  color: string;
-  season: string | null;
-  size: string | null;
-  brand: string | null;
-  price: number | null;
-  material: string | null;
-  favorite: boolean | null;
-  image_url: string | null;
-  categories: string[] | null;
-  description: string | null;
-  purchase_date: string | null; // date as "YYYY-MM-DD"
-  location: string | null;
-  notes: string | null;
-  use_case: string[] | null;
-
-  created_at?: string;
-  updated_at?: string | null;
-  deleted_at?: string | null;
-};
+type Clothes = ItemDetail;
 
 const SEASONS = ['All', 'Spring', 'Summer', 'Autumn', 'Winter'];
 const SIZES = ['XS', 'S', 'M', 'L', 'XL'];
@@ -57,10 +38,30 @@ export default function EditWardrobePage() {
   const params = useParams<{ id: string }>();
   const { data: session } = useSession();
   const id = params?.id;
+  const userId = session?.user?.id;
+  const formInitRef = useRef(false);
 
-  const [clothes, setClothes] = useState<Clothes | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: item } = useItem(id, userId);
+  const { data: categories = [] } = useCategories();
+  const { data: brandSuggestions = [] } = useSuggestions('brands', userId);
+  const { data: locationSuggestions = [] } = useSuggestions(
+    'locations',
+    userId,
+  );
+  const { data: materialSuggestions = [] } = useSuggestions(
+    'materials',
+    userId,
+  );
+  const { data: similarItems = [] } = useSimilarItems(
+    item?.type,
+    item?.color || undefined,
+    id,
+    userId,
+  );
+  const updateClothing = useUpdateClothing(userId);
+  const deleteClothing = useDeleteClothing(userId);
+
+  const [formData, setFormData] = useState<Clothes | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -68,100 +69,31 @@ export default function EditWardrobePage() {
   const [customBrand, setCustomBrand] = useState(false);
   const [customMaterial, setCustomMaterial] = useState(false);
   const [customLocation, setCustomLocation] = useState(false);
-  const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
-  const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
-  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
-  const [similarItems, setSimilarItems] = useState<Array<{id: string; name: string; color: string | null; image_url: string | null; similarity: number}>>([]);
-  const [visualResult, setVisualResult] = useState<{is_different: boolean; reasoning: string; confidence: number} | null>(null);
+  const [visualResult, setVisualResult] = useState<{
+    is_different: boolean;
+    reasoning: string;
+    confidence: number;
+  } | null>(null);
   const [checkingVisual, setCheckingVisual] = useState(false);
 
-  // Fetch item and category list
+  // Initialize form data from API item (once, never overwritten by refetch)
   useEffect(() => {
-    if (!id) return;
-
-    async function fetchItem() {
-      try {
-        const res = await fetch(`/api/clothes/${id}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (!res.ok) {
-          console.error('Failed to fetch item:', res.statusText);
-          setLoading(false);
-          return;
-        }
-
-        const raw = await res.json();
-
-        // normalise price from numeric (string) to number
-        const normalised: Clothes = {
-          ...raw,
-          price:
-            raw.price === null || raw.price === undefined
-              ? null
-              : Number(raw.price),
-        };
-
-        setClothes(normalised);
-      } catch (e) {
-        console.error('Fetch error:', e);
-      } finally {
-        setLoading(false);
-      }
+    if (item && !formInitRef.current) {
+      formInitRef.current = true;
+      setFormData({
+        ...item,
+        price:
+          item.price === null || item.price === undefined
+            ? null
+            : Number(item.price),
+      });
     }
-
-    async function fetchCategories() {
-      try {
-        const res = await fetch('/api/categories');
-        if (!res.ok) return;
-
-        const list = await res.json();
-        setCategories(list ?? []);
-      } catch (e) {
-        console.error('Category fetch error:', e);
-      }
-    }
-
-    fetchItem();
-    fetchCategories();
-  }, [id]);
-
-  // Fetch suggestions
-  useEffect(() => {
-    const userId = session?.user?.id;
-    if (!userId) return;
-    Promise.all([
-      fetch(`/api/brands?user_id=${userId}`).then((r) => r.json()),
-      fetch(`/api/locations?user_id=${userId}`).then((r) => r.json()),
-      fetch(`/api/materials?user_id=${userId}`).then((r) => r.json()),
-    ])
-      .then(([brandsData, locationsData, materialsData]) => {
-        setBrandSuggestions(brandsData.brands || []);
-        setLocationSuggestions(locationsData.locations || []);
-        setMaterialSuggestions(materialsData.materials || []);
-      })
-      .catch(() => {});
-  }, [session?.user?.id]);
-
-  // Fetch similar items
-  useEffect(() => {
-    if (!clothes || !session?.user?.id) return;
-    const params = new URLSearchParams({
-      user_id: session.user.id,
-      type: clothes.type,
-      exclude_id: clothes.id,
-    });
-    if (clothes.color) params.set('color', clothes.color);
-    fetch(`/api/clothes/similar?${params}`)
-      .then((r) => r.json())
-      .then((data) => setSimilarItems(data.similar || []))
-      .catch(() => {});
-  }, [clothes?.id, clothes?.type, clothes?.color, session?.user?.id]);
+  }, [item]);
 
   // Fire Gemini visual comparison when 1-3 similar items exist
   useEffect(() => {
-    if (!clothes?.image_url || similarItems.length < 1 || similarItems.length > 3) return;
+    if (!item?.image_url || similarItems.length < 1 || similarItems.length > 3)
+      return;
     let active = true;
     const check = async () => {
       setCheckingVisual(true);
@@ -171,7 +103,7 @@ export default function EditWardrobePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             new_image: await (async () => {
-              const imgRes = await fetch(clothes!.image_url!);
+              const imgRes = await fetch(item!.image_url!);
               const buf = Buffer.from(await imgRes.arrayBuffer());
               return buf.toString('base64');
             })(),
@@ -180,7 +112,7 @@ export default function EditWardrobePage() {
               image_url: s.image_url,
               name: s.name,
             })),
-            type: clothes!.type,
+            type: item!.type,
           }),
         });
         if (res.ok && active) setVisualResult(await res.json());
@@ -191,8 +123,10 @@ export default function EditWardrobePage() {
       }
     };
     check();
-    return () => { active = false; };
-  }, [clothes?.image_url, clothes?.type, similarItems]);
+    return () => {
+      active = false;
+    };
+  }, [item?.image_url, item?.type, similarItems]);
 
   const USE_CASE_LABELS: Record<string, string> = {
     casual: 'Casual',
@@ -204,7 +138,7 @@ export default function EditWardrobePage() {
   };
 
   const toggleUseCase = (value: string) => {
-    setClothes((prev) => {
+    setFormData((prev) => {
       if (!prev) return prev;
       const current = prev.use_case || [];
       return {
@@ -220,13 +154,13 @@ export default function EditWardrobePage() {
     field: K,
     value: Clothes[K],
   ) => {
-    setClothes((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setFormData((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
   const handleUpdate = async () => {
-    if (!clothes) return;
+    if (!formData) return;
 
-    const useCase = clothes.use_case || [];
+    const useCase = formData.use_case || [];
     if (useCase.length === 0) {
       toast.error('Please select at least one use case.');
       return;
@@ -234,54 +168,71 @@ export default function EditWardrobePage() {
 
     setSaving(true);
 
-    await fetch(`/api/clothes/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: clothes.name,
-        type: clothes.type,
-        color: clothes.color,
-        season: clothes.season,
-        size: clothes.size,
-        brand: clothes.brand,
-        price: clothes.price,
-        material: clothes.material,
-        favorite: clothes.favorite ?? false,
-        image_url: clothes.image_url,
-        use_case: clothes.use_case,
-        categories: clothes.categories,
-        description: clothes.description,
-        purchase_date: clothes.purchase_date,
-        location: clothes.location,
-        notes: clothes.notes,
-      }),
-    });
-
-    setSaving(false);
-    router.push('/wardrobe');
+    try {
+      await updateClothing.mutateAsync({
+        id,
+        name: formData.name,
+        type: formData.type,
+        color: formData.color,
+        season: formData.season,
+        size: formData.size,
+        brand: formData.brand,
+        price: formData.price,
+        material: formData.material,
+        favorite: formData.favorite ?? false,
+        image_url: formData.image_url,
+        use_case: formData.use_case || [],
+        categories: formData.categories,
+        description: formData.description,
+        purchase_date: formData.purchase_date,
+        location: formData.location,
+        notes: formData.notes,
+      });
+      router.push('/wardrobe');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/clothes/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await deleteClothing.mutateAsync(id);
       toast.success('Item deleted');
       router.push('/wardrobe');
     } catch {
       toast.error('Failed to delete item');
-      setDeleting(false);
     } finally {
+      setDeleting(false);
       setConfirmDelete(false);
     }
   };
 
-  if (loading || !clothes) {
-    return <p className="text-center p-10">Loading...</p>;
+  if (!formData) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-10 animate-pulse">
+        <div className="h-4 bg-surface-variant rounded w-16 mb-6" />
+        <div className="h-8 bg-surface-variant rounded w-48 mb-6" />
+        <div className="h-6 bg-surface-variant rounded w-32 mb-8" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="aspect-[3/4] bg-surface-variant rounded-2xl" />
+          <div className="space-y-4">
+            <div className="h-4 bg-surface-variant rounded w-3/4" />
+            <div className="h-4 bg-surface-variant rounded w-1/2" />
+            <div className="h-10 bg-surface-variant rounded-2xl w-full" />
+            <div className="h-4 bg-surface-variant rounded w-2/3" />
+            <div className="h-4 bg-surface-variant rounded w-1/3" />
+            <div className="h-10 bg-surface-variant rounded-2xl w-full mt-4" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  const purchaseDateValue = clothes.purchase_date
-    ? clothes.purchase_date.slice(0, 10)
+  const purchaseDateValue = formData.purchase_date
+    ? formData.purchase_date.slice(0, 10)
     : '';
 
   return (
@@ -296,12 +247,12 @@ export default function EditWardrobePage() {
 
         <h1 className="text-3xl font-bold mb-6 font-headline">Edit Clothing</h1>
 
-        {clothes.type && (
+        {formData.type && (
           <div className="mb-3">
             <span
-              className={`inline-block px-4 py-1.5 rounded-full text-sm font-semibold ${categories.find((c) => c.name === clothes.type)?.color ?? ''} ${categories.find((c) => c.name === clothes.type)?.textColor ?? ''}`}
+              className={`inline-block px-4 py-1.5 rounded-full text-sm font-semibold ${categories.find((c) => c.name === formData.type)?.color ?? ''} ${categories.find((c) => c.name === formData.type)?.textColor ?? ''}`}
             >
-              {clothes.type}
+              {formData.type}
             </span>
           </div>
         )}
@@ -311,10 +262,10 @@ export default function EditWardrobePage() {
           {/* LEFT */}
           <div className="space-y-4 h-full">
             <div className="relative rounded-3xl overflow-hidden shadow-sm bg-white">
-              {clothes.image_url && (
+              {formData.image_url && (
                 <Image
-                  src={clothes.image_url}
-                  alt={clothes.name}
+                  src={formData.image_url}
+                  alt={formData.name}
                   width={600}
                   height={600}
                   className="object-cover w-full h-80"
@@ -325,19 +276,19 @@ export default function EditWardrobePage() {
               <button
                 type="button"
                 onClick={() =>
-                  updateField('favorite', !(clothes.favorite ?? false))
+                  updateField('favorite', !(formData.favorite ?? false))
                 }
-                aria-pressed={!!clothes.favorite}
+                aria-pressed={!!formData.favorite}
                 title={
-                  clothes.favorite ? 'Unmark favourite' : 'Mark as favourite'
+                  formData.favorite ? 'Unmark favourite' : 'Mark as favourite'
                 }
                 className={`absolute top-3 right-3 z-20 inline-flex items-center justify-center p-2 rounded-full shadow transition ${
-                  clothes.favorite
+                  formData.favorite
                     ? 'bg-pink-500 text-white hover:brightness-95'
                     : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                {clothes.favorite ? (
+                {formData.favorite ? (
                   // filled heart
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -378,7 +329,7 @@ export default function EditWardrobePage() {
                         {/* Editable name */}
                         <input
                           type="text"
-                          value={clothes.name}
+                          value={formData.name}
                           onChange={(e) => updateField('name', e.target.value)}
                           className="w-full rounded-xl border border-slate-200 text-sm font-semibold placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                           placeholder="Clothing name"
@@ -387,7 +338,7 @@ export default function EditWardrobePage() {
                         {/* Editable color */}
                         <input
                           type="text"
-                          value={clothes.color}
+                          value={formData.color}
                           onChange={(e) => updateField('color', e.target.value)}
                           className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                           placeholder="Color"
@@ -396,9 +347,11 @@ export default function EditWardrobePage() {
                     ) : (
                       <>
                         <h2 className="text-lg font-semibold truncate font-headline">
-                          {clothes.name}
+                          {formData.name}
                         </h2>
-                        <p className="text-sm text-gray-500">{clothes.color}</p>
+                        <p className="text-sm text-gray-500">
+                          {formData.color}
+                        </p>
                       </>
                     )}
                   </div>
@@ -447,7 +400,7 @@ export default function EditWardrobePage() {
                   Type
                 </label>
                 <select
-                  value={clothes.type ?? ''}
+                  value={formData.type ?? ''}
                   onChange={(e) => updateField('type', e.target.value)}
                   className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                 >
@@ -466,7 +419,7 @@ export default function EditWardrobePage() {
                   Season
                 </label>
                 <select
-                  value={clothes.season ?? ''}
+                  value={formData.season ?? ''}
                   onChange={(e) => updateField('season', e.target.value)}
                   className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                 >
@@ -485,7 +438,7 @@ export default function EditWardrobePage() {
                   Size
                 </label>
                 <select
-                  value={clothes.size ?? ''}
+                  value={formData.size ?? ''}
                   onChange={(e) => updateField('size', e.target.value)}
                   className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                 >
@@ -507,7 +460,7 @@ export default function EditWardrobePage() {
                   <div className="space-y-2">
                     <input
                       type="text"
-                      value={clothes.brand ?? ''}
+                      value={formData.brand ?? ''}
                       onChange={(e) => updateField('brand', e.target.value)}
                       className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                       placeholder="Type brand name..."
@@ -526,7 +479,7 @@ export default function EditWardrobePage() {
                   </div>
                 ) : (
                   <select
-                    value={clothes.brand ?? ''}
+                    value={formData.brand ?? ''}
                     onChange={(e) => {
                       if (e.target.value === '__custom__') {
                         setCustomBrand(true);
@@ -554,7 +507,7 @@ export default function EditWardrobePage() {
                   type="number"
                   min={0}
                   step="0.01"
-                  value={clothes.price ?? ''}
+                  value={formData.price ?? ''}
                   onChange={(e) =>
                     updateField(
                       'price',
@@ -575,7 +528,7 @@ export default function EditWardrobePage() {
                   <div className="space-y-2">
                     <input
                       type="text"
-                      value={clothes.material ?? ''}
+                      value={formData.material ?? ''}
                       onChange={(e) => updateField('material', e.target.value)}
                       className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                       placeholder="Type material name..."
@@ -594,7 +547,7 @@ export default function EditWardrobePage() {
                   </div>
                 ) : (
                   <select
-                    value={clothes.material ?? ''}
+                    value={formData.material ?? ''}
                     onChange={(e) => {
                       if (e.target.value === '__custom__') {
                         setCustomMaterial(true);
@@ -642,7 +595,7 @@ export default function EditWardrobePage() {
                   <div className="space-y-2">
                     <input
                       type="text"
-                      value={clothes.location ?? ''}
+                      value={formData.location ?? ''}
                       onChange={(e) => updateField('location', e.target.value)}
                       className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                       placeholder="e.g. Wardrobe A, Drawer 2"
@@ -661,7 +614,7 @@ export default function EditWardrobePage() {
                   </div>
                 ) : (
                   <select
-                    value={clothes.location ?? ''}
+                    value={formData.location ?? ''}
                     onChange={(e) => {
                       if (e.target.value === '__custom__') {
                         setCustomLocation(true);
@@ -693,14 +646,14 @@ export default function EditWardrobePage() {
                   <label
                     key={value}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs cursor-pointer transition ${
-                      (clothes.use_case || []).includes(value)
+                      (formData.use_case || []).includes(value)
                         ? 'bg-black text-white border-black'
                         : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <input
                       type="checkbox"
-                      checked={(clothes.use_case || []).includes(value)}
+                      checked={(formData.use_case || []).includes(value)}
                       onChange={() => toggleUseCase(value)}
                       className="sr-only"
                     />
@@ -720,7 +673,7 @@ export default function EditWardrobePage() {
                 Description
               </label>
               <textarea
-                value={clothes.description ?? ''}
+                value={formData.description ?? ''}
                 onChange={(e) => updateField('description', e.target.value)}
                 className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2 min-h-[80px]"
                 placeholder="Extra details about this piece..."
@@ -731,7 +684,7 @@ export default function EditWardrobePage() {
             <div>
               <label className="block text-xs text-slate-600 mb-1">Notes</label>
               <textarea
-                value={clothes.notes ?? ''}
+                value={formData.notes ?? ''}
                 onChange={(e) => updateField('notes', e.target.value)}
                 className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2 min-h-[80px]"
                 placeholder="Care instructions, outfit ideas, where you wore it..."
@@ -762,12 +715,22 @@ export default function EditWardrobePage() {
                   className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-slate-200 hover:border-slate-400 transition shrink-0"
                 >
                   {item.image_url ? (
-                    <img src={item.image_url} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                    <Image
+                      src={item.image_url}
+                      alt={item.name}
+                      width={40}
+                      height={40}
+                      className="rounded-lg object-cover"
+                    />
                   ) : (
-                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-400">?</div>
+                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-400">
+                      ?
+                    </div>
                   )}
                   <div className="text-left min-w-0">
-                    <div className="text-xs font-medium text-slate-700 truncate max-w-[100px]">{item.name}</div>
+                    <div className="text-xs font-medium text-slate-700 truncate max-w-[100px]">
+                      {item.name}
+                    </div>
                     <div className="text-[10px] text-slate-400">
                       {item.similarity >= 1 ? 'Same color' : 'Same family'}
                     </div>
@@ -776,9 +739,14 @@ export default function EditWardrobePage() {
               ))}
             </div>
             {visualResult && (
-              <div className={`mt-3 text-[11px] px-2 py-1.5 rounded-lg ${visualResult.is_different ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+              <div
+                className={`mt-3 text-[11px] px-2 py-1.5 rounded-lg ${visualResult.is_different ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}
+              >
                 <span className="font-medium">
-                  {visualResult.is_different ? '✓ Different enough' : '⚠ May be redundant'}:
+                  {visualResult.is_different
+                    ? '✓ Different enough'
+                    : '⚠ May be redundant'}
+                  :
                 </span>{' '}
                 {visualResult.reasoning}
               </div>

@@ -23,7 +23,7 @@ export interface ClothingItem {
   type: string;
   color: string;
   season: string;
-  image_url?: string;
+  image_url: string | null;
   favorite?: boolean;
   wear_count?: number;
   use_case?: string[];

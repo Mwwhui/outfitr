@@ -2,7 +2,14 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { clothesOptions, clustersOptions } from '@/hooks/queries/wardrobe';
+import { dashboardStatsOptions } from '@/hooks/queries/dashboard';
+import { useAlerts, monthlyInsightsOptions, pledgesOptions, sustainabilityStoryOptions } from '@/hooks/queries/home';
+import { frequentCombosOptions, outfitDnaOptions } from '@/hooks/queries/outfits';
+import { partnersOptions } from '@/hooks/queries/partners';
+import { outfitPlansOptions } from '@/hooks/queries/calendar';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -45,9 +52,7 @@ const USER_SECTIONS: NavSection[] = [
   },
   {
     title: 'Insights',
-    items: [
-      { icon: 'dashboard', label: 'Dashboard', href: '/dashboard' },
-    ],
+    items: [{ icon: 'dashboard', label: 'Dashboard', href: '/dashboard' }],
   },
 ];
 
@@ -62,74 +67,29 @@ const PARTNER_SECTIONS: NavSection[] = [
   },
   {
     title: 'Insights',
-    items: [
-      { icon: 'dashboard', label: 'Dashboard', href: '/dashboard' },
-    ],
+    items: [{ icon: 'dashboard', label: 'Dashboard', href: '/dashboard' }],
   },
 ];
-
-function usePledgeBadges() {
-  const [prelovedCount, setPrelovedCount] = useState(0);
-  const [activityCount, setActivityCount] = useState(0);
-  const lastFetchRef = useRef(0);
-
-  const fetchCounts = useCallback(async () => {
-    try {
-      const res = await fetch('/api/home/alerts');
-      if (!res.ok) return;
-      const data = await res.json();
-      setPrelovedCount((data.pledges_pending || 0) + (data.pledges_accepted || 0));
-      setActivityCount(data.pledges_total || 0);
-      lastFetchRef.current = Date.now();
-    } catch {
-      // silently fail
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCounts();
-
-    const interval = setInterval(fetchCounts, 300000);
-
-    const handleFocus = () => {
-      if (Date.now() - lastFetchRef.current < 60000) return;
-      fetchCounts();
-    };
-    const handleVisibility = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (Date.now() - lastFetchRef.current < 60000) return;
-      fetchCounts();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [fetchCounts]);
-
-  return { prelovedCount, activityCount };
-}
 
 function NavPill({
   item,
   isActive,
   onClick,
+  onHover,
   index,
   collapsed,
 }: {
   item: NavItem;
   isActive: boolean;
   onClick: () => void;
+  onHover?: () => void;
   index: number;
   collapsed: boolean;
 }) {
   return (
     <motion.button
       onClick={onClick}
+      onMouseEnter={onHover}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.03, duration: 0.25, ease: 'easeOut' }}
@@ -139,7 +99,9 @@ function NavPill({
           : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
       } justify-center ${collapsed ? '' : 'lg:justify-start'}`}
     >
-      <span className="relative z-10 material-symbols-outlined text-lg">{item.icon}</span>
+      <span className="relative z-10 material-symbols-outlined text-lg">
+        {item.icon}
+      </span>
       {!collapsed && (
         <span className="relative z-10 text-sm font-medium flex-1 text-left">
           {item.label}
@@ -158,12 +120,19 @@ function NavPill({
   );
 }
 
-export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggleCollapse }: SidebarProps) {
+export default function Sidebar({
+  mobile,
+  onNavigate,
+  collapsed = false,
+  onToggleCollapse,
+}: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { data: session } = useSession();
   const isPartner = session?.user?.role === 'partner';
-  const { prelovedCount, activityCount } = usePledgeBadges();
+  const { data: alerts } = useAlerts(session?.user?.id);
+  const prelovedCount = alerts?.preloved ?? 0;
+  const activityCount = alerts?.activity ?? 0;
 
   const sections = isPartner ? PARTNER_SECTIONS : USER_SECTIONS;
 
@@ -177,6 +146,56 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
     }),
   }));
 
+  const queryClient = useQueryClient();
+
+  const prefetchPage = useCallback(
+    (href: string) => {
+      const userId = session?.user?.id;
+      switch (href) {
+        case '/home':
+          queryClient.prefetchQuery(monthlyInsightsOptions(userId));
+          queryClient.prefetchQuery(pledgesOptions(userId));
+          queryClient.prefetchQuery(sustainabilityStoryOptions(userId));
+          break;
+        case '/wardrobe':
+          queryClient.prefetchQuery(clothesOptions(userId));
+          queryClient.prefetchQuery(clustersOptions(userId));
+          break;
+        case '/dashboard':
+          queryClient.prefetchQuery(dashboardStatsOptions(userId));
+          queryClient.prefetchQuery(clustersOptions(userId));
+          break;
+        case '/outfits':
+          queryClient.prefetchQuery(frequentCombosOptions(userId));
+          queryClient.prefetchQuery(outfitDnaOptions(userId));
+          break;
+        case '/pre-loved':
+          queryClient.prefetchQuery(clothesOptions(userId));
+          queryClient.prefetchQuery(partnersOptions());
+          break;
+        case '/activity':
+          queryClient.prefetchQuery(pledgesOptions(userId));
+          break;
+        case '/calendar': {
+          const now = new Date();
+          const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+          const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+          queryClient.prefetchQuery(outfitPlansOptions(userId, from, to));
+          break;
+        }
+        case '/planner': {
+          const now = new Date();
+          const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+          const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+          queryClient.prefetchQuery(clothesOptions(userId));
+          queryClient.prefetchQuery(outfitPlansOptions(userId, from, to));
+          break;
+        }
+      }
+    },
+    [queryClient, session?.user?.id],
+  );
+
   const handleNavigate = (href: string) => {
     router.push(href);
     onNavigate?.();
@@ -184,6 +203,7 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
 
   const handleLogout = async () => {
     await signOut({ redirect: false });
+    queryClient.clear();
     router.push('/auth/login');
     onNavigate?.();
   };
@@ -240,6 +260,7 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
                   item={item}
                   isActive={pathname === item.href}
                   onClick={() => handleNavigate(item.href)}
+                  onHover={() => prefetchPage(item.href)}
                   index={si * 10 + ii}
                   collapsed={collapsed}
                 />
@@ -259,8 +280,12 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
             onClick={() => handleNavigate(quickAction.href)}
             className="w-full flex items-center justify-center gap-0 lg:gap-2 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
           >
-            <span className="material-symbols-outlined text-sm">{quickAction.icon}</span>
-            {!collapsed && <span className="hidden lg:inline">{quickAction.label}</span>}
+            <span className="material-symbols-outlined text-sm">
+              {quickAction.icon}
+            </span>
+            {!collapsed && (
+              <span className="hidden lg:inline">{quickAction.label}</span>
+            )}
           </button>
         </motion.div>
       </nav>

@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 interface OutfitItem {
   id: string;
   name: string;
@@ -36,19 +38,34 @@ export default function TodaysEnsemble({
 
   return (
     <div className="glass-card rounded-lg p-6 flex flex-col md:flex-row gap-6">
-      <div className="w-full md:w-1/2 aspect-[4/5] rounded bg-surface-variant overflow-hidden flex items-center justify-center">
+      <div className="w-full md:w-1/2 aspect-[4/5] rounded bg-surface-variant overflow-hidden flex items-center justify-center relative">
         {hasImages ? (
           items.length === 1 ? (
-            <img src={items[0].image_url!} alt={items[0].name} className="w-full h-full object-cover" />
+            <Image
+              fill
+              src={items[0].image_url!}
+              alt={items[0].name}
+              className="object-cover"
+            />
           ) : (
             <div className="grid grid-cols-2 gap-1 w-full h-full">
               {items.slice(0, 4).map((item, i) => (
-                <div key={item.id || i} className="relative overflow-hidden bg-surface-variant">
+                <div
+                  key={item.id || i}
+                  className="relative overflow-hidden bg-surface-variant"
+                >
                   {item.image_url ? (
-                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                    <Image
+                      fill
+                      src={item.image_url}
+                      alt={item.name}
+                      className="object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <span className="material-symbols-outlined text-on-surface-variant">checkroom</span>
+                      <span className="material-symbols-outlined text-on-surface-variant">
+                        checkroom
+                      </span>
                     </div>
                   )}
                 </div>
@@ -56,23 +73,36 @@ export default function TodaysEnsemble({
             </div>
           )
         ) : (
-          <span className="material-symbols-outlined text-5xl text-on-surface-variant">checkroom</span>
+          <span className="material-symbols-outlined text-5xl text-on-surface-variant">
+            checkroom
+          </span>
         )}
       </div>
       <div className="w-full md:w-1/2 flex flex-col justify-between">
         <div>
           {weather && (
             <div className="flex items-center gap-1 text-on-surface-variant mb-3">
-              <span className="material-symbols-outlined text-sm">{weather.icon}</span>
-              <span className="text-sm font-semibold">{weather.temp}&deg;F &bull; {weather.condition}</span>
+              <span className="material-symbols-outlined text-sm">
+                {weather.icon}
+              </span>
+              <span className="text-sm font-semibold">
+                {weather.temp}&deg;F &bull; {weather.condition}
+              </span>
             </div>
           )}
-          <h4 className="text-2xl font-semibold text-on-surface mb-3">{outfitName}</h4>
-          <p className="text-base text-on-surface-variant mb-4">{description}</p>
+          <h4 className="text-2xl font-semibold text-on-surface mb-3">
+            {outfitName}
+          </h4>
+          <p className="text-base text-on-surface-variant mb-4">
+            {description}
+          </p>
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-4">
               {tags.map((tag, i) => (
-                <span key={i} className="px-3 py-1 bg-surface-container-low text-primary border border-surface-variant rounded-full text-xs font-medium">
+                <span
+                  key={i}
+                  className="px-3 py-1 bg-surface-container-low text-primary border border-surface-variant rounded-full text-xs font-medium"
+                >
                   {tag}
                 </span>
               ))}

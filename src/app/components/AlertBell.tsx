@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAlerts, AlertItem } from '../hooks/useAlerts';
+import { useAlerts, AlertItem } from '@/hooks/useAlerts';
 
 interface AlertBellProps {
   variant?: 'sidebar' | 'mobile';

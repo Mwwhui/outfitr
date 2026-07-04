@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,7 +28,11 @@ function isYouTubeId(id: string): boolean {
 }
 
 function openYouTubeSearch(query: string) {
-  window.open(`https://www.youtube.com/results?q=${encodeURIComponent(query)}+DIY+tutorial`, '_blank', 'noopener');
+  window.open(
+    `https://www.youtube.com/results?q=${encodeURIComponent(query)}+DIY+tutorial`,
+    '_blank',
+    'noopener',
+  );
 }
 
 const GRADIENTS = [
@@ -67,7 +72,10 @@ export default function DiyVideoGrid({
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="rounded-2xl overflow-hidden bg-white border border-gray-200 animate-pulse">
+          <div
+            key={i}
+            className="rounded-2xl overflow-hidden bg-white border border-gray-200 animate-pulse"
+          >
             <div className="aspect-video bg-surface-variant" />
             <div className="p-4 space-y-2">
               <div className="h-3 bg-surface-variant rounded w-3/4" />
@@ -102,15 +110,20 @@ export default function DiyVideoGrid({
             >
               <div className="aspect-video relative overflow-hidden">
                 {video.thumbnail ? (
-                  <img
+                  <Image
+                    fill
                     src={video.thumbnail}
                     alt={video.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 768px) 50vw, 33vw"
                   />
                 ) : (
-                  <div className={`w-full h-full bg-gradient-to-br ${GRADIENTS[i % GRADIENTS.length]} flex flex-col items-center justify-center gap-2 p-4`}>
-                    <span className="material-symbols-outlined text-5xl text-white/70">smart_display</span>
+                  <div
+                    className={`w-full h-full bg-gradient-to-br ${GRADIENTS[i % GRADIENTS.length]} flex flex-col items-center justify-center gap-2 p-4`}
+                  >
+                    <span className="material-symbols-outlined text-5xl text-white/70">
+                      smart_display
+                    </span>
                     {!isYouTubeId(video.id) && (
                       <>
                         <p className="text-xs text-white/80 font-medium text-center leading-tight line-clamp-2 max-w-full">
@@ -125,7 +138,9 @@ export default function DiyVideoGrid({
                 )}
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                   <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                    <span className="material-symbols-outlined text-2xl text-[#0f172a]">play_arrow</span>
+                    <span className="material-symbols-outlined text-2xl text-[#0f172a]">
+                      play_arrow
+                    </span>
                   </div>
                 </div>
 
@@ -135,9 +150,11 @@ export default function DiyVideoGrid({
                     onClick={(e) => handleSave(e, video)}
                     className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 flex items-center justify-center transition-colors cursor-pointer z-10"
                   >
-                    <span className={`material-symbols-outlined text-sm ${
-                      isSaved ? 'text-amber-300' : 'text-white/80'
-                    }`}>
+                    <span
+                      className={`material-symbols-outlined text-sm ${
+                        isSaved ? 'text-amber-300' : 'text-white/80'
+                      }`}
+                    >
                       {isSaved ? 'bookmark' : 'bookmark_border'}
                     </span>
                   </div>
@@ -153,7 +170,9 @@ export default function DiyVideoGrid({
                   {video.title}
                 </p>
                 <p className="text-xs text-on-surface-variant/60 mt-1.5">
-                  {isYouTubeId(video.id) ? video.channelTitle : 'Watch on YouTube →'}
+                  {isYouTubeId(video.id)
+                    ? video.channelTitle
+                    : 'Watch on YouTube →'}
                 </p>
               </div>
             </button>
@@ -171,7 +190,7 @@ export default function DiyVideoGrid({
           >
             {loadingMore ? (
               <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-[#0f172a] border-t-transparent rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
                 Loading...
               </span>
             ) : (
@@ -222,7 +241,9 @@ export default function DiyVideoGrid({
                     onClick={() => setActiveVideo(null)}
                     className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-on-surface-variant hover:bg-gray-200 transition shrink-0"
                   >
-                    <span className="material-symbols-outlined text-sm">close</span>
+                    <span className="material-symbols-outlined text-sm">
+                      close
+                    </span>
                   </button>
                 </div>
               </div>

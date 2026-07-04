@@ -131,8 +131,16 @@ export default function PartnerDirectory({
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {loadingPartners ? (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-sm">Fetching partners...</p>
+          <div className="space-y-3 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3 p-3 border border-outline-variant rounded-xl">
+                <div className="w-10 h-10 rounded-full bg-surface-variant shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-surface-variant rounded w-3/4" />
+                  <div className="h-3 bg-surface-variant rounded w-1/2" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredPartners.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
