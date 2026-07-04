@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 interface WearItem {
   item_id: string;
   name: string;
@@ -15,11 +17,17 @@ interface Props {
   wearLabel?: string;
 }
 
-export default function HighestRotation({ items, title = 'Highest Rotation', wearLabel = 'wears' }: Props) {
+export default function HighestRotation({
+  items,
+  title = 'Highest Rotation',
+  wearLabel = 'wears',
+}: Props) {
   if (items.length === 0) {
     return (
       <div className="bg-surface-bright p-6 rounded-lg border border-outline-variant flex flex-col items-center justify-center min-h-[200px]">
-        <span className="material-symbols-outlined text-3xl text-on-surface-variant mb-2">trending_up</span>
+        <span className="material-symbols-outlined text-3xl text-on-surface-variant mb-2">
+          trending_up
+        </span>
         <p className="text-sm text-on-surface-variant">No wear data yet</p>
       </div>
     );
@@ -40,14 +48,24 @@ export default function HighestRotation({ items, title = 'Highest Rotation', wea
         {display.map((item, i) => {
           const wearCount = item.times_worn_this_month || item.total_wears;
           return (
-            <li key={item.item_id || i} className="flex justify-between items-center border-b border-surface-variant pb-2 gap-2 last:border-b-0 last:pb-0">
+            <li
+              key={item.item_id || i}
+              className="flex justify-between items-center border-b border-surface-variant pb-2 gap-2 last:border-b-0 last:pb-0"
+            >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded overflow-hidden bg-surface-variant shrink-0">
+                <div className="w-8 h-8 rounded overflow-hidden bg-surface-variant shrink-0 relative">
                   {item.image_url ? (
-                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                    <Image
+                      fill
+                      src={item.image_url}
+                      alt={item.name}
+                      className="object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">checkroom</span>
+                      <span className="material-symbols-outlined text-sm text-on-surface-variant">
+                        checkroom
+                      </span>
                     </div>
                   )}
                 </div>

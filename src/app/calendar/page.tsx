@@ -3,6 +3,7 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import toast from 'react-hot-toast';
 import {
   useOutfitPlans,
@@ -80,10 +81,11 @@ function TooltipSlotGroup({
             className="relative aspect-[3/4] rounded-lg overflow-hidden bg-slate-100"
           >
             {item.image_url ? (
-              <img
+              <Image
+                fill
                 src={item.image_url}
                 alt={item.name}
-                className="w-full h-full object-cover"
+                className="object-cover"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-slate-400 text-[10px]">
@@ -148,7 +150,10 @@ export default function CalendarPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
-  const { data: googleConnected } = useGoogleStatus(session?.user?.id, status === 'authenticated');
+  const { data: googleConnected } = useGoogleStatus(
+    session?.user?.id,
+    status === 'authenticated',
+  );
   const isGoogleConnected = googleConnected ?? false;
   const deletePlan = useDeleteOutfitPlan(session?.user?.id);
 

@@ -3,10 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { useClothes } from '@/hooks/queries/wardrobe';
 import { useOutfitPlans } from '@/hooks/queries/calendar';
 import { useWeather } from '@/hooks/queries/weather';
-import { useCreateOutfitPlan, useDeleteOutfitPlan } from '@/hooks/mutations/outfitPlans';
+import {
+  useCreateOutfitPlan,
+  useDeleteOutfitPlan,
+} from '@/hooks/mutations/outfitPlans';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
@@ -97,7 +101,9 @@ export default function PlannerPage() {
   const [panelMode, setPanelMode] = useState<'suggestions' | 'complete'>(
     'suggestions',
   );
-  const { data: weatherResult, isLoading: panelWeatherLoading } = useWeather(showSuggestions && status === 'authenticated');
+  const { data: weatherResult, isLoading: panelWeatherLoading } = useWeather(
+    showSuggestions && status === 'authenticated',
+  );
   const panelWeather = weatherResult?.current ?? null;
   const createPlan = useCreateOutfitPlan(session?.user?.id);
   const deletePlan = useDeleteOutfitPlan(session?.user?.id);
@@ -126,7 +132,11 @@ export default function PlannerPage() {
     setUrlReady(true);
   }, [searchParams]);
 
-  const { data: outfitPlans } = useOutfitPlans(session?.user?.id, selectedDate, selectedDate);
+  const { data: outfitPlans } = useOutfitPlans(
+    session?.user?.id,
+    selectedDate,
+    selectedDate,
+  );
 
   useEffect(() => {
     if (!urlReady) return;
@@ -493,19 +503,22 @@ export default function PlannerPage() {
                         e.dataTransfer.setData('text/plain', item.id);
                         e.dataTransfer.effectAllowed = 'copyMove';
                       }}
-                      className="bg-slate-50 rounded-xl overflow-hidden border border-slate-200 hover:border-black cursor-grab active:cursor-grabbing transition"
+                      className="bg-slate-50 rounded-xl border border-slate-200 hover:border-black cursor-grab active:cursor-grabbing transition"
                     >
-                      {item.image_url ? (
-                        <img
-                          src={item.image_url}
-                          alt={item.name}
-                          className="h-24 w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-24 flex items-center justify-center text-xs text-slate-400">
-                          No Image
-                        </div>
-                      )}
+                      <div className="relative h-24 overflow-hidden rounded-t-xl">
+                        {item.image_url ? (
+                          <Image
+                            fill
+                            src={item.image_url}
+                            alt={item.name}
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="h-24 flex items-center justify-center text-xs text-slate-400">
+                            No Image
+                          </div>
+                        )}
+                      </div>
 
                       <div className="px-2 py-1">
                         <p className="text-[11px] text-slate-500 truncate">

@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { useUpdatePledgeStatus } from '@/hooks/mutations/pledges';
 import type { IDetectedBarcode, IScannerError } from '@yudiel/react-qr-scanner';
@@ -60,7 +61,9 @@ export default function PartnerScanPage() {
   const [pendingPledgeId, setPendingPledgeId] = useState<string | null>(null);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [preview, setPreview] = useState<PledgePreview | null>(null);
-  const [expandedImage, setExpandedImage] = useState<PledgePreviewItem | null>(null);
+  const [expandedImage, setExpandedImage] = useState<PledgePreviewItem | null>(
+    null,
+  );
 
   const processingRef = useRef(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,9 +198,7 @@ export default function PartnerScanPage() {
         setCameraError('Camera does not meet the required constraints.');
         break;
       case 'insecure-context':
-        setCameraError(
-          'Camera access requires a secure connection (HTTPS).',
-        );
+        setCameraError('Camera access requires a secure connection (HTTPS).');
         break;
       case 'unsupported':
         setCameraError(
@@ -205,9 +206,7 @@ export default function PartnerScanPage() {
         );
         break;
       default:
-        setCameraError(
-          `Camera error: ${error.message || 'Unknown error'}`,
-        );
+        setCameraError(`Camera error: ${error.message || 'Unknown error'}`);
     }
     setPhase('error');
   }, []);
@@ -264,9 +263,7 @@ export default function PartnerScanPage() {
             {cameraError ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6 text-center">
                 <div className="text-5xl mb-4">📷</div>
-                <p className="text-lg font-semibold mb-1">
-                  Camera Unavailable
-                </p>
+                <p className="text-lg font-semibold mb-1">Camera Unavailable</p>
                 <p className="text-sm text-gray-300 mb-5 max-w-sm">
                   {cameraError}
                 </p>
@@ -422,10 +419,12 @@ export default function PartnerScanPage() {
                                       onClick={() => setExpandedImage(item)}
                                       className="shrink-0"
                                     >
-                                      <img
+                                      <Image
                                         src={item.image_url}
                                         alt={item.name}
-                                        className="w-8 h-8 rounded-lg object-cover cursor-pointer hover:ring-2 hover:ring-white/50 transition"
+                                        width={32}
+                                        height={32}
+                                        className="rounded-lg object-cover cursor-pointer hover:ring-2 hover:ring-white/50 transition"
                                       />
                                     </button>
                                   ) : (
@@ -435,9 +434,7 @@ export default function PartnerScanPage() {
                                       </span>
                                     </div>
                                   )}
-                                  <span className="truncate">
-                                    {item.name}
-                                  </span>
+                                  <span className="truncate">{item.name}</span>
                                   {item.brand && (
                                     <span className="text-white/40 text-xs truncate">
                                       · {item.brand}
@@ -457,7 +454,9 @@ export default function PartnerScanPage() {
                             <span>⏱️</span>
                             <span>
                               Pledged {daysSince(preview.created_at)} day
-                              {daysSince(preview.created_at) !== 1 ? 's' : ''}{' '}
+                              {daysSince(preview.created_at) !== 1
+                                ? 's'
+                                : ''}{' '}
                               ago
                             </span>
                             {daysSince(preview.created_at) > 30 && (
@@ -515,12 +514,8 @@ export default function PartnerScanPage() {
                             />
                           </svg>
                         </div>
-                        <p className="text-xl font-bold">
-                          Pledge Fulfilled!
-                        </p>
-                        <p className="text-sm text-gray-300 mt-1">
-                          {userName}
-                        </p>
+                        <p className="text-xl font-bold">Pledge Fulfilled!</p>
+                        <p className="text-sm text-gray-300 mt-1">{userName}</p>
                         <p className="text-xs text-gray-400 mt-1">
                           Ready for next scan...
                         </p>
@@ -537,9 +532,7 @@ export default function PartnerScanPage() {
           <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
             <span className="text-xl flex-shrink-0 mt-0.5">⚠️</span>
             <div>
-              <p className="text-sm font-semibold text-red-800">
-                Scan Failed
-              </p>
+              <p className="text-sm font-semibold text-red-800">Scan Failed</p>
               <p className="text-sm text-red-700 mt-0.5">{errorMessage}</p>
             </div>
           </div>
@@ -586,11 +579,13 @@ export default function PartnerScanPage() {
           >
             ✕
           </button>
-          <div className="max-w-full max-h-full flex flex-col items-center">
-            <img
+          <div className="max-w-full max-h-full flex flex-col items-center relative">
+            <Image
+              fill
               src={expandedImage.image_url!}
               alt={expandedImage.name}
-              className="max-w-full max-h-[75vh] rounded-xl object-contain"
+              className="object-contain rounded-xl"
+              sizes="90vw"
             />
             <p className="text-white text-sm mt-3 font-medium">
               {expandedImage.name}

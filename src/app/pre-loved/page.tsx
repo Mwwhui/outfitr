@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { usePartners } from '@/hooks/queries/partners';
 import { useClothes } from '@/hooks/queries/wardrobe';
 import { useCreatePledge } from '@/hooks/mutations/pledges';
@@ -153,7 +154,9 @@ export default function PreLovedPage() {
         await createPledge.mutateAsync({ partnerId, itemIds, actionType });
         toast.success('Pledge submitted! Check your email for confirmation.');
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to submit pledge');
+        toast.error(
+          err instanceof Error ? err.message : 'Failed to submit pledge',
+        );
       }
     },
     [],
@@ -308,14 +311,15 @@ export default function PreLovedPage() {
             <div className="flex gap-3 overflow-x-auto pb-3">
               {pendingItems.map((item) => (
                 <div key={item.id} className="shrink-0 w-24">
-                  <div className="aspect-[3/4] rounded-xl overflow-hidden bg-white mb-1.5 shadow-sm">
+                  <div className="aspect-[3/4] rounded-xl overflow-hidden bg-white mb-1.5 shadow-sm relative">
                     {(item as Record<string, unknown>).image_url ? (
-                      <img
+                      <Image
+                        fill
                         src={
                           (item as Record<string, unknown>).image_url as string
                         }
                         alt={item.name}
-                        className="w-full h-full object-cover"
+                        className="object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-xs text-amber-300">

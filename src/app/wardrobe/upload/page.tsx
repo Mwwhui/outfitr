@@ -4,6 +4,7 @@ import { useState, useEffect, useReducer, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
+import Image from 'next/image';
 import {
   useCategories,
   useSuggestions,
@@ -487,10 +488,11 @@ export default function UploadClothesPage() {
             >
               {imagePreview ? (
                 <div className="relative w-full h-full">
-                  <img
+                  <Image
+                    fill
                     src={imagePreview}
                     alt={fields.name || 'Clothing preview'}
-                    className="w-full h-full object-cover"
+                    className="object-cover"
                   />
                   {detecting && (
                     <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-white/90 text-xs text-slate-600 px-2.5 py-1.5 rounded-full z-10 shadow-sm backdrop-blur-sm">
@@ -591,10 +593,12 @@ export default function UploadClothesPage() {
                       className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border border-amber-100 shrink-0"
                     >
                       {item.image_url ? (
-                        <img
+                        <Image
                           src={item.image_url}
                           alt={item.name}
-                          className="w-8 h-8 rounded object-cover"
+                          width={32}
+                          height={32}
+                          className="rounded object-cover"
                         />
                       ) : (
                         <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">
@@ -995,8 +999,12 @@ export default function UploadClothesPage() {
           await cam.handleSave(uid);
           queryClientForCam.invalidateQueries({ queryKey: ['clothes', uid] });
           queryClientForCam.invalidateQueries({ queryKey: ['clusters', uid] });
-          queryClientForCam.invalidateQueries({ queryKey: ['dashboard-stats', uid] });
-          queryClientForCam.invalidateQueries({ queryKey: ['sustainability-story', uid] });
+          queryClientForCam.invalidateQueries({
+            queryKey: ['dashboard-stats', uid],
+          });
+          queryClientForCam.invalidateQueries({
+            queryKey: ['sustainability-story', uid],
+          });
         }}
         onEditItemsChange={cam.setEditItems}
       />

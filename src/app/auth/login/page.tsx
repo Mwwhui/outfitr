@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import Loader from '../../components/Loader';
 
 export default function LoginPage() {
@@ -96,10 +97,11 @@ export default function LoginPage() {
             onClick={() => signIn('google', { callbackUrl: '/home' })}
             className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-lg py-2 hover:bg-gray-50 transition"
           >
-            <img
+            <Image
               src="https://developers.google.com/identity/images/g-logo.png"
               alt="Google"
-              className="h-5 w-5"
+              width={20}
+              height={20}
             />
             <span className="text-sm font-medium text-gray-700">
               Continue with Google

@@ -12,7 +12,10 @@ import {
   useSuggestions,
   useSimilarItems,
 } from '@/hooks/queries/wardrobe';
-import { useUpdateClothing, useDeleteClothing } from '@/hooks/mutations/clothing';
+import {
+  useUpdateClothing,
+  useDeleteClothing,
+} from '@/hooks/mutations/clothing';
 import ConfirmModal from '../../components/ConfirmModal';
 
 type Clothes = ItemDetail;
@@ -712,10 +715,12 @@ export default function EditWardrobePage() {
                   className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-slate-200 hover:border-slate-400 transition shrink-0"
                 >
                   {item.image_url ? (
-                    <img
+                    <Image
                       src={item.image_url}
                       alt={item.name}
-                      className="w-10 h-10 rounded-lg object-cover"
+                      width={40}
+                      height={40}
+                      className="rounded-lg object-cover"
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-400">

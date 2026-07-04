@@ -2,12 +2,16 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWeather } from '@/hooks/queries/weather';
 import { useClothes, type ClothingItem } from '@/hooks/queries/wardrobe';
 import { useOutfitPlans } from '@/hooks/queries/calendar';
-import { useCreateOutfitPlan, useDeleteOutfitPlan } from '@/hooks/mutations/outfitPlans';
+import {
+  useCreateOutfitPlan,
+  useDeleteOutfitPlan,
+} from '@/hooks/mutations/outfitPlans';
 import {
   useFrequentCombos,
   useOutfitDNA,
@@ -61,18 +65,18 @@ function ComboImageGrid({ items }: { items: ComboItem[] }) {
     });
 
   return (
-    <div className="grid grid-cols-2 gap-2 aspect-[4/3]">
+    <div className="grid grid-cols-2 gap-2 aspect-[4/3] auto-rows-fr">
       {grid.map((item, i) => (
         <div
           key={item.id + i}
-          className="bg-surface-container rounded-lg overflow-hidden"
+          className="bg-surface-container rounded-lg overflow-hidden relative"
         >
           {item.image_url ? (
-            <img
+            <Image
+              fill
               src={item.image_url}
               alt={item.name}
-              className="w-full h-full object-cover"
-              loading="lazy"
+              className="object-cover"
             />
           ) : item.type ? (
             <div
@@ -281,7 +285,10 @@ export default function OutfitsPage() {
   >('favorites');
   const [dnaLoaded, setDnaLoaded] = useState(false);
 
-  const { data: freqData, isLoading: combosLoading } = useFrequentCombos(session?.user?.id, 10);
+  const { data: freqData, isLoading: combosLoading } = useFrequentCombos(
+    session?.user?.id,
+    10,
+  );
   const {
     data: dna,
     refetch: refetchDna,
@@ -902,14 +909,14 @@ export default function OutfitsPage() {
                           Schedule Weekly
                         </button>
                         {showPicker && (
-    <MiniCalendarPicker
-      items={combo.items}
-      onScheduled={() => {
-        setSchedulingCombo(null);
-        refreshPlans();
-      }}
-      createPlan={createPlan}
-    />
+                          <MiniCalendarPicker
+                            items={combo.items}
+                            onScheduled={() => {
+                              setSchedulingCombo(null);
+                              refreshPlans();
+                            }}
+                            createPlan={createPlan}
+                          />
                         )}
                         <button
                           onClick={(e) => {
@@ -994,13 +1001,14 @@ export default function OutfitsPage() {
                               {bentoItem.items.slice(0, 2).map((item, i) => (
                                 <div
                                   key={i}
-                                  className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-surface-variant"
+                                  className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-surface-variant relative"
                                 >
                                   {item.image_url ? (
-                                    <img
+                                    <Image
+                                      fill
                                       src={item.image_url}
                                       alt={item.name}
-                                      className="w-full h-full object-cover"
+                                      className="object-cover"
                                     />
                                   ) : (
                                     <div
@@ -1051,10 +1059,11 @@ export default function OutfitsPage() {
                                 className="h-[85%] aspect-[3/4] shrink-0 relative overflow-hidden rounded-lg"
                               >
                                 {item.image_url ? (
-                                  <img
+                                  <Image
+                                    fill
                                     src={item.image_url}
                                     alt={item.name}
-                                    className="w-full h-full object-cover"
+                                    className="object-cover"
                                   />
                                 ) : (
                                   <div
@@ -1091,14 +1100,15 @@ export default function OutfitsPage() {
                           }
                           className="bg-surface-bright border border-outline-variant p-4 rounded-xl flex items-center gap-4 group cursor-pointer hover:bg-surface-container-low transition-colors"
                         >
-                          <div className="w-20 h-20 rounded-lg shrink-0 overflow-hidden grid grid-cols-2 gap-0.5">
+                          <div className="w-20 h-20 rounded-lg shrink-0 overflow-hidden grid grid-cols-2 gap-0.5 auto-rows-fr">
                             {item.items.slice(0, 2).map((it, j) => (
                               <div key={j} className="relative overflow-hidden">
                                 {it.image_url ? (
-                                  <img
+                                  <Image
+                                    fill
                                     src={it.image_url}
                                     alt={it.name}
-                                    className="w-full h-full object-cover"
+                                    className="object-cover"
                                   />
                                 ) : (
                                   <div

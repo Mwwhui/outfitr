@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
@@ -28,12 +29,25 @@ interface Props {
 }
 
 const COLOR_MAP: Record<string, string> = {
-  black: '#1e293b', white: '#f8fafc', grey: '#94a3b8', blue: '#3b82f6',
-  red: '#ef4444', green: '#22c55e', brown: '#a16207', pink: '#ec4899',
-  purple: '#a855f7', orange: '#f97316', yellow: '#eab308',
+  black: '#1e293b',
+  white: '#f8fafc',
+  grey: '#94a3b8',
+  blue: '#3b82f6',
+  red: '#ef4444',
+  green: '#22c55e',
+  brown: '#a16207',
+  pink: '#ec4899',
+  purple: '#a855f7',
+  orange: '#f97316',
+  yellow: '#eab308',
 };
 
-export default function DuplicateCompareModal({ open, group, onClose, userId }: Props) {
+export default function DuplicateCompareModal({
+  open,
+  group,
+  onClose,
+  userId,
+}: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -57,7 +71,9 @@ export default function DuplicateCompareModal({ open, group, onClose, userId }: 
   };
 
   // Only non-pending items can be kept or deleted
-  const actionableItems = group.items.filter((i) => i.status !== 'pending_action');
+  const actionableItems = group.items.filter(
+    (i) => i.status !== 'pending_action',
+  );
   const pendingItems = group.items.filter((i) => i.status === 'pending_action');
   const keepItems = actionableItems.filter((i) => selectedIds.has(i.id));
   const deleteItems = actionableItems.filter((i) => !selectedIds.has(i.id));
@@ -84,24 +100,27 @@ export default function DuplicateCompareModal({ open, group, onClose, userId }: 
         const keptNames = keepItems.map((i) => i.name).join(', ');
         toast.success(
           `Kept ${keptNames}. ${deleteIds.length} item${deleteIds.length > 1 ? 's' : ''} moved to Pre-Loved.`,
-          { duration: 5000 }
+          { duration: 5000 },
         );
         // Undo toast
-        toast((t) => (
-          <button
-            onClick={async () => {
-              await batchUpdate.mutateAsync({
-                ids: deleteIds,
-                status: null,
-              });
-              toast.dismiss(t.id);
-              toast.success('Items restored to wardrobe');
-            }}
-            className="text-sm font-semibold underline"
-          >
-            Undo
-          </button>
-        ), { duration: 5000 });
+        toast(
+          (t) => (
+            <button
+              onClick={async () => {
+                await batchUpdate.mutateAsync({
+                  ids: deleteIds,
+                  status: null,
+                });
+                toast.dismiss(t.id);
+                toast.success('Items restored to wardrobe');
+              }}
+              className="text-sm font-semibold underline"
+            >
+              Undo
+            </button>
+          ),
+          { duration: 5000 },
+        );
       }
 
       // Reset and close
@@ -141,16 +160,27 @@ export default function DuplicateCompareModal({ open, group, onClose, userId }: 
             </h2>
             <p className="text-xs text-slate-400">
               {pendingItems.length > 0 && (
-                <span className="text-amber-500 font-medium">{pendingItems.length} already flagged · </span>
+                <span className="text-amber-500 font-medium">
+                  {pendingItems.length} already flagged ·{' '}
+                </span>
               )}
-              Tap items to keep — {actionableItems.length - selectedIds.size} will be moved to Pre-Loved
+              Tap items to keep — {actionableItems.length - selectedIds.size}{' '}
+              will be moved to Pre-Loved
             </p>
           </div>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            >
               <path d="M18 6L6 18" />
               <path d="M6 6l12 12" />
             </svg>
@@ -170,21 +200,29 @@ export default function DuplicateCompareModal({ open, group, onClose, userId }: 
                     isSelected
                       ? 'border-emerald-500 shadow-lg shadow-emerald-500/10'
                       : isPending
-                      ? 'border-amber-200 opacity-60'
-                      : 'border-transparent hover:border-slate-200'
+                        ? 'border-amber-200 opacity-60'
+                        : 'border-transparent hover:border-slate-200'
                   }`}
                 >
                   {/* Image */}
                   <div className="aspect-[3/4] bg-slate-100 relative">
                     {item.image_url ? (
-                      <img
+                      <Image
+                        fill
                         src={item.image_url}
                         alt={item.name}
-                        className="w-full h-full object-cover"
+                        className="object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-slate-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          className="w-10 h-10 opacity-30"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                        >
                           <rect x="3" y="3" width="18" height="18" rx="2" />
                           <circle cx="8.5" cy="8.5" r="1.5" />
                           <path d="M21 15l-5-5L5 21" />
@@ -203,7 +241,16 @@ export default function DuplicateCompareModal({ open, group, onClose, userId }: 
                     {isSelected && (
                       <div className="absolute inset-0 bg-emerald-500/10 flex items-center justify-center">
                         <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            className="w-6 h-6 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <path d="M20 6L9 17l-5-5" />
                           </svg>
                         </div>
@@ -211,30 +258,44 @@ export default function DuplicateCompareModal({ open, group, onClose, userId }: 
                     )}
 
                     {/* Wear count badge */}
-                    {!isPending && maxWear > 0 && item.wear_count === maxWear && (
-                      <div className="absolute top-2 left-2 bg-emerald-500 text-white rounded-full px-2 py-0.5 text-[10px] font-bold shadow-sm flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[11px] leading-none" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
-                        Most Worn
-                      </div>
-                    )}
+                    {!isPending &&
+                      maxWear > 0 &&
+                      item.wear_count === maxWear && (
+                        <div className="absolute top-2 left-2 bg-emerald-500 text-white rounded-full px-2 py-0.5 text-[10px] font-bold shadow-sm flex items-center gap-1">
+                          <span
+                            className="material-symbols-outlined text-[11px] leading-none"
+                            style={{ fontVariationSettings: "'FILL' 1" }}
+                          >
+                            local_fire_department
+                          </span>
+                          Most Worn
+                        </div>
+                      )}
                     {!isPending && item.wear_count === 0 && (
                       <div className="absolute top-2 left-2 bg-slate-100 text-slate-400 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm">
                         Never Worn
                       </div>
                     )}
-                    {!isPending && maxWear > 0 && item.wear_count > 0 && item.wear_count < maxWear && (
-                      <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] font-semibold text-slate-600 shadow-sm">
-                        Worn {item.wear_count}×
-                      </div>
-                    )}
+                    {!isPending &&
+                      maxWear > 0 &&
+                      item.wear_count > 0 &&
+                      item.wear_count < maxWear && (
+                        <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-full px-2 py-0.5 text-[10px] font-semibold text-slate-600 shadow-sm">
+                          Worn {item.wear_count}×
+                        </div>
+                      )}
                   </div>
 
                   {/* Info */}
                   <div className="p-3 bg-white">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{item.name}</p>
+                    <p className="text-sm font-semibold text-slate-800 truncate">
+                      {item.name}
+                    </p>
                     <div className="flex items-center gap-2 mt-1">
                       {item.price > 0 && (
-                        <span className="text-xs text-slate-400">RM{item.price}</span>
+                        <span className="text-xs text-slate-400">
+                          RM{item.price}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -247,11 +308,15 @@ export default function DuplicateCompareModal({ open, group, onClose, userId }: 
                       isPending
                         ? 'bg-amber-50 text-amber-400 cursor-not-allowed'
                         : isSelected
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    {isPending ? 'Already flagged' : isSelected ? 'Keeping' : 'Keep'}
+                    {isPending
+                      ? 'Already flagged'
+                      : isSelected
+                        ? 'Keeping'
+                        : 'Keep'}
                   </button>
                 </div>
               );
@@ -262,16 +327,20 @@ export default function DuplicateCompareModal({ open, group, onClose, userId }: 
         {/* Confirmation bar */}
         <div
           className={`border-t border-slate-100 bg-white px-6 py-4 shrink-0 transition-all duration-300 ${
-            showConfirm && hasSelection ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'
+            showConfirm && hasSelection
+              ? 'translate-y-0 opacity-100'
+              : 'translate-y-full opacity-0 pointer-events-none'
           }`}
         >
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-800 truncate">
-                Keeping {keepItems.length} item{keepItems.length !== 1 ? 's' : ''}
+                Keeping {keepItems.length} item
+                {keepItems.length !== 1 ? 's' : ''}
               </p>
               <p className="text-xs text-slate-400">
-                {deleteIds.length} item{deleteIds.length !== 1 ? 's' : ''} will be moved to Pre-Loved
+                {deleteIds.length} item{deleteIds.length !== 1 ? 's' : ''} will
+                be moved to Pre-Loved
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
