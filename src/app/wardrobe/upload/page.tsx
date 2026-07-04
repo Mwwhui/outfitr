@@ -3,8 +3,13 @@
 import { useState, useEffect, useReducer, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
-  Category,
+  useCategories,
+  useSuggestions,
+  useSimilarItems,
+} from '@/hooks/queries/wardrobe';
+import {
   SEASONS,
   SIZES,
   MATERIALS,
@@ -55,32 +60,10 @@ function formReducer(state: FormFields, next: Partial<FormFields>): FormFields {
   return { ...state, ...next };
 }
 
-function useSuggestions(userId: string | undefined) {
-  const [brandSuggestions, setBrandSuggestions] = useState<string[]>([]);
-  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
-  const [materialSuggestions, setMaterialSuggestions] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!userId) return;
-    Promise.all([
-      fetch(`/api/brands?user_id=${userId}`).then((r) => r.json()),
-      fetch(`/api/locations?user_id=${userId}`).then((r) => r.json()),
-      fetch(`/api/materials?user_id=${userId}`).then((r) => r.json()),
-    ])
-      .then(([brandsData, locationsData, materialsData]) => {
-        setBrandSuggestions(brandsData.brands || []);
-        setLocationSuggestions(locationsData.locations || []);
-        setMaterialSuggestions(materialsData.materials || []);
-      })
-      .catch(() => {});
-  }, [userId]);
-
-  return { brandSuggestions, locationSuggestions, materialSuggestions };
-}
-
 export default function UploadClothesPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
   const [fields, setField] = useReducer(formReducer, initialForm);
 
   const [customBrand, setCustomBrand] = useState(false);
@@ -97,28 +80,38 @@ export default function UploadClothesPage() {
     source: ColorSource | null;
   } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [formError, setFormError] = useState('');
-  const [similarItems, setSimilarItems] = useState<Array<{id: string; name: string; color: string | null; image_url: string | null; similarity: number}>>([]);
-  const [checkingSimilar, setCheckingSimilar] = useState(false);
-  const [visualResult, setVisualResult] = useState<{is_different: boolean; reasoning: string; confidence: number} | null>(null);
+  const [visualResult, setVisualResult] = useState<{
+    is_different: boolean;
+    reasoning: string;
+    confidence: number;
+  } | null>(null);
   const [similarDismissed, setSimilarDismissed] = useState(false);
   const [useCaseDetected, setUseCaseDetected] = useState(false);
 
-  const { brandSuggestions, locationSuggestions, materialSuggestions } =
-    useSuggestions(session?.user?.id);
+  const { data: categories = [] } = useCategories();
+  const { data: brandSuggestions = [] } = useSuggestions(
+    'brands',
+    session?.user?.id,
+  );
+  const { data: locationSuggestions = [] } = useSuggestions(
+    'locations',
+    session?.user?.id,
+  );
+  const { data: materialSuggestions = [] } = useSuggestions(
+    'materials',
+    session?.user?.id,
+  );
+  const { data: similarItems = [] } = useSimilarItems(
+    fields.type,
+    fields.color || undefined,
+    undefined,
+    session?.user?.id,
+  );
 
   const cam = useCameraScanner();
   const fileKeyRef = useRef('');
   const compressedCacheRef = useRef<{ key: string; file: File } | null>(null);
-
-  // Fetch categories on mount
-  useEffect(() => {
-    fetch('/api/categories')
-      .then((r) => r.json())
-      .then(setCategories)
-      .catch(() => setCategories([]));
-  }, []);
 
   // Auto-detect for file upload
   useEffect(() => {
@@ -149,35 +142,49 @@ export default function UploadClothesPage() {
             method: 'POST',
             body: fdYolo,
             signal: abortController.signal,
-          }).then((r) => {
-            if (!r.ok) throw new Error('YOLO API error');
-            return r.json();
-          }).catch((err) => {
-            console.error('YOLO detection failed:', err);
-            return null;
-          }),
-          fetchWithTimeout('/api/clothes/detect-color', {
-            method: 'POST',
-            body: fdGemini,
-            signal: abortController.signal,
-          }, GEMINI_TIMEOUT_MS).then((r) => {
-            if (!r.ok) throw new Error('Gemini API error');
-            return r.json();
-          }).catch((err) => {
-            console.error('Gemini color detection failed:', err);
-            return null;
-          }),
-          fetchWithTimeout('/api/clothes/detect-use-case', {
-            method: 'POST',
-            body: fdUseCase,
-            signal: abortController.signal,
-          }, GEMINI_TIMEOUT_MS).then((r) => {
-            if (!r.ok) throw new Error('Use case API error');
-            return r.json();
-          }).catch((err) => {
-            console.error('Use case detection failed:', err);
-            return null;
-          }),
+          })
+            .then((r) => {
+              if (!r.ok) throw new Error('YOLO API error');
+              return r.json();
+            })
+            .catch((err) => {
+              console.error('YOLO detection failed:', err);
+              return null;
+            }),
+          fetchWithTimeout(
+            '/api/clothes/detect-color',
+            {
+              method: 'POST',
+              body: fdGemini,
+              signal: abortController.signal,
+            },
+            GEMINI_TIMEOUT_MS,
+          )
+            .then((r) => {
+              if (!r.ok) throw new Error('Gemini API error');
+              return r.json();
+            })
+            .catch((err) => {
+              console.error('Gemini color detection failed:', err);
+              return null;
+            }),
+          fetchWithTimeout(
+            '/api/clothes/detect-use-case',
+            {
+              method: 'POST',
+              body: fdUseCase,
+              signal: abortController.signal,
+            },
+            GEMINI_TIMEOUT_MS,
+          )
+            .then((r) => {
+              if (!r.ok) throw new Error('Use case API error');
+              return r.json();
+            })
+            .catch((err) => {
+              console.error('Use case detection failed:', err);
+              return null;
+            }),
         ]);
 
         if (!active) return;
@@ -185,7 +192,11 @@ export default function UploadClothesPage() {
         const detectedColor = geminiData?.color || yoloData?.color || '';
         const detectedType = yoloData?.type || '';
         const confidence = yoloData?.confidence || 0;
-        const colorSource: ColorSource = geminiData?.color ? "gemini" : yoloData?.color ? "yolo" : "hsv";
+        const colorSource: ColorSource = geminiData?.color
+          ? 'gemini'
+          : yoloData?.color
+            ? 'yolo'
+            : 'hsv';
 
         let yoloType = '';
         try {
@@ -203,7 +214,8 @@ export default function UploadClothesPage() {
           /* ignore yolo-detect failure */
         }
 
-        const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const cap = (s: string) =>
+          s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
         const title = (s: string) => s.split(' ').map(cap).join(' ');
 
         const specificName = yoloType || detectedType;
@@ -224,7 +236,10 @@ export default function UploadClothesPage() {
           setUseCaseDetected(true);
         }
 
-        const label = [detectedColor, specificName].filter(Boolean).map(title).join(' ');
+        const label = [detectedColor, specificName]
+          .filter(Boolean)
+          .map(title)
+          .join(' ');
         if (label) setField({ name: label });
 
         if (desc) {
@@ -255,73 +270,65 @@ export default function UploadClothesPage() {
     };
   }, [imageFile]);
 
-  // Check for similar items after type + color settle
+  // Fire Gemini visual comparison when 1-3 similar items exist
   useEffect(() => {
     if (!session?.user?.id || !fields.type) return;
-    let active = true;
-    setSimilarDismissed(false);
     setVisualResult(null);
+    let active = true;
 
-    const check = async () => {
-      setCheckingSimilar(true);
-      setSimilarItems([]);
+    const checkVisual = async () => {
+      if (
+        similarItems.length < 1 ||
+        similarItems.length > 3 ||
+        similarDismissed
+      )
+        return;
       try {
-        const params = new URLSearchParams({
-          user_id: session.user.id,
-          type: fields.type,
+        let compressed = compressedCacheRef.current?.file;
+        if (!compressed && imageFile) {
+          compressed = await compressImage(imageFile);
+        }
+        if (!compressed || !active) return;
+        const imageBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () =>
+            resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(compressed!);
         });
-        if (fields.color) params.set('color', fields.color);
-        const res = await fetch(`/api/clothes/similar?${params}`);
-        if (!res.ok || !active) return;
-        const data = await res.json();
         if (!active) return;
-        setSimilarItems(data.similar || []);
-
-        // Tier 2: If 1-3 matches, fire Gemini visual comparison (use cached compressed image)
-        if (data.similar?.length >= 1 && data.similar.length <= 3 && !similarDismissed && active) {
-          try {
-            // Reuse cached compressed image from auto-detect, or compress fresh
-            let compressed = compressedCacheRef.current?.file;
-            if (!compressed && imageFile) {
-              compressed = await compressImage(imageFile);
-            }
-            if (!compressed || !active) return;
-            const imageBase64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve((reader.result as string).split(',')[1]);
-              reader.readAsDataURL(compressed!);
-            });
-            if (!active) return;
-            const visRes = await fetch('/api/clothes/visual-similarity', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                new_image: imageBase64,
-                existing_images: data.similar.map((s: { id: string; image_url: string; name: string }) => ({
-                  id: s.id,
-                  image_url: s.image_url,
-                  name: s.name,
-                })),
-                type: fields.type,
-              }),
-            });
-            if (visRes.ok && active) {
-              setVisualResult(await visRes.json());
-            }
-          } catch {
-            // Visual comparison is optional, ignore errors
-          }
+        const visRes = await fetch('/api/clothes/visual-similarity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            new_image: imageBase64,
+            existing_images: similarItems.map((s) => ({
+              id: s.id,
+              image_url: s.image_url,
+              name: s.name,
+            })),
+            type: fields.type,
+          }),
+        });
+        if (visRes.ok && active) {
+          setVisualResult(await visRes.json());
         }
       } catch {
-        // Ignore errors
-      } finally {
-        if (active) setCheckingSimilar(false);
+        // Visual comparison is optional, ignore errors
       }
     };
 
-    const timer = setTimeout(check, 800);
-    return () => { active = false; clearTimeout(timer); };
-  }, [fields.type, fields.color, session?.user?.id, imageFile]);
+    const timer = setTimeout(checkVisual, 800);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [
+    similarItems,
+    fields.type,
+    imageFile,
+    similarDismissed,
+    session?.user?.id,
+  ]);
 
   // Clean up blob URLs
   useEffect(() => {
@@ -354,7 +361,9 @@ export default function UploadClothesPage() {
     }
 
     if (fields.useCases.length === 0) {
-      setFormError('Please select at least one use case (e.g. casual, business, sleepwear).');
+      setFormError(
+        'Please select at least one use case (e.g. casual, business, sleepwear).',
+      );
       return;
     }
 
@@ -362,7 +371,8 @@ export default function UploadClothesPage() {
     setFormError('');
 
     try {
-      const compressed = compressedCacheRef.current?.file || await compressImage(imageFile);
+      const compressed =
+        compressedCacheRef.current?.file || (await compressImage(imageFile));
       const formData = new FormData();
       formData.append('file', compressed);
 
@@ -444,7 +454,9 @@ export default function UploadClothesPage() {
         ← Back
       </button>
 
-      <h1 className="text-3xl font-bold mb-6 font-headline">Add New Clothing</h1>
+      <h1 className="text-3xl font-bold mb-6 font-headline">
+        Add New Clothing
+      </h1>
 
       {errorMsg && (
         <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-xl">
@@ -529,8 +541,8 @@ export default function UploadClothesPage() {
                           : detectResult.source === 'yolo'
                             ? 'YOLO detected'
                             : 'Auto detected'}{' '}
-                        at{' '}
-                        {Math.round(detectResult.confidence * 100)}% confidence
+                        at {Math.round(detectResult.confidence * 100)}%
+                        confidence
                       </span>
                     </div>
                   )}
@@ -566,14 +578,9 @@ export default function UploadClothesPage() {
                   <div className="flex items-center gap-1.5 text-xs text-amber-700">
                     <span className="text-amber-500">✦</span>
                     <span className="font-medium">
-                      You already have {similarItems.length} similar {similarItems.length === 1 ? 'item' : 'items'}
+                      You already have {similarItems.length} similar{' '}
+                      {similarItems.length === 1 ? 'item' : 'items'}
                     </span>
-                    {checkingSimilar && (
-                      <span className="relative flex w-1.5 h-1.5 ml-1">
-                        <span className="absolute inline-flex w-full h-full rounded-full bg-amber-400 opacity-75 animate-ping" />
-                        <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-amber-500" />
-                      </span>
-                    )}
                   </div>
                   <button
                     type="button"
@@ -585,14 +592,25 @@ export default function UploadClothesPage() {
                 </div>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {similarItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border border-amber-100 shrink-0">
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border border-amber-100 shrink-0"
+                    >
                       {item.image_url ? (
-                        <img src={item.image_url} alt={item.name} className="w-8 h-8 rounded object-cover" />
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="w-8 h-8 rounded object-cover"
+                        />
                       ) : (
-                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">?</div>
+                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">
+                          ?
+                        </div>
                       )}
                       <div className="text-[11px] min-w-0">
-                        <div className="font-medium text-slate-700 truncate">{item.name}</div>
+                        <div className="font-medium text-slate-700 truncate">
+                          {item.name}
+                        </div>
                         <div className="text-slate-400">
                           {item.similarity >= 1 ? 'Same color' : 'Similar'}
                         </div>
@@ -601,9 +619,14 @@ export default function UploadClothesPage() {
                   ))}
                 </div>
                 {visualResult && (
-                  <div className={`mt-2 text-[11px] px-2 py-1.5 rounded-lg ${visualResult.is_different ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}>
+                  <div
+                    className={`mt-2 text-[11px] px-2 py-1.5 rounded-lg ${visualResult.is_different ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'}`}
+                  >
                     <span className="font-medium">
-                      {visualResult.is_different ? '✓ Different enough' : '⚠ May be redundant'}:
+                      {visualResult.is_different
+                        ? '✓ Different enough'
+                        : '⚠ May be redundant'}
+                      :
                     </span>{' '}
                     {visualResult.reasoning}
                   </div>
@@ -873,8 +896,16 @@ export default function UploadClothesPage() {
           <div>
             <label className="block text-xs text-slate-600 mb-2">
               Use case <span className="text-red-400">*</span>
-              {detecting && <span className="text-slate-400 font-normal ml-2">AI detecting…</span>}
-              {useCaseDetected && <span className="text-emerald-500 font-normal ml-2">✦ AI detected</span>}
+              {detecting && (
+                <span className="text-slate-400 font-normal ml-2">
+                  AI detecting…
+                </span>
+              )}
+              {useCaseDetected && (
+                <span className="text-emerald-500 font-normal ml-2">
+                  ✦ AI detected
+                </span>
+              )}
             </label>
             <div className="flex flex-wrap gap-2">
               {Object.entries(USE_CASE_LABELS).map(([value, label]) => (
