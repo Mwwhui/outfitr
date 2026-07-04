@@ -4,6 +4,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { clothesOptions, clustersOptions } from '@/hooks/queries/wardrobe';
+import { dashboardStatsOptions } from '@/hooks/queries/dashboard';
+import { monthlyInsightsOptions, pledgesOptions } from '@/hooks/queries/home';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -117,18 +120,21 @@ function NavPill({
   item,
   isActive,
   onClick,
+  onHover,
   index,
   collapsed,
 }: {
   item: NavItem;
   isActive: boolean;
   onClick: () => void;
+  onHover?: () => void;
   index: number;
   collapsed: boolean;
 }) {
   return (
     <motion.button
       onClick={onClick}
+      onMouseEnter={onHover}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.03, duration: 0.25, ease: 'easeOut' }}
@@ -183,12 +189,33 @@ export default function Sidebar({
     }),
   }));
 
+  const queryClient = useQueryClient();
+
+  const prefetchPage = useCallback(
+    (href: string) => {
+      const userId = session?.user?.id;
+      switch (href) {
+        case '/home':
+          queryClient.prefetchQuery(monthlyInsightsOptions(userId));
+          queryClient.prefetchQuery(pledgesOptions(userId));
+          break;
+        case '/wardrobe':
+          queryClient.prefetchQuery(clothesOptions(userId));
+          queryClient.prefetchQuery(clustersOptions(userId));
+          break;
+        case '/dashboard':
+          queryClient.prefetchQuery(dashboardStatsOptions(userId));
+          queryClient.prefetchQuery(clustersOptions(userId));
+          break;
+      }
+    },
+    [queryClient, session?.user?.id],
+  );
+
   const handleNavigate = (href: string) => {
     router.push(href);
     onNavigate?.();
   };
-
-  const queryClient = useQueryClient();
 
   const handleLogout = async () => {
     queryClient.clear();
@@ -249,6 +276,7 @@ export default function Sidebar({
                   item={item}
                   isActive={pathname === item.href}
                   onClick={() => handleNavigate(item.href)}
+                  onHover={() => prefetchPage(item.href)}
                   index={si * 10 + ii}
                   collapsed={collapsed}
                 />

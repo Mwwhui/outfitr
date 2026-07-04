@@ -72,7 +72,7 @@ export default function HomePage() {
     data: insights,
     isLoading: insightsLoading,
     error: insightsError,
-  } = useMonthlyInsights();
+  } = useMonthlyInsights(session?.user?.id);
 
   const detectedOccasion = useMemo(() => {
     if (!calendar)
@@ -96,8 +96,8 @@ export default function HomePage() {
     detectedOccasion,
     weatherData?.current ?? null,
   );
-  const { data: pledgesData } = usePledges();
-  const { data: sustainability } = useSustainabilityStory();
+  const { data: pledgesData } = usePledges(session?.user?.id);
+  const { data: sustainability } = useSustainabilityStory(session?.user?.id);
 
   // Local state only
   const [loggingWear, setLoggingWear] = useState(false);

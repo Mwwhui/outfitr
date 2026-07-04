@@ -52,5 +52,6 @@ export function useCalendarEvents() {
     },
     staleTime: 60 * 1000,
     retry: 1,
+    placeholderData: (previous) => previous,
   });
 }

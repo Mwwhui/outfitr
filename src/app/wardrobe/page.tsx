@@ -1,87 +1,37 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { clothesOptions, clustersOptions, useClothes, useCategories, useClusters, type ClothingItem } from "@/hooks/queries/wardrobe";
 import Loader from "../components/Loader";
 import WardrobeFilters from "../components/WardrobeFilters";
 import DuplicateCompareModal from "../components/DuplicateCompareModal";
-
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-  textColor: string;
-}
-
-type ClothingItem = {
-  id: string;
-  name: string;
-  type: string;
-  image_url?: string;
-  favorite?: boolean;
-};
-
-interface DuplicateGroup {
-  type: string;
-  color: string;
-  items: { id: string; name: string; type: string; image_url: string | null; wear_count: number; price: number; status?: string | null }[];
-}
-
-interface ClusterGroup {
-  id: number;
-  label: string;
-  color: string;
-  size: number;
-  items: { id: string; name: string; type: string; image_url: string | null; wear_count: number; price: number; status?: string | null }[];
-  groups?: DuplicateGroup[];
-}
 
 export default function WardrobePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
 
-  const [clothes, setClothes] = useState<ClothingItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { data: categories } = useCategories();
+  const { data: clothes, isLoading: clothesLoading } = useClothes(session?.user?.id);
+  const { data: clusterData, isLoading: clustersLoading } = useClusters(session?.user?.id);
+
   const [filters, setFilters] = useState({
     category: "",
     favoritesOnly: false,
     search: "",
   });
   const [selectedCluster, setSelectedCluster] = useState<number | null>(null);
-  const [clusterData, setClusterData] = useState<{ clusters: ClusterGroup[] } | null>(null);
-  const [compareGroup, setCompareGroup] = useState<DuplicateGroup | null>(null);
+  const [compareGroup, setCompareGroup] = useState<any | null>(null);
 
   useEffect(() => {
-    // Fetch categories on mount
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch("/api/categories");
-        if (!res.ok) throw new Error("Failed to fetch categories");
-        const data = await res.json();
-        setCategories(data);
-      } catch (error) {
-        console.error("Error fetching categories:", error);
-        setCategories([]);
-      }
-    };
-    fetchCategories();
-  }, []);
-
-  useEffect(() => {
-    // not logged in, force to login first
     if (status === "unauthenticated") {
       router.push("/auth/login");
-      return;
     }
-
-    if (status === "authenticated") {
-      fetchClothes();
-      refreshClusters();
-    }
-  }, [status]);
+  }, [status, router]);
 
   useEffect(() => {
     const clusterParam = searchParams.get('cluster');
@@ -90,31 +40,8 @@ export default function WardrobePage() {
     }
   }, [searchParams]);
 
-  const fetchClothes = async () => {
-    const res = await fetch(`/api/clothes?user_id=${session?.user?.id}`);
-    const data = await res.json();
-
-    setClothes(data);
-    setLoading(false);
-  };
-
-  const refreshClusters = useCallback(() => {
-    fetch('/api/wardrobe/clusters')
-      .then(async r => {
-        const json = await r.json();
-        if (json && Array.isArray(json.clusters)) setClusterData(json);
-      })
-      .catch(err => console.error('Clusters fetch failed:', err));
-  }, []);
-
-  const handleCompareClose = useCallback(() => {
-    setCompareGroup(null);
-    fetchClothes();
-    refreshClusters();
-  }, [fetchClothes, refreshClusters]);
-
   const getCategoryColor = (categoryName: string) => {
-    return categories.find((c) => c.name === categoryName);
+    return categories?.find((c) => c.name === categoryName);
   };
 
   const selectedClusterData = useMemo(() => {
@@ -128,7 +55,7 @@ export default function WardrobePage() {
   }, [selectedClusterData]);
 
   const filteredClothes = useMemo(() => {
-    let filtered = clothes.filter((item) => {
+    let filtered = (clothes || []).filter((item) => {
       if (filters.favoritesOnly && !item.favorite) return false;
       if (filters.category && item.type !== filters.category) return false;
       if (
@@ -145,7 +72,6 @@ export default function WardrobePage() {
       filtered = filtered.filter(item => ids.has(item.id));
     }
 
-    // favourites first, then others
     return filtered.sort((a, b) => {
       const aFav = !!a.favorite;
       const bFav = !!b.favorite;
@@ -154,10 +80,9 @@ export default function WardrobePage() {
     });
   }, [clothes, filters, selectedClusterData]);
 
-  if (loading) {
+  if (status === 'loading' || clothesLoading) {
     return <Loader message={"Loading your wardrobe… ✨"} />;
   }
-  console.log('Wardrobe render:', { clothes: clothes.length, clusterData, selectedCluster, loading });
 
   return (
     <div className="min-h-screen">
@@ -168,7 +93,7 @@ export default function WardrobePage() {
     <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
       {/* Filters row */}
       <WardrobeFilters
-        categories={categories}
+        categories={categories || []}
         filters={filters}
         onChange={setFilters}
       />
@@ -184,7 +109,7 @@ export default function WardrobePage() {
                 : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'
             }`}
           >
-            All ({clothes.length})
+            All ({(clothes || []).length})
           </button>
           {clusterData.clusters.map((cluster) => {
             const isActive = selectedCluster === cluster.id;
@@ -360,11 +285,10 @@ export default function WardrobePage() {
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-
                       const updatedFav = !item.favorite;
 
-                      setClothes((prev) =>
-                        prev.map((c) =>
+                      queryClient.setQueryData(['clothes'], (old: ClothingItem[] | undefined) =>
+                        old?.map((c) =>
                           c.id === item.id ? { ...c, favorite: updatedFav } : c
                         )
                       );
@@ -424,7 +348,11 @@ export default function WardrobePage() {
       <DuplicateCompareModal
         open={!!compareGroup}
         group={compareGroup}
-        onClose={handleCompareClose}
+        onClose={() => {
+          setCompareGroup(null);
+                      queryClient.invalidateQueries(clothesOptions(session?.user?.id));
+                      queryClient.invalidateQueries(clustersOptions(session?.user?.id));
+        }}
       />
     </div>
     </div>

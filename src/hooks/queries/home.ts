@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, queryOptions } from '@tanstack/react-query';
 
 export interface InsightsData {
   insufficient_data?: boolean;
@@ -51,11 +51,7 @@ export interface InsightsData {
     missing_types: string[];
     coverage_pct: number;
     coverage_detail: string;
-    missing_tooltips: Array<{
-      type: string;
-      suggestion: string;
-      reason: string;
-    }>;
+    missing_tooltips: Array<{ type: string; suggestion: string; reason: string }>;
     transition_tip: string;
   };
   wardrobe_health: {
@@ -70,18 +66,8 @@ export interface InsightsData {
       color_diversity: { score: number; detail: string; suggestion: string };
     };
   };
-  color_palette: Array<{
-    color: string;
-    hex: string | null;
-    count: number;
-    pct: number;
-  }>;
-  category_balance: Array<{
-    type: string;
-    count: number;
-    ideal: number;
-    pct: number;
-  }>;
+  color_palette: Array<{ color: string; hex: string | null; count: number; pct: number }>;
+  category_balance: Array<{ type: string; count: number; ideal: number; pct: number }>;
 }
 
 export interface OutfitSuggestion {
@@ -126,9 +112,9 @@ export interface SustainabilityData {
   sustainability_rate: number;
 }
 
-export function useMonthlyInsights() {
-  return useQuery({
-    queryKey: ['monthly-insights'],
+export const monthlyInsightsOptions = (userId?: string) =>
+  queryOptions({
+    queryKey: ['monthly-insights', userId],
     queryFn: async (): Promise<InsightsData> => {
       const res = await fetch('/api/wardrobe/monthly-insights');
       if (!res.ok) throw new Error('Failed to load insights');
@@ -136,19 +122,20 @@ export function useMonthlyInsights() {
     },
     staleTime: 15 * 60 * 1000,
     retry: 1,
+    enabled: !!userId,
+    placeholderData: (previous) => previous,
   });
+
+export function useMonthlyInsights(userId?: string) {
+  return useQuery(monthlyInsightsOptions(userId));
 }
 
-export function useOutfitSuggestion(
+export const outfitSuggestOptions = (
   occasion: string,
   weather: { temperature?: number; weathercode?: number } | null,
-) {
-  return useQuery({
-    queryKey: [
-      'outfit-suggest',
-      occasion,
-      weather?.temperature ?? 'no-weather',
-    ],
+) =>
+  queryOptions({
+    queryKey: ['outfit-suggest', occasion, weather?.temperature ?? 'no-weather'],
     queryFn: async (): Promise<OutfitSuggestion | null> => {
       const res = await fetch('/api/outfits/suggest', {
         method: 'POST',
@@ -156,10 +143,7 @@ export function useOutfitSuggestion(
         body: JSON.stringify({
           occasion,
           weather: weather
-            ? {
-                temperature: weather.temperature,
-                weathercode: weather.weathercode,
-              }
+            ? { temperature: weather.temperature, weathercode: weather.weathercode }
             : null,
         }),
       });
@@ -170,12 +154,19 @@ export function useOutfitSuggestion(
     staleTime: 30 * 60 * 1000,
     enabled: !!occasion,
     retry: 1,
+    placeholderData: (previous) => previous,
   });
+
+export function useOutfitSuggestion(
+  occasion: string,
+  weather: { temperature?: number; weathercode?: number } | null,
+) {
+  return useQuery(outfitSuggestOptions(occasion, weather));
 }
 
-export function usePledges() {
-  return useQuery({
-    queryKey: ['pledges'],
+export const pledgesOptions = (userId?: string) =>
+  queryOptions({
+    queryKey: ['pledges', userId],
     queryFn: async (): Promise<PledgesResponse> => {
       const res = await fetch('/api/pledges');
       if (!res.ok) return { pledges: [], fallback_partner_text: 'Partner' };
@@ -183,12 +174,17 @@ export function usePledges() {
     },
     staleTime: 60 * 1000,
     retry: 1,
+    enabled: !!userId,
+    placeholderData: (previous) => previous,
   });
+
+export function usePledges(userId?: string) {
+  return useQuery(pledgesOptions(userId));
 }
 
-export function useSustainabilityStory() {
-  return useQuery({
-    queryKey: ['sustainability-story'],
+export const sustainabilityStoryOptions = (userId?: string) =>
+  queryOptions({
+    queryKey: ['sustainability-story', userId],
     queryFn: async (): Promise<SustainabilityData | null> => {
       const res = await fetch('/api/wardrobe/sustainability-story');
       if (!res.ok) return null;
@@ -196,5 +192,10 @@ export function useSustainabilityStory() {
     },
     staleTime: 30 * 60 * 1000,
     retry: 1,
+    enabled: !!userId,
+    placeholderData: (previous) => previous,
   });
+
+export function useSustainabilityStory(userId?: string) {
+  return useQuery(sustainabilityStoryOptions(userId));
 }
