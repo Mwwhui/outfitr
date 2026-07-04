@@ -6,7 +6,7 @@ export interface ClothingItem {
   id: string;
   name: string;
   type: string;
-  image_url?: string;
+  image_url: string | null;
   favorite?: boolean;
   use_case?: string[];
 }
