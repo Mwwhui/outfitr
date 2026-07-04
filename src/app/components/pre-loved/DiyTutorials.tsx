@@ -350,6 +350,9 @@ export default function DiyTutorials() {
   );
   const [showSavedOnly, setShowSavedOnly] = useState(false);
   const [showCompletedOnly, setShowCompletedOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'Easy' | 'Medium'>('all');
+  const [timeFilter, setTimeFilter] = useState<number | null>(null);
 
   // Step progress
   const [stepProgress, setStepProgress] =
@@ -548,6 +551,18 @@ export default function DiyTutorials() {
   const filteredTutorials = DIY_TUTORIALS.filter((t) => {
     if (showSavedOnly && !saved.has(t.id)) return false;
     if (showCompletedOnly && !completed.has(t.id)) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesTitle = t.title.toLowerCase().includes(q);
+      const matchesMaterials = t.materials.some((m) => m.toLowerCase().includes(q));
+      const matchesDifficulty = t.difficulty.toLowerCase().includes(q);
+      if (!matchesTitle && !matchesMaterials && !matchesDifficulty) return false;
+    }
+    if (difficultyFilter !== 'all' && t.difficulty !== difficultyFilter) return false;
+    if (timeFilter !== null) {
+      const mins = parseInt(t.time);
+      if (isNaN(mins) || mins > timeFilter) return false;
+    }
     return true;
   });
 
@@ -644,12 +659,78 @@ export default function DiyTutorials() {
             </button>
           </div>
 
+          {/* Search bar */}
+          <div className="relative mb-3">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 material-symbols-outlined text-sm">
+              search
+            </span>
+            <input
+              type="text"
+              placeholder="Search tutorials by title, material, or difficulty..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 pl-8 pr-4 text-sm text-gray-800 focus:outline-none focus:border-[#0f172a] focus:ring-1 focus:ring-[#0f172a] transition"
+            />
+          </div>
+
+          {/* Difficulty & time filters */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <span className="text-xs text-on-surface-variant/50 font-medium">
+              Difficulty:
+            </span>
+            {(['all', 'Easy', 'Medium'] as const).map((d) => (
+              <button
+                key={d}
+                onClick={() => setDifficultyFilter(d)}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition ${
+                  difficultyFilter === d
+                    ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                    : 'bg-white text-on-surface-variant/60 border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                {d === 'all' ? 'Any' : d}
+              </button>
+            ))}
+            <span className="text-xs text-on-surface-variant/50 font-medium ml-1">
+              Time:
+            </span>
+            {[
+              { label: 'Any', value: null },
+              { label: '<15m', value: 15 },
+              { label: '<30m', value: 30 },
+            ].map((t) => (
+              <button
+                key={t.label}
+                onClick={() => setTimeFilter(t.value)}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition ${
+                  timeFilter === t.value
+                    ? 'bg-[#0f172a] text-white border-[#0f172a]'
+                    : 'bg-white text-on-surface-variant/60 border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+            {(searchQuery || difficultyFilter !== 'all' || timeFilter !== null) && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setDifficultyFilter('all');
+                  setTimeFilter(null);
+                }}
+                className="text-xs font-medium text-primary ml-1 hover:underline"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
           {filteredTutorials.length === 0 ? (
             <div className="text-center py-12 text-on-surface-variant/60">
               <span className="material-symbols-outlined text-4xl mb-2">
-                bookmark
+                search
               </span>
-              <p className="text-sm font-medium">No saved tutorials</p>
+              <p className="text-sm font-medium">No tutorials match your search</p>
               <p className="text-xs mt-1">
                 Bookmark tutorials to find them here
               </p>
@@ -1008,6 +1089,56 @@ export default function DiyTutorials() {
             hasMore={query !== 'all' && !!pageTokens[query]}
             loadingMore={loadingMore}
           />
+
+          {/* Wardrobe match for single category */}
+          {query !== 'all' && (() => {
+            const activeTopic = SEARCH_TOPICS.find((t) => t.query === query);
+            if (!activeTopic) return null;
+            const matchingItems = getMatchingItems(activeTopic.matchTypes, wardrobe);
+            if (matchingItems.length === 0) return null;
+            return (
+              <div className="mt-6 p-4 bg-white rounded-2xl border border-gray-200">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  From your wardrobe
+                </p>
+                <div className="flex items-center gap-3">
+                  <div className="flex -space-x-2">
+                    {matchingItems.slice(0, 3).map((item) => (
+                      <div
+                        key={item.id}
+                        className="w-10 h-10 rounded-full border-2 border-white bg-gray-100 overflow-hidden shrink-0"
+                      >
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                            {item.name[0]}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {matchingItems.length > 3 && (
+                      <div className="w-10 h-10 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-xs font-semibold text-gray-500 shrink-0">
+                        +{matchingItems.length - 3}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#0f172a]">
+                      {matchingItems.length} item{matchingItems.length > 1 ? 's' : ''} in your wardrobe
+                    </p>
+                    <p className="text-xs text-on-surface-variant/60 mt-0.5">
+                      Could work for {activeTopic.label.toLowerCase()} projects
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

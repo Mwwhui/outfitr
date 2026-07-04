@@ -9,6 +9,7 @@ export interface VideoResult {
   channelTitle: string;
   thumbnail: string;
   publishedAt: string;
+  duration?: string;
 }
 
 interface DiyVideoGridProps {
@@ -140,6 +141,11 @@ export default function DiyVideoGrid({
                       {isSaved ? 'bookmark' : 'bookmark_border'}
                     </span>
                   </div>
+                )}
+                {video.duration && (
+                  <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded leading-tight">
+                    {video.duration}
+                  </span>
                 )}
               </div>
               <div className="p-4">
