@@ -1,20 +1,15 @@
 'use client';
 
-import {
-  JSXElementConstructor,
-  Key,
-  ReactElement,
-  ReactNode,
-  ReactPortal,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { useOutfitPlans, type OutfitPlanRow } from '@/hooks/queries/calendar';
+import {
+  useOutfitPlans,
+  useGoogleStatus,
+  type OutfitPlanRow,
+} from '@/hooks/queries/calendar';
 import Loader from '../components/Loader';
 import GoogleCalendarConnectCard from '../components/GoogleCalendarConnectCard';
 import GoogleEventsPanel from '../components/GoogleEventsPanel';
@@ -153,15 +148,8 @@ export default function CalendarPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
-  const [googleConnected, setGoogleConnected] = useState(false);
-
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-    fetch('/api/integrations/google/status')
-      .then((r) => (r.ok ? r.json() : { connected: false }))
-      .then((j) => setGoogleConnected(Boolean(j.connected)))
-      .catch(() => setGoogleConnected(false));
-  }, [status]);
+  const { data: googleConnected } = useGoogleStatus(status === 'authenticated');
+  const isGoogleConnected = googleConnected ?? false;
 
   // Redirect if not logged in
   useEffect(() => {
@@ -387,7 +375,7 @@ export default function CalendarPage() {
           <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
             {/* Google Calendar connect + toggle */}
             <GoogleCalendarConnectCard
-              connected={googleConnected}
+              connected={isGoogleConnected}
               enabled={showGoogleEvents}
               onToggle={setShowGoogleEvents}
             />
@@ -541,7 +529,7 @@ export default function CalendarPage() {
                 <GoogleEventsPanel
                   date={selectedDate}
                   enabled={showGoogleEvents}
-                  connected={googleConnected}
+                  connected={isGoogleConnected}
                 />
 
                 {/* Planner CTA */}

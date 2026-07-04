@@ -48,6 +48,26 @@ export function useOutfitPlans(from?: string, to?: string) {
   return useQuery(outfitPlansOptions(from, to));
 }
 
+export function useGoogleStatus(enabled = true) {
+  return useQuery({
+    queryKey: ['google-status'],
+    queryFn: async (): Promise<boolean> => {
+      try {
+        const res = await fetch('/api/integrations/google/status');
+        if (!res.ok) return false;
+        const data = await res.json();
+        return Boolean(data.connected);
+      } catch {
+        return false;
+      }
+    },
+    staleTime: 60 * 1000,
+    retry: 1,
+    enabled,
+    placeholderData: (previous) => previous,
+  });
+}
+
 export function useCalendarEvents() {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 

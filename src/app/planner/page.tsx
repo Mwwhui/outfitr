@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useClothes } from '@/hooks/queries/wardrobe';
 import { useOutfitPlans } from '@/hooks/queries/calendar';
+import { useWeather } from '@/hooks/queries/weather';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
@@ -14,7 +15,6 @@ import toast from 'react-hot-toast';
 import type {
   ClothingItem,
   OccasionKey,
-  WeatherData,
   SuggestedOutfit,
 } from '@/lib/suggestOutfits';
 import {
@@ -45,6 +45,15 @@ const CATEGORY_ORDER: Record<string, number> = {
   Bottoms: 2,
   Outerwear: 3,
   Tops: 1,
+};
+
+const weatherEmojiFn = (code: number) => {
+  if (code === 0) return '\u2600\uFE0F';
+  if (code <= 3) return '\u26C5';
+  if (code <= 48) return '\uD83C\uDF2B\uFE0F';
+  if (code <= 65) return '\uD83C\uDF27\uFE0F';
+  if (code <= 75) return '\u2744\uFE0F';
+  return '\u26C8\uFE0F';
 };
 
 export default function PlannerPage() {
@@ -87,41 +96,8 @@ export default function PlannerPage() {
   const [panelMode, setPanelMode] = useState<'suggestions' | 'complete'>(
     'suggestions',
   );
-  const [panelWeather, setPanelWeather] = useState<WeatherData | null>(null);
-  const [panelWeatherLoading, setPanelWeatherLoading] = useState(false);
-  const weatherCache = useRef<
-    Record<string, { data: WeatherData; ts: number }>
-  >({});
-
-  const WMO_LABELS: Record<number, string> = {
-    0: 'Clear',
-    1: 'Mostly clear',
-    2: 'Partly cloudy',
-    3: 'Overcast',
-    45: 'Foggy',
-    48: 'Foggy',
-    51: 'Light drizzle',
-    53: 'Drizzle',
-    55: 'Heavy drizzle',
-    61: 'Light rain',
-    63: 'Rain',
-    65: 'Heavy rain',
-    71: 'Light snow',
-    73: 'Snow',
-    75: 'Heavy snow',
-    95: 'Thunderstorm',
-    96: 'Thunderstorm',
-    99: 'Thunderstorm',
-  };
-
-  const weatherEmoji = (code: number) => {
-    if (code === 0) return '☀️';
-    if (code <= 3) return '⛅';
-    if (code <= 48) return '🌫️';
-    if (code <= 65) return '🌧️';
-    if (code <= 75) return '❄️';
-    return '⛈️';
-  };
+  const { data: weatherResult, isLoading: panelWeatherLoading } = useWeather(showSuggestions && status === 'authenticated');
+  const panelWeather = weatherResult?.current ?? null;
 
   useEffect(() => {
     const qpDate = searchParams.get('date');
@@ -261,129 +237,6 @@ export default function PlannerPage() {
       [slot]: null,
     }));
   };
-
-  // Weather fetch when panel opens — forecast for selected date
-  useEffect(() => {
-    if (!showSuggestions) return;
-    setPanelWeatherLoading(true);
-
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const isToday = selectedDate === todayStr;
-
-    const cachedKey = `planner_weather_${selectedDate}`;
-    try {
-      const cached = weatherCache.current[cachedKey];
-      if (cached && Date.now() - cached.ts < 30 * 60 * 1000) {
-        setPanelWeather(cached.data);
-        setPanelWeatherLoading(false);
-        return;
-      }
-    } catch {
-      /* ignore */
-    }
-
-    const controller = new AbortController();
-
-    const fetchWeatherByCoords = async (
-      latitude: number,
-      longitude: number,
-    ) => {
-      if (controller.signal.aborted) return;
-      const base = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}`;
-
-      const url = isToday
-        ? `${base}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m`
-        : `${base}&daily=temperature_2m_max,temperature_2m_min,weather_code,apparent_temperature_max,wind_speed_10m_max,relative_humidity_2m_mean&start_date=${selectedDate}&end_date=${selectedDate}`;
-
-      try {
-        const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) throw new Error('Weather fetch failed');
-        const data = await res.json();
-        if (controller.signal.aborted) return;
-        let w: WeatherData | null = null;
-
-        if (isToday && data?.current) {
-          const c = data.current;
-          w = {
-            temperature: c.temperature_2m,
-            weathercode: c.weather_code ?? 0,
-            description: WMO_LABELS[c.weather_code] ?? 'Unknown',
-            humidity: c.relative_humidity_2m,
-            feelsLike: c.apparent_temperature,
-            windSpeed: c.wind_speed_10m,
-          };
-        } else if (!isToday && data?.daily?.time?.length > 0) {
-          const d = data.daily;
-          const i = d.time.indexOf(selectedDate);
-          if (i !== -1) {
-            w = {
-              temperature: Math.round(
-                (d.temperature_2m_max[i] + d.temperature_2m_min[i]) / 2,
-              ),
-              weathercode: d.weather_code[i] ?? 0,
-              description: WMO_LABELS[d.weather_code[i]] ?? 'Unknown',
-              humidity: d.relative_humidity_2m_mean?.[i],
-              feelsLike: d.apparent_temperature_max?.[i],
-              windSpeed: d.wind_speed_10m_max?.[i],
-            };
-          }
-        }
-
-        if (w) {
-          setPanelWeather(w);
-          weatherCache.current[cachedKey] = { data: w, ts: Date.now() };
-        } else if (!isToday) {
-          setPanelWeather(null);
-        }
-        if (!controller.signal.aborted) setPanelWeatherLoading(false);
-      } catch {
-        if (!controller.signal.aborted) {
-          if (!isToday) setPanelWeather(null);
-          setPanelWeatherLoading(false);
-        }
-      }
-    };
-
-    const fallbackToIpLocation = async () => {
-      try {
-        const res = await fetch('http://ip-api.com/json/', {
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error('IP geolocation failed');
-        const data = await res.json();
-        if (data?.lat && data?.lon) {
-          await fetchWeatherByCoords(data.lat, data.lon);
-        } else {
-          throw new Error('No coords from IP');
-        }
-      } catch {
-        if (!controller.signal.aborted) {
-          if (!isToday) setPanelWeather(null);
-          setPanelWeatherLoading(false);
-        }
-      }
-    };
-
-    if (!('geolocation' in navigator)) {
-      fallbackToIpLocation();
-      return () => controller.abort();
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (controller.signal.aborted) return;
-        fetchWeatherByCoords(
-          position.coords.latitude,
-          position.coords.longitude,
-        );
-      },
-      () => {
-        fallbackToIpLocation();
-      },
-    );
-
-    return () => controller.abort();
-  }, [showSuggestions, selectedDate]);
 
   // Compute suggestions via API when panel opens or occasion/weather/mode changes
   useEffect(() => {
@@ -809,7 +662,7 @@ export default function PlannerPage() {
                       <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-transparent rounded-full" />
                     ) : panelWeather ? (
                       <span className="group relative text-sm font-medium text-slate-600 cursor-pointer">
-                        {weatherEmoji(panelWeather.weathercode)}{' '}
+                        {weatherEmojiFn(panelWeather.weathercode)}{' '}
                         {Math.round(panelWeather.temperature)}°C
                         <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
                           <p className="font-medium">

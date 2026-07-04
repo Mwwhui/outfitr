@@ -6,6 +6,9 @@ export interface WeatherData {
   temperature: number;
   weathercode: number;
   description: string;
+  humidity?: number;
+  feelsLike?: number;
+  windSpeed?: number;
 }
 
 export interface WeatherAlert {
@@ -138,14 +141,14 @@ async function resolveCoords(): Promise<{ latitude: number; longitude: number }>
   }
 }
 
-export function useWeather() {
+export function useWeather(enabled = true) {
   return useQuery({
     queryKey: ['weather'],
     queryFn: async (): Promise<WeatherResult | null> => {
       try {
         const { latitude, longitude } = await resolveCoords();
         const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&hourly=weather_code,temperature_2m&forecast_days=1`,
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=weather_code,temperature_2m&forecast_days=1`,
         );
         const data = await res.json();
         if (!data?.current) return null;
@@ -154,6 +157,9 @@ export function useWeather() {
           temperature: Math.round(data.current.temperature_2m),
           weathercode: data.current.weather_code ?? 0,
           description: WMO_LABELS[data.current.weather_code] ?? 'Unknown',
+          humidity: data.current.relative_humidity_2m ?? undefined,
+          feelsLike: data.current.apparent_temperature ?? undefined,
+          windSpeed: data.current.wind_speed_10m ?? undefined,
         };
 
         const hourly: HourlyPoint[] = data.hourly?.time
@@ -173,6 +179,7 @@ export function useWeather() {
     },
     staleTime: 10 * 60 * 1000,
     retry: 1,
+    enabled,
     placeholderData: (previous) => previous,
   });
 }

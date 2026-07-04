@@ -4,9 +4,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { useWeather } from '@/hooks/queries/weather';
+import { useClothes } from '@/hooks/queries/wardrobe';
 import Loader from '../components/Loader';
 import OutfitSuggestionCard from '../components/OutfitSuggestionCard';
-import type { ClothingItem, SuggestedOutfit, WeatherData } from '@/lib/suggestOutfits';
+import type { SuggestedOutfit } from '@/lib/suggestOutfits';
+import type { WeatherData } from '@/hooks/queries/weather';
 
 type OccasionKey = 'casual' | 'business' | 'formal' | 'sport' | 'date';
 
@@ -18,47 +21,23 @@ const OCCASIONS: { key: OccasionKey; label: string }[] = [
   { key: 'date', label: 'Date' },
 ];
 
-const WMO_LABELS: Record<number, string> = {
-  0: 'Clear',
-  1: 'Mostly clear',
-  2: 'Partly cloudy',
-  3: 'Overcast',
-  45: 'Foggy',
-  48: 'Foggy',
-  51: 'Light drizzle',
-  53: 'Drizzle',
-  55: 'Heavy drizzle',
-  61: 'Light rain',
-  63: 'Rain',
-  65: 'Heavy rain',
-  71: 'Light snow',
-  73: 'Snow',
-  75: 'Heavy snow',
-  95: 'Thunderstorm',
-  96: 'Thunderstorm',
-  99: 'Thunderstorm',
-};
-
-const DEFAULT_LOCATION = { lat: 3.0061, lng: 101.6169 };
-const WEATHER_TTL = 30 * 60 * 1000;
-
-function getWeatherEmoji(code: number): string {
-  if (code === 0) return '☀️';
-  if (code <= 3) return '⛅';
-  if (code <= 48) return '🌫️';
-  if (code <= 65) return '🌧️';
-  if (code <= 75) return '❄️';
-  return '⛈️';
+function weatherEmoji(code: number): string {
+  if (code === 0) return '\u2600\uFE0F';
+  if (code <= 3) return '\u26C5';
+  if (code <= 48) return '\uD83C\uDF2B\uFE0F';
+  if (code <= 65) return '\uD83C\uDF27\uFE0F';
+  if (code <= 75) return '\u2744\uFE0F';
+  return '\u26C8\uFE0F';
 }
 
 interface SlotsState {
-  top: ClothingItem | null;
-  bottom: ClothingItem | null;
-  onepiece: ClothingItem | null;
-  outerwear: ClothingItem | null;
+  top: any;
+  bottom: any;
+  onepiece: any;
+  outerwear: any;
 }
 
-function clothingToSlots(items: ClothingItem[]): SlotsState {
+function clothingToSlots(items: any[]): SlotsState {
   const slots: SlotsState = { top: null, bottom: null, onepiece: null, outerwear: null };
   for (const item of items) {
     if (item.type === 'Tops') slots.top = item;
@@ -69,60 +48,19 @@ function clothingToSlots(items: ClothingItem[]): SlotsState {
   return slots;
 }
 
-function getCachedWeather<T>(lat: number, lng: number): T | null {
-  try {
-    const key = `weather_${lat.toFixed(1)}_${lng.toFixed(1)}`;
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const { data, timestamp } = JSON.parse(raw);
-    if (Date.now() - timestamp > WEATHER_TTL) {
-      localStorage.removeItem(key);
-      return null;
-    }
-    return data as T;
-  } catch {
-    return null;
-  }
-}
-
-function setCachedWeather<T>(lat: number, lng: number, data: T): void {
-  try {
-    const key = `weather_${lat.toFixed(1)}_${lng.toFixed(1)}`;
-    localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
-  } catch {
-    /* localStorage full or unavailable */
-  }
-}
-
-function getCachedClothes(userId: string): ClothingItem[] | null {
-  try {
-    const raw = sessionStorage.getItem(`clothes_${userId}`);
-    return raw ? (JSON.parse(raw) as ClothingItem[]) : null;
-  } catch {
-    return null;
-  }
-}
-
-function setCachedClothes(userId: string, data: ClothingItem[]): void {
-  try {
-    sessionStorage.setItem(`clothes_${userId}`, JSON.stringify(data));
-  } catch {
-    /* sessionStorage full */
-  }
-}
-
 export default function OutfitSuggestPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
-  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const { data: weatherResult, isLoading: weatherLoading } = useWeather(status === 'authenticated');
+  const { data: clothesData, isLoading: clothesLoading } = useClothes(
+    session?.user?.id,
+  );
+  const clothes = clothesData || [];
+  const weather: WeatherData | null = weatherResult?.current ?? null;
+
   const [occasion, setOccasion] = useState<OccasionKey>('casual');
-  const [clothes, setClothes] = useState<ClothingItem[]>([]);
-  const [loadingLocation, setLoadingLocation] = useState(true);
-  const [loadingWeather, setLoadingWeather] = useState(true);
-  const [loadingClothes, setLoadingClothes] = useState(true);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
   const [seedItemIds, setSeedItemIds] = useState<string[]>([]);
@@ -136,92 +74,10 @@ export default function OutfitSuggestPage() {
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login');
-      return;
     }
   }, [status, router]);
 
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLoc({ lat: position.coords.latitude, lng: position.coords.longitude });
-          setLoadingLocation(false);
-        },
-        () => {
-          setUserLoc(DEFAULT_LOCATION);
-          setLoadingLocation(false);
-        },
-      );
-    } else {
-      setUserLoc(DEFAULT_LOCATION);
-      setLoadingLocation(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!userLoc) return;
-    setLoadingWeather(true);
-
-    const cached = getCachedWeather<WeatherData>(
-      userLoc.lat,
-      userLoc.lng,
-    );
-    if (cached) {
-      setWeather(cached);
-      setLoadingWeather(false);
-      return;
-    }
-
-    fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${userLoc.lat}&longitude=${userLoc.lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m`,
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.current) {
-          const c = data.current;
-          const w: WeatherData = {
-            temperature: c.temperature_2m,
-            weathercode: c.weather_code ?? 0,
-            description: WMO_LABELS[c.weather_code] ?? 'Unknown',
-            humidity: c.relative_humidity_2m,
-            feelsLike: c.apparent_temperature,
-            windSpeed: c.wind_speed_10m,
-          };
-          setWeather(w);
-          setCachedWeather(userLoc.lat, userLoc.lng, w);
-        }
-        setLoadingWeather(false);
-      })
-      .catch(() => {
-        setLoadingWeather(false);
-      });
-  }, [userLoc]);
-
-  useEffect(() => {
-    if (status !== 'authenticated' || !session?.user?.id) return;
-    setLoadingClothes(true);
-
-    const cached = getCachedClothes(session.user.id);
-    if (cached) {
-      setClothes(cached);
-      setLoadingClothes(false);
-    }
-
-    fetch(`/api/clothes?user_id=${session.user.id}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setClothes(data);
-          setCachedClothes(session.user.id, data);
-        }
-        setLoadingClothes(false);
-      })
-      .catch(() => {
-        setLoadingClothes(false);
-      });
-  }, [status, session?.user?.id]);
-
-  const allLoaded = !loadingLocation && !loadingWeather && !loadingClothes;
+  const allLoaded = !weatherLoading && !clothesLoading && status === 'authenticated';
 
   useEffect(() => {
     if (!allLoaded) return;
@@ -248,7 +104,7 @@ export default function OutfitSuggestPage() {
       });
 
     return () => controller.abort();
-  }, [allLoaded, weather, occasion, seedItemIds, seedItemIds.length]);
+  }, [allLoaded, weather, occasion, seedItemIds]);
 
   const handleUseSuggestion = useCallback(
     async (suggestion: SuggestedOutfit, idx: number) => {
@@ -282,8 +138,8 @@ export default function OutfitSuggestPage() {
     return <Loader message="Loading..." />;
   }
 
-  const weatherCondition = weather ? WMO_LABELS[weather.weathercode] ?? 'Unknown' : null;
-  const weatherEmoji = weather ? getWeatherEmoji(weather.weathercode) : null;
+  const weatherCondition = weather?.description ?? null;
+  const weatherEmojiStr = weather ? weatherEmoji(weather.weathercode) : null;
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
@@ -299,14 +155,14 @@ export default function OutfitSuggestPage() {
       {/* Top bar: weather + occasion */}
       <div className="flex flex-col sm:flex-row gap-4 mb-8">
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-slate-200 shadow-sm min-w-[200px]">
-          {loadingLocation || loadingWeather ? (
+          {weatherLoading ? (
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-transparent rounded-full" />
               Getting weather...
             </div>
           ) : weather ? (
             <span className="group relative flex items-center gap-3 cursor-pointer">
-              <span className="text-2xl">{weatherEmoji}</span>
+              <span className="text-2xl">{weatherEmojiStr}</span>
               <div>
                 <p className="text-lg font-semibold text-slate-800">
                   {Math.round(weather.temperature)}°C
@@ -361,7 +217,7 @@ export default function OutfitSuggestPage() {
       )}
 
       {/* Content area */}
-      {loadingClothes ? (
+      {clothesLoading ? (
         <Loader message="Loading your wardrobe..." />
       ) : clothes.length === 0 ? (
         <div className="text-center py-20">

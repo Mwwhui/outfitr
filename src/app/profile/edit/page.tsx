@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
 type FormErrors = Partial<Record<keyof typeof INITIAL_FORM, string>>;
@@ -23,50 +24,53 @@ const inputBase =
 
 export default function EditProfilePage() {
   const router = useRouter();
-  const { status } = useSession();
+  const { data: session, status } = useSession();
 
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [originalForm, setOriginalForm] = useState({ ...INITIAL_FORM });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const initRef = useRef(false);
+
+  const { data: profileData, isLoading: profileLoading, isError: profileError } = useQuery({
+    queryKey: ['profile', session?.user?.id],
+    queryFn: async (): Promise<typeof INITIAL_FORM> => {
+      const res = await fetch("/api/user/profile");
+      if (!res.ok) throw new Error("Failed to load profile");
+      const data = await res.json();
+      const u = data.user;
+      return {
+        username: u.username || "",
+        email: u.email || "",
+        first_name: u.first_name || "",
+        last_name: u.last_name || "",
+        dob: u.dob || "",
+        nationality: u.nationality || "",
+        gender: u.gender || "",
+        contact_no: u.contact_no || "",
+      };
+    },
+    enabled: status === "authenticated",
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+    placeholderData: (previous) => previous,
+  });
+
+  useEffect(() => {
+    if (profileData && !initRef.current) {
+      initRef.current = true;
+      setForm(profileData);
+      setOriginalForm(profileData);
+    }
+  }, [profileData]);
 
   const hasUnsaved = JSON.stringify(form) !== JSON.stringify(originalForm);
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/auth/login");
-      return;
     }
-    if (status !== "authenticated") return;
-
-    const fetchProfile = async () => {
-      try {
-        const res = await fetch("/api/user/profile");
-        if (!res.ok) throw new Error("Failed to load profile");
-        const data = await res.json();
-        const u = data.user;
-        const loaded = {
-          username: u.username || "",
-          email: u.email || "",
-          first_name: u.first_name || "",
-          last_name: u.last_name || "",
-          dob: u.dob || "",
-          nationality: u.nationality || "",
-          gender: u.gender || "",
-          contact_no: u.contact_no || "",
-        };
-        setForm(loaded);
-        setOriginalForm(loaded);
-      } catch (err) {
-        setErrors({ username: err instanceof Error ? err.message : "Failed to load profile" });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
   }, [status, router]);
 
   useEffect(() => {
@@ -177,7 +181,7 @@ export default function EditProfilePage() {
     }
   };
 
-  if (status === "loading" || loading) {
+  if (status === "loading" || profileLoading) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-10">
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -207,6 +211,12 @@ export default function EditProfilePage() {
       </button>
 
       <h1 className="text-3xl font-bold mb-8 text-[#0f172a]">Edit Profile</h1>
+
+      {profileError && (
+        <div className="mb-6 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+          Failed to load profile. Changes may not be saved correctly.
+        </div>
+      )}
 
       <div className="rounded-3xl overflow-hidden shadow-sm bg-white border border-slate-200">
         <form onSubmit={handleSave} className="p-6 space-y-6">
