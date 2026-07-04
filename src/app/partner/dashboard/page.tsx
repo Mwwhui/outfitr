@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { usePartnerPledges } from '@/hooks/queries/partners';
 import PledgeCard, { Pledge } from '../../components/partner/PledgeCard';
 
 type Tab = 'all' | 'pending' | 'accepted' | 'rejected' | 'fulfilled';
@@ -20,44 +21,19 @@ export default function PartnerDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [pledges, setPledges] = useState<Pledge[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('pending');
 
-  const fetchPledges = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = activeTab !== 'all' ? `?status=${activeTab}` : '';
-      const res = await fetch(`/api/partner/pledges${params}`);
-      if (!res.ok) {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to fetch pledges');
-        return;
-      }
-      const data = await res.json();
-      setPledges(data as Pledge[]);
-    } catch (err) {
-      console.error('Error fetching pledges:', err);
-      toast.error('Failed to load pledges');
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab]);
+  const { data: pledges = [], isLoading, refetch } = usePartnerPledges(activeTab !== 'all' ? activeTab : undefined);
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/login');
-      return;
-    }
+  if (status === 'unauthenticated') {
+    router.push('/auth/login');
+    return null;
+  }
 
-    if (status === 'authenticated') {
-      if (session.user.role !== 'partner') {
-        router.push('/home');
-        return;
-      }
-      fetchPledges();
-    }
-  }, [status, session, activeTab, fetchPledges, router]);
+  if (status === 'authenticated' && session.user.role !== 'partner') {
+    router.push('/home');
+    return null;
+  }
 
   const handleAccept = useCallback(
     async (id: string) => {
@@ -75,13 +51,13 @@ export default function PartnerDashboard() {
         }
 
         toast.success('Pledge accepted! QR code sent to user.');
-        fetchPledges();
+        refetch();
       } catch (err) {
         console.error('Error accepting pledge:', err);
         toast.error('Something went wrong');
       }
     },
-    [fetchPledges],
+    [refetch],
   );
 
   const handleFulfill = useCallback(
@@ -100,13 +76,13 @@ export default function PartnerDashboard() {
         }
 
         toast.success('Pledge fulfilled! User notified.');
-        fetchPledges();
+        refetch();
       } catch (err) {
         console.error('Error fulfilling pledge:', err);
         toast.error('Something went wrong');
       }
     },
-    [fetchPledges],
+    [refetch],
   );
 
   const handleReject = useCallback(
@@ -128,13 +104,13 @@ export default function PartnerDashboard() {
         }
 
         toast.success('Pledge rejected. User notified.');
-        fetchPledges();
+        refetch();
       } catch (err) {
         console.error('Error rejecting pledge:', err);
         toast.error('Something went wrong');
       }
     },
-    [fetchPledges],
+    [refetch],
   );
 
   if (status === 'loading') {
@@ -182,7 +158,7 @@ export default function PartnerDashboard() {
           ))}
         </div>
 
-        {loading ? (
+        {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400">
             <div className="w-8 h-8 border-2 border-[#163422] border-t-transparent rounded-full animate-spin mb-3" />
             <p className="text-sm">Loading pledges...</p>

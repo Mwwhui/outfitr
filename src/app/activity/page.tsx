@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { usePledges } from '@/hooks/queries/home';
 import Loader from '../components/Loader';
 
 interface PledgeItem {
@@ -193,40 +194,25 @@ function PledgeCard({ pledge }: { pledge: Pledge }) {
 }
 
 export default function ActivityPage() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
-  const [pledges, setPledges] = useState<Pledge[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('all');
 
-  const fetchPledges = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch('/api/pledges');
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Failed to load' }));
-        throw new Error(err.error || 'Failed to load pledges');
-      }
-      const data = await res.json();
-      setPledges(data.pledges || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: pledgesData, isLoading, isError, error: queryError, refetch } = usePledges(session?.user?.id);
+  const pledges: Pledge[] = pledgesData?.pledges || [];
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/login');
-      return;
-    }
-    if (status === 'authenticated') {
-      fetchPledges();
-    }
-  }, [status, router, fetchPledges]);
+  if (status === 'unauthenticated') {
+    router.push('/auth/login');
+    return null;
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader message="Loading session..." />
+      </div>
+    );
+  }
 
   const filtered =
     activeTab === 'all' ? pledges : pledges.filter((p) => p.status === activeTab);
@@ -239,7 +225,7 @@ export default function ActivityPage() {
     rejected: pledges.filter((p) => p.status === 'rejected').length,
   };
 
-  if (status === 'loading' || loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader message="Loading pledges..." />
@@ -255,11 +241,11 @@ export default function ActivityPage() {
       </div>
 
       <div className="px-6 pb-16 max-w-5xl mx-auto space-y-6">
-        {error && (
+        {isError && (
           <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">
-            {error}
+            {queryError?.message || 'Failed to load pledges'}
             <button
-              onClick={fetchPledges}
+              onClick={() => refetch()}
               className="ml-2 underline font-semibold"
             >
               Retry

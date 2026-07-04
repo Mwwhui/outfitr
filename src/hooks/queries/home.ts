@@ -93,6 +93,8 @@ export interface PledgeData {
   item_count: number;
   items: Array<{ id: string; name: string; image_url: string | null }>;
   created_at: string;
+  fulfilled_at: string | null;
+  rejection_reason: string | null;
 }
 
 interface PledgesResponse {
