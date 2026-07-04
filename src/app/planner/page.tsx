@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useClothes } from '@/hooks/queries/wardrobe';
+import { useOutfitPlans } from '@/hooks/queries/calendar';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
@@ -42,8 +44,8 @@ export default function PlannerPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [loading, setLoading] = useState(true);
-  const [clothes, setClothes] = useState<ClothingItem[]>([]);
+  const { data: clothesData, isLoading: clothesLoading } = useClothes(session?.user?.id);
+  const clothes = clothesData || [];
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().slice(0, 10),
@@ -117,74 +119,24 @@ export default function PlannerPage() {
     setUrlReady(true);
   }, [searchParams]);
 
+  const { data: outfitPlans } = useOutfitPlans(selectedDate, selectedDate);
+
   useEffect(() => {
     if (!urlReady) return;
-    if (status !== 'authenticated') return;
+    if (outfitPlans === undefined) return;
 
-    const controller = new AbortController();
+    const found = outfitPlans.find((o: any) => o.time_slot === timeSlot);
+    setSlots((found?.slots ?? EMPTY_SLOTS) as SlotsState);
+    setOutfitName(found?.name ?? '');
+    setPlanId(found?.id ?? null);
+  }, [urlReady, outfitPlans, timeSlot]);
 
-    async function loadOutfit() {
-      setSlots(EMPTY_SLOTS);
-      setPlanId(null);
-
-      try {
-        const res = await fetch(
-          `/api/outfit_plans?from=${selectedDate}&to=${selectedDate}`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) return;
-
-        const data = await res.json();
-        const found = (data || []).find((o: any) => o.time_slot === timeSlot);
-
-        if (!controller.signal.aborted) {
-          setSlots(found?.slots ?? EMPTY_SLOTS);
-          setOutfitName(found?.name ?? '');
-          setPlanId(found?.id ?? null);
-        }
-      } catch (e: any) {
-        if (e?.name !== 'AbortError') console.error(e);
-      }
-    }
-
-    loadOutfit();
-    return () => controller.abort();
-  }, [urlReady, selectedDate, timeSlot, status]);
-
-  // Fetch wardrobe items
+  // Auth redirect
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login');
-      return;
     }
-
-    if (status === 'authenticated') {
-      fetchClothes();
-    }
-  }, [status]);
-
-  const fetchClothes = async () => {
-    try {
-      const res = await fetch(`/api/clothes?user_id=${session?.user?.id}`);
-      if (!res.ok) {
-        console.error('Failed to fetch clothes for planner:', await res.text());
-        setClothes([]);
-      } else {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setClothes(data);
-        } else {
-          console.error('Invalid clothes response:', data);
-          setClothes([]);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching clothes for planner:', err);
-      setClothes([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [status, router]);
 
   // Pre-fill slots from URL params (after clothes are loaded)
   useEffect(() => {
@@ -300,15 +252,18 @@ export default function PlannerPage() {
 
     const controller = new AbortController();
 
-    const base = 'https://api.open-meteo.com/v1/forecast?latitude=3.0061&longitude=101.6169';
+    const fetchWeatherByCoords = async (latitude: number, longitude: number) => {
+      if (controller.signal.aborted) return;
+      const base = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}`;
 
-    const url = isToday
-      ? `${base}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m`
-      : `${base}&daily=temperature_2m_max,temperature_2m_min,weather_code,apparent_temperature_max,wind_speed_10m_max,relative_humidity_2m_mean&start_date=${selectedDate}&end_date=${selectedDate}`;
+      const url = isToday
+        ? `${base}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m`
+        : `${base}&daily=temperature_2m_max,temperature_2m_min,weather_code,apparent_temperature_max,wind_speed_10m_max,relative_humidity_2m_mean&start_date=${selectedDate}&end_date=${selectedDate}`;
 
-    fetch(url, { signal: controller.signal })
-      .then(r => r.json())
-      .then(data => {
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error('Weather fetch failed');
+        const data = await res.json();
         if (controller.signal.aborted) return;
         let w: WeatherData | null = null;
 
@@ -344,13 +299,46 @@ export default function PlannerPage() {
           setPanelWeather(null);
         }
         if (!controller.signal.aborted) setPanelWeatherLoading(false);
-      })
-      .catch(() => {
+      } catch {
         if (!controller.signal.aborted) {
           if (!isToday) setPanelWeather(null);
           setPanelWeatherLoading(false);
         }
-      });
+      }
+    };
+
+    const fallbackToIpLocation = async () => {
+      try {
+        const res = await fetch('http://ip-api.com/json/', { signal: controller.signal });
+        if (!res.ok) throw new Error('IP geolocation failed');
+        const data = await res.json();
+        if (data?.lat && data?.lon) {
+          await fetchWeatherByCoords(data.lat, data.lon);
+        } else {
+          throw new Error('No coords from IP');
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          if (!isToday) setPanelWeather(null);
+          setPanelWeatherLoading(false);
+        }
+      }
+    };
+
+    if (!('geolocation' in navigator)) {
+      fallbackToIpLocation();
+      return () => controller.abort();
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (controller.signal.aborted) return;
+        fetchWeatherByCoords(position.coords.latitude, position.coords.longitude);
+      },
+      () => {
+        fallbackToIpLocation();
+      },
+    );
 
     return () => controller.abort();
   }, [showSuggestions, selectedDate]);
@@ -429,7 +417,7 @@ export default function PlannerPage() {
     }
   }
 
-  if (loading) {
+  if (clothesLoading) {
     return <Loader message="Loading planner..." />;
   }
 

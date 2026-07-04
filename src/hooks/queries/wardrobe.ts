@@ -13,8 +13,12 @@ export type ClothingItem = {
   id: string;
   name: string;
   type: string;
+  color: string;
+  season: string;
   image_url?: string;
   favorite?: boolean;
+  wear_count?: number;
+  use_case?: string[];
 };
 
 export interface DuplicateGroup {

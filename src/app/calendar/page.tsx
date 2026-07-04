@@ -12,20 +12,15 @@ import {
 } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { useOutfitPlans, type OutfitPlanRow } from '@/hooks/queries/calendar';
 import Loader from '../components/Loader';
 import GoogleCalendarConnectCard from '../components/GoogleCalendarConnectCard';
 import GoogleEventsPanel from '../components/GoogleEventsPanel';
 import ConfirmModal from '../components/ConfirmModal';
 
 type TimeSlot = 'day' | 'night';
-
-type OutfitPlanRow = {
-  id?: string;
-  date: string; // "YYYY-MM-DD"
-  time_slot: TimeSlot;
-  slots: Record<string, any>; // saved JSONB
-};
 
 function pad2(n: number) {
   return String(n).padStart(2, '0');
@@ -131,8 +126,25 @@ export default function CalendarPage() {
   const [viewMonth, setViewMonth] = useState<Date>(() =>
     startOfMonth(new Date()),
   );
-  const [loading, setLoading] = useState(true);
-  const [plans, setPlans] = useState<OutfitPlanRow[]>([]);
+  const gridStart = useMemo(() => {
+    const first = startOfMonth(viewMonth);
+    const gs = new Date(first);
+    gs.setDate(first.getDate() - mondayIndex(first.getDay()));
+    return toISODate(gs);
+  }, [viewMonth]);
+
+  const gridEnd = useMemo(() => {
+    const last = endOfMonth(viewMonth);
+    const ge = new Date(last);
+    ge.setDate(last.getDate() + (6 - mondayIndex(last.getDay())));
+    return toISODate(ge);
+  }, [viewMonth]);
+
+  const queryClient = useQueryClient();
+  const { data: plans, isLoading: plansLoading } = useOutfitPlans(
+    gridStart,
+    gridEnd,
+  );
   const [selectedDate, setSelectedDate] = useState<string>(() =>
     toISODate(new Date()),
   );
@@ -156,48 +168,11 @@ export default function CalendarPage() {
     if (status === 'unauthenticated') router.push('/auth/login');
   }, [status, router]);
 
-  // Fetch plans for the current month range
-  useEffect(() => {
-    async function loadMonthPlans() {
-      if (status !== 'authenticated') return;
-
-      setLoading(true);
-      try {
-        // Build range: from grid start to grid end so badges always show
-        const first = startOfMonth(viewMonth);
-        const last = endOfMonth(viewMonth);
-
-        const gridStart = new Date(first);
-        gridStart.setDate(first.getDate() - mondayIndex(first.getDay()));
-
-        const gridEnd = new Date(last);
-        gridEnd.setDate(last.getDate() + (6 - mondayIndex(last.getDay())));
-
-        const from = toISODate(gridStart);
-        const to = toISODate(gridEnd);
-
-        const res = await fetch(`/api/outfit_plans?from=${from}&to=${to}`);
-        if (!res.ok) {
-          console.error('Failed to load outfit plans:', await res.text());
-          setPlans([]);
-          return;
-        }
-        const data = await res.json();
-        setPlans(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error('Error loading outfit plans:', e);
-        setPlans([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadMonthPlans();
-  }, [viewMonth, status]);
+  // Fetch plans for the current month range (handled by useOutfitPlans above)
 
   const planMap = useMemo(() => {
     const m = new Map<string, { day?: OutfitPlanRow; night?: OutfitPlanRow }>();
-    for (const p of plans) {
+    for (const p of plans || []) {
       const key = p.date;
       if (!m.has(key)) m.set(key, {});
       const entry = m.get(key)!;
@@ -246,7 +221,7 @@ export default function CalendarPage() {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete');
-      setPlans((prev) => prev.filter((p) => p.id !== planId));
+      queryClient.invalidateQueries({ queryKey: ['outfit-plans'] });
       toast.success('Outfit deleted');
     } catch (e) {
       console.error('Delete outfit plan failed:', e);
@@ -264,7 +239,9 @@ export default function CalendarPage() {
   return (
     <div className="min-h-screen">
       <div className="px-6 pt-8 pb-4 max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-[#163422] font-headline">Calendar</h1>
+        <h1 className="text-3xl font-bold text-[#163422] font-headline">
+          Calendar
+        </h1>
       </div>
 
       <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
@@ -307,7 +284,7 @@ export default function CalendarPage() {
             </div>
 
             {/* Grid */}
-            {loading ? (
+            {plansLoading ? (
               <div className="py-10">
                 <Loader message="Loading outfits..." />
               </div>
@@ -373,11 +350,15 @@ export default function CalendarPage() {
                       </div>
 
                       {entry && (hasDay || hasNight) && (
-                        <div className={`absolute bottom-full mb-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 hidden group-hover:block pointer-events-none ${
-                          d.getDay() <= 2 ? 'left-0'
-                          : d.getDay() === 0 || d.getDay() >= 6 ? 'right-0'
-                          : 'left-1/2 -translate-x-1/2'
-                        }`}>
+                        <div
+                          className={`absolute bottom-full mb-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 hidden group-hover:block pointer-events-none ${
+                            d.getDay() <= 2
+                              ? 'left-0'
+                              : d.getDay() === 0 || d.getDay() >= 6
+                                ? 'right-0'
+                                : 'left-1/2 -translate-x-1/2'
+                          }`}
+                        >
                           {entry.day && (
                             <TooltipSlotGroup
                               label="☀ Day"

@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, queryOptions } from '@tanstack/react-query';
+import type { ClothingItem } from './wardrobe';
 
 export interface CalendarEvent {
   id: string;
@@ -15,6 +16,36 @@ export interface CalendarResult {
   events: CalendarEvent[];
   connected: boolean;
   needsReconnect: boolean;
+}
+
+export interface OutfitPlanRow {
+  id?: string;
+  date: string;
+  time_slot: string;
+  slots: Record<string, ClothingItem | null>;
+  name?: string | null;
+}
+
+export const outfitPlansOptions = (from?: string, to?: string) =>
+  queryOptions({
+    queryKey: ['outfit-plans', from, to],
+    queryFn: async (): Promise<OutfitPlanRow[]> => {
+      const res = await fetch(`/api/outfit_plans?from=${from}&to=${to}`);
+      if (!res.ok) {
+        console.error('Failed to load outfit plans:', await res.text());
+        return [];
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 60 * 1000,
+    retry: 1,
+    enabled: !!from && !!to,
+    placeholderData: (previous) => previous,
+  });
+
+export function useOutfitPlans(from?: string, to?: string) {
+  return useQuery(outfitPlansOptions(from, to));
 }
 
 export function useCalendarEvents() {
