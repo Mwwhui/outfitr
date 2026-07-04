@@ -158,7 +158,7 @@ export default function WardrobeClustersCard({
     return (
       <div className="bg-white rounded-3xl shadow-sm p-5">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-4 h-4 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin" />
+          <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
           <span className="text-xs text-gray-400">Analyzing clusters…</span>
         </div>
         <div className="space-y-2">

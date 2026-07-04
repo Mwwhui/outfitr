@@ -154,7 +154,7 @@ export default function OutfitSuggestPage() {
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-slate-200 shadow-sm min-w-[200px]">
           {weatherLoading ? (
             <div className="flex items-center gap-2 text-sm text-slate-400">
-              <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-transparent rounded-full" />
+              <div className="animate-spin h-4 w-4 border-2 border-black/20 border-t-black rounded-full" />
               Getting weather...
             </div>
           ) : weather ? (

@@ -38,7 +38,7 @@ function ChartSkeleton() {
     <div className="bg-white rounded-3xl shadow-sm p-5 animate-pulse">
       <div className="h-3 bg-gray-100 rounded w-1/4 mb-6" />
       <div className="h-48 bg-gray-50 rounded-xl flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-gray-200 border-t-gray-300 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin" />
       </div>
     </div>
   );

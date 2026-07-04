@@ -642,7 +642,7 @@ export default function PlannerPage() {
                 <div className="px-5 py-4 border-b border-slate-100">
                   <div className="flex items-center gap-3 mb-3">
                     {panelWeatherLoading ? (
-                      <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-transparent rounded-full" />
+                      <div className="animate-spin h-4 w-4 border-2 border-black/20 border-t-black rounded-full" />
                     ) : panelWeather ? (
                       <span className="group relative text-sm font-medium text-slate-600 cursor-pointer">
                         {weatherEmojiFn(panelWeather.weathercode)}{' '}
@@ -750,7 +750,7 @@ export default function PlannerPage() {
                   {panelLoading ? (
                     <div className="flex justify-center py-16">
                       <div className="flex flex-col items-center gap-3">
-                        <div className="animate-spin h-8 w-8 border-4 border-slate-200 border-t-[#163422] rounded-full" />
+                        <div className="animate-spin h-8 w-8 border-4 border-black/20 border-t-black rounded-full" />
                         <p className="text-sm text-slate-400">
                           Finding the best combos...
                         </p>

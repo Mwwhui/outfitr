@@ -180,7 +180,7 @@ export default function EditProfilePage() {
     return (
       <div className="max-w-4xl mx-auto px-6 py-10">
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-          <div className="animate-spin h-8 w-8 border-2 border-[#163422] border-t-transparent rounded-full" />
+          <div className="animate-spin h-8 w-8 border-2 border-black/20 border-t-black rounded-full" />
           <p className="text-slate-500 text-sm">Loading profile...</p>
         </div>
       </div>

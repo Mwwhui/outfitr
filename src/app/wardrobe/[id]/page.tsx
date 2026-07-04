@@ -38,7 +38,7 @@ export default function EditWardrobePage() {
   const userId = session?.user?.id;
   const formInitRef = useRef(false);
 
-  const { data: item, isLoading: itemLoading } = useItem(id, userId);
+  const { data: item } = useItem(id, userId);
   const { data: categories = [] } = useCategories();
   const { data: brandSuggestions = [] } = useSuggestions('brands', userId);
   const { data: locationSuggestions = [] } = useSuggestions(

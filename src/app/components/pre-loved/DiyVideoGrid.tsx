@@ -171,7 +171,7 @@ export default function DiyVideoGrid({
           >
             {loadingMore ? (
               <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-[#0f172a] border-t-transparent rounded-full animate-spin" />
+                <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
                 Loading...
               </span>
             ) : (

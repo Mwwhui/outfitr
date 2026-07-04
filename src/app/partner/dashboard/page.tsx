@@ -79,7 +79,7 @@ export default function PartnerDashboard() {
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#163422] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin" />
       </div>
     );
   }
@@ -123,7 +123,7 @@ export default function PartnerDashboard() {
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <div className="w-8 h-8 border-2 border-[#163422] border-t-transparent rounded-full animate-spin mb-3" />
+            <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin mb-3" />
             <p className="text-sm">Loading pledges...</p>
           </div>
         ) : pledges.length === 0 ? (

@@ -6,7 +6,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { clothesOptions, clustersOptions } from '@/hooks/queries/wardrobe';
 import { dashboardStatsOptions } from '@/hooks/queries/dashboard';
-import { useAlerts, monthlyInsightsOptions, pledgesOptions, alertsOptions } from '@/hooks/queries/home';
+import { useAlerts, monthlyInsightsOptions, pledgesOptions, sustainabilityStoryOptions } from '@/hooks/queries/home';
+import { frequentCombosOptions, outfitDnaOptions } from '@/hooks/queries/outfits';
+import { partnersOptions } from '@/hooks/queries/partners';
+import { outfitPlansOptions } from '@/hooks/queries/calendar';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -152,6 +155,7 @@ export default function Sidebar({
         case '/home':
           queryClient.prefetchQuery(monthlyInsightsOptions(userId));
           queryClient.prefetchQuery(pledgesOptions(userId));
+          queryClient.prefetchQuery(sustainabilityStoryOptions(userId));
           break;
         case '/wardrobe':
           queryClient.prefetchQuery(clothesOptions(userId));
@@ -161,6 +165,32 @@ export default function Sidebar({
           queryClient.prefetchQuery(dashboardStatsOptions(userId));
           queryClient.prefetchQuery(clustersOptions(userId));
           break;
+        case '/outfits':
+          queryClient.prefetchQuery(frequentCombosOptions(userId));
+          queryClient.prefetchQuery(outfitDnaOptions(userId));
+          break;
+        case '/pre-loved':
+          queryClient.prefetchQuery(clothesOptions(userId));
+          queryClient.prefetchQuery(partnersOptions());
+          break;
+        case '/activity':
+          queryClient.prefetchQuery(pledgesOptions(userId));
+          break;
+        case '/calendar': {
+          const now = new Date();
+          const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+          const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+          queryClient.prefetchQuery(outfitPlansOptions(userId, from, to));
+          break;
+        }
+        case '/planner': {
+          const now = new Date();
+          const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+          const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+          queryClient.prefetchQuery(clothesOptions(userId));
+          queryClient.prefetchQuery(outfitPlansOptions(userId, from, to));
+          break;
+        }
       }
     },
     [queryClient, session?.user?.id],
