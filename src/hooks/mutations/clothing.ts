@@ -37,8 +37,11 @@ export function useCreateClothing(userId?: string) {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       if (!userId) return;
+      queryClient.setQueryData<ClothingItem[]>(['clothes', userId], (old) =>
+        old ? [...old, data as ClothingItem] : old,
+      );
       queryClient.invalidateQueries({ queryKey: ['clothes', userId] });
       queryClient.invalidateQueries({ queryKey: ['clusters', userId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats', userId] });
@@ -77,7 +80,7 @@ export interface UpdateClothingData {
 export function useUpdateClothing(userId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: UpdateClothingData) => {
+    mutationFn: async (data: UpdateClothingData): Promise<ItemDetail> => {
       const { id, ...body } = data;
       const res = await fetch(`/api/clothes/${id}`, {
         method: 'PATCH',
@@ -138,6 +141,7 @@ export function useDeleteClothing(userId?: string) {
     onMutate: async (id) => {
       if (!userId) return;
       await queryClient.cancelQueries({ queryKey: ['clothes', userId] });
+      await queryClient.cancelQueries({ queryKey: ['item', userId, id] });
 
       const previousClothes = queryClient.getQueryData<ClothingItem[]>(['clothes', userId]);
 

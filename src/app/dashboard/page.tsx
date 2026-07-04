@@ -63,12 +63,16 @@ export default function DashboardPage() {
   // Fire-and-forget: score unused items for accurate dashboard stats
   useEffect(() => {
     if (status !== 'authenticated') return;
+    const userId = session?.user?.id;
     fetch('/api/clothes/score-unused', { method: 'POST' })
       .catch(() => {})
       .finally(() => {
-        queryClient.invalidateQueries(dashboardStatsOptions(session?.user?.id));
+        queryClient.invalidateQueries(dashboardStatsOptions(userId));
+        if (userId) {
+          queryClient.invalidateQueries({ queryKey: ['clothes', userId] });
+        }
       });
-  }, [status, queryClient]);
+  }, [status, queryClient, session?.user?.id]);
 
   // Auth guard
   useEffect(() => {

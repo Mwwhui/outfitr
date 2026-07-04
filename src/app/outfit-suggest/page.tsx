@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useWeather } from '@/hooks/queries/weather';
 import { useClothes } from '@/hooks/queries/wardrobe';
+import { useCreateOutfitPlan } from '@/hooks/mutations/outfitPlans';
 import Loader from '../components/Loader';
 import OutfitSuggestionCard from '../components/OutfitSuggestionCard';
 import type { ClothingItem, SuggestedOutfit } from '@/lib/suggestOutfits';
@@ -59,6 +60,7 @@ export default function OutfitSuggestPage() {
   );
   const clothes = clothesData || [];
   const weather: WeatherData | null = weatherResult?.current ?? null;
+  const createPlan = useCreateOutfitPlan(session?.user?.id);
 
   const [occasion, setOccasion] = useState<OccasionKey>('casual');
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
@@ -112,17 +114,12 @@ export default function OutfitSuggestPage() {
       try {
         const today = new Date().toISOString().slice(0, 10);
         const slots = clothingToSlots(suggestion.items);
-        const plansRes = await fetch('/api/outfit_plans', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date: today,
-            time_slot: 'day',
-            name: `${occasion} suggestion`,
-            slots,
-          }),
+        await createPlan.mutateAsync({
+          date: today,
+          timeSlot: 'day',
+          name: `${occasion} suggestion`,
+          slots,
         });
-        if (!plansRes.ok) throw new Error('Failed to save');
         toast.success('Outfit saved! Opening planner...');
         router.push(`/planner?date=${today}`);
       } catch {
@@ -131,7 +128,7 @@ export default function OutfitSuggestPage() {
         setSavingIdx(null);
       }
     },
-    [occasion, router],
+    [occasion, router, createPlan],
   );
 
   if (status === 'loading') {

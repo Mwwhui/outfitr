@@ -3,6 +3,7 @@
 import { useState, useEffect, useReducer, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useCategories,
   useSuggestions,
@@ -108,6 +109,7 @@ export default function UploadClothesPage() {
     session?.user?.id,
   );
   const createClothing = useCreateClothing(session?.user?.id);
+  const queryClientForCam = useQueryClient();
 
   const cam = useCameraScanner();
   const fileKeyRef = useRef('');
@@ -987,7 +989,15 @@ export default function UploadClothesPage() {
         editCanvasRef={cam.editCanvasRef}
         onStopCamera={cam.stopCamera}
         onRetake={cam.handleRetake}
-        onSave={() => session?.user?.id && cam.handleSave(session.user.id)}
+        onSave={async () => {
+          const uid = session?.user?.id;
+          if (!uid) return;
+          await cam.handleSave(uid);
+          queryClientForCam.invalidateQueries({ queryKey: ['clothes', uid] });
+          queryClientForCam.invalidateQueries({ queryKey: ['clusters', uid] });
+          queryClientForCam.invalidateQueries({ queryKey: ['dashboard-stats', uid] });
+          queryClientForCam.invalidateQueries({ queryKey: ['sustainability-story', uid] });
+        }}
         onEditItemsChange={cam.setEditItems}
       />
     </div>

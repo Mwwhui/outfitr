@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import toast from 'react-hot-toast';
 import { clothesOptions, clustersOptions, useClothes, useCategories, useClusters, type ClothingItem } from "@/hooks/queries/wardrobe";
 import { useToggleFavorite } from '@/hooks/mutations/clothing';
 import Loader from "../components/Loader";
@@ -285,9 +286,13 @@ export default function WardrobePage() {
 
                   {/* Favourite toggle */}
                   <button
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      toggleFavorite.mutate({ id: item.id, favorite: !item.favorite });
+                      try {
+                        await toggleFavorite.mutateAsync({ id: item.id, favorite: !item.favorite });
+                      } catch {
+                        toast.error('Failed to update favorite');
+                      }
                     }}
                     className="p-1"
                     aria-label="Toggle favourite"
