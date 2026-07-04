@@ -373,7 +373,11 @@ export default function CalendarPage() {
                       </div>
 
                       {entry && (hasDay || hasNight) && (
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 hidden group-hover:block pointer-events-none">
+                        <div className={`absolute bottom-full mb-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 hidden group-hover:block pointer-events-none ${
+                          d.getDay() <= 2 ? 'left-0'
+                          : d.getDay() === 0 || d.getDay() >= 6 ? 'right-0'
+                          : 'left-1/2 -translate-x-1/2'
+                        }`}>
                           {entry.day && (
                             <TooltipSlotGroup
                               label="☀ Day"

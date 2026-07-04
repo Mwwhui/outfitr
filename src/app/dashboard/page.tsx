@@ -9,11 +9,11 @@ import CategoryChart from '../components/dashboard/CategoryChart';
 import PledgeTimeline from '../components/dashboard/PledgeTimeline';
 import ItemsAddedChart from '../components/dashboard/ItemsAddedChart';
 import TopBrandsChart from '../components/dashboard/TopBrandsChart';
-import RecentActivity from '../components/dashboard/RecentActivity';
 import ImpactCard from '../components/dashboard/ImpactCard';
 import WardrobeValueCard from '../components/dashboard/WardrobeValueCard';
 import WornItemsCard from '../components/dashboard/WornItemsCard';
 import WardrobeClustersCard from '../components/dashboard/WardrobeClustersCard';
+import WearingHabitsChart from '../components/dashboard/WearingHabitsChart';
 
 interface DashboardTotals {
   items: number;
@@ -95,6 +95,12 @@ interface WardrobeValue {
   replacement_saved: number;
 }
 
+interface WearMonthPoint {
+  month: string;
+  wears: number;
+  items_worn: number;
+}
+
 interface WornItem {
   id: string;
   name: string;
@@ -117,6 +123,11 @@ interface DashboardData {
   wardrobe: WardrobeValue;
   most_worn: WornItem[];
   least_worn: WornItem[];
+  wears_over_time: WearMonthPoint[];
+  wearing_insight: string;
+  this_month_wears: number;
+  last_month_wears: number;
+  wear_change_pct: number;
 }
 
 function SkeletonCard({ className }: { className?: string }) {
@@ -379,6 +390,15 @@ export default function DashboardPage() {
           <WardrobeValueCard data={data!.wardrobe} totalItems={t.items} />
         )}
 
+        <WearingHabitsChart
+          data={data!.wears_over_time}
+          thisMonthWears={data!.this_month_wears}
+          lastMonthWears={data!.last_month_wears}
+          changePct={data!.wear_change_pct}
+          insight={data!.wearing_insight}
+          totalItems={t.items}
+        />
+
         {!emptyWardrobe && (
           <WornItemsCard
             mostWorn={data!.most_worn}
@@ -469,23 +489,6 @@ export default function DashboardPage() {
             }
           />
         )}
-
-        <div className="bg-white rounded-3xl shadow-sm p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[#163422] font-headline">
-              Recent Pledges
-            </h3>
-            {!noPledges && (
-              <Link
-                href="/activity"
-                className="text-xs font-medium text-[#163422] hover:underline"
-              >
-                View all →
-              </Link>
-            )}
-          </div>
-          <RecentActivity data={data?.recent_activity || []} />
-        </div>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -71,18 +71,16 @@ const PARTNER_SECTIONS: NavSection[] = [
 function usePledgeBadges() {
   const [prelovedCount, setPrelovedCount] = useState(0);
   const [activityCount, setActivityCount] = useState(0);
+  const lastFetchRef = useRef(0);
 
   const fetchCounts = useCallback(async () => {
     try {
-      const res = await fetch('/api/pledges');
+      const res = await fetch('/api/home/alerts');
       if (!res.ok) return;
       const data = await res.json();
-      const pledges = data.pledges || [];
-      const active = pledges.filter(
-        (p: { status: string }) => p.status === 'pending' || p.status === 'accepted'
-      ).length;
-      setPrelovedCount(active);
-      setActivityCount(pledges.length);
+      setPrelovedCount((data.pledges_pending || 0) + (data.pledges_accepted || 0));
+      setActivityCount(data.pledges_total || 0);
+      lastFetchRef.current = Date.now();
     } catch {
       // silently fail
     }
@@ -91,13 +89,16 @@ function usePledgeBadges() {
   useEffect(() => {
     fetchCounts();
 
-    // Refetch every 60s
-    const interval = setInterval(fetchCounts, 60000);
+    const interval = setInterval(fetchCounts, 300000);
 
-    // Refetch when user returns to tab
-    const handleFocus = () => fetchCounts();
+    const handleFocus = () => {
+      if (Date.now() - lastFetchRef.current < 60000) return;
+      fetchCounts();
+    };
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') fetchCounts();
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastFetchRef.current < 60000) return;
+      fetchCounts();
     };
 
     window.addEventListener('focus', handleFocus);

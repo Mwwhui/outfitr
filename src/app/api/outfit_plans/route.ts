@@ -72,6 +72,15 @@ export async function POST(req: Request) {
       .eq('worn_at', date)
       .eq('time_slot', timeSlot)
       .in('cloth_id', removedIds);
+
+    // Decrement wear counts for removed items
+    const { error: decError } = await supabase.rpc(
+      'decrement_clothes_wear_counts',
+      { p_user_id: userId, p_cloth_ids: removedIds },
+    );
+    if (decError) {
+      console.error('Failed to decrement wear counts for removed items:', decError);
+    }
   }
 
   // Upsert the outfit plan
@@ -91,8 +100,9 @@ export async function POST(req: Request) {
   }
 
   const newItemIds = [...newIds];
+  const today = new Date().toISOString().slice(0, 10);
 
-  if (newItemIds.length > 0) {
+  if (newItemIds.length > 0 && date <= today) {
     // Insert wear_logs for new items (with time_slot for accurate pair grouping)
     const wearLogRows = newItemIds.map((clothId) => ({
       user_id: userId,

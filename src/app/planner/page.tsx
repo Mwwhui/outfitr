@@ -7,6 +7,7 @@ import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
 import OutfitSuggestionCard from '../components/OutfitSuggestionCard';
+import ConfirmModal from '../components/ConfirmModal';
 import toast from 'react-hot-toast';
 import type { ClothingItem, OccasionKey, WeatherData, SuggestedOutfit } from '@/lib/suggestOutfits';
 import { hasCompatibleUseCases, hasCompatibleSeasons } from '@/lib/suggestOutfits';
@@ -59,6 +60,9 @@ export default function PlannerPage() {
 
   const [slots, setSlots] = useState<SlotsState>(EMPTY_SLOTS);
   const [urlReady, setUrlReady] = useState(false);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Suggestion panel state
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -121,6 +125,7 @@ export default function PlannerPage() {
 
     async function loadOutfit() {
       setSlots(EMPTY_SLOTS);
+      setPlanId(null);
 
       try {
         const res = await fetch(
@@ -135,6 +140,7 @@ export default function PlannerPage() {
         if (!controller.signal.aborted) {
           setSlots(found?.slots ?? EMPTY_SLOTS);
           setOutfitName(found?.name ?? '');
+          setPlanId(found?.id ?? null);
         }
       } catch (e: any) {
         if (e?.name !== 'AbortError') console.error(e);
@@ -427,6 +433,29 @@ export default function PlannerPage() {
     return <Loader message="Loading planner..." />;
   }
 
+  async function handleDeleteOutfit() {
+    if (!planId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/outfit_plans/${planId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        toast.error('Failed to delete outfit');
+        return;
+      }
+      toast.success('Outfit deleted');
+      setPlanId(null);
+      setSlots(EMPTY_SLOTS);
+      setOutfitName('');
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
   async function handleSaveOutfit() {
     const toastId = toast.loading('Saving outfit...');
 
@@ -654,6 +683,14 @@ export default function PlannerPage() {
 
           {/* Save + suggest actions */}
           <div className="flex justify-end gap-2">
+            {planId && (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-sm px-4 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition font-medium"
+              >
+                Delete
+              </button>
+            )}
             <button
               onClick={() => setShowSuggestions(true)}
               className="shimmer-btn text-sm px-5 py-2.5 rounded-xl bg-gradient-to-r from-zinc-800 via-zinc-900 to-black
@@ -781,6 +818,15 @@ export default function PlannerPage() {
         )}
       </div>
     </div>
+      <ConfirmModal
+        open={confirmDelete}
+        title="Delete outfit?"
+        message="This will remove the outfit plan and its wear logs. Wear counts for these items will be reduced."
+        confirmLabel="Delete"
+        onConfirm={handleDeleteOutfit}
+        onCancel={() => setConfirmDelete(false)}
+        loading={deleting}
+      />
     </div>
   );
 }

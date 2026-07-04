@@ -116,15 +116,25 @@ function itemsToPlannerParams(items: Array<{ id: string; type: string }>): strin
 
 function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onScheduled: () => void }) {
   const [scheduling, setScheduling] = useState(false);
-  const [confirmDay, setConfirmDay] = useState<number | null>(null);
-  const days = ['M', 'T', 'W', 'T', 'F'];
-  const dayIndices = [1, 2, 3, 4, 5];
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const dayIndices = [1, 2, 3, 4, 5, 6, 0];
+  const dayLabels: Record<number, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 0: 'Sun' };
+
+  const toggleDay = (dayIndex: number) => {
+    setSelectedDays((prev) =>
+      prev.includes(dayIndex)
+        ? prev.filter((d) => d !== dayIndex)
+        : [...prev, dayIndex],
+    );
+  };
 
   const handleConfirm = async () => {
-    if (confirmDay === null) return;
+    if (selectedDays.length === 0) return;
     setScheduling(true);
     try {
-      const slots: Record<string, { id: string; name: string }> = {};
+      const slots: Record<string, { id: string; name: string; image_url: string | null; color: string | null; type: string }> = {};
       for (const item of items) {
         const key = item.type === 'Tops' ? 'top'
           : item.type === 'Bottoms' ? 'bottom'
@@ -133,38 +143,57 @@ function MiniCalendarPicker({ items, onScheduled }: { items: ComboItem[]; onSche
           : item.type === 'Shoes' ? 'shoes'
           : item.type === 'Accessories' ? 'accessories'
           : null;
-        if (key) slots[key] = { id: item.id, name: item.name };
+        if (key) slots[key] = { id: item.id, name: item.name, image_url: item.image_url, color: item.color, type: item.type };
       }
-      await fetch('/api/outfit_plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: getNextWeekday(confirmDay), timeSlot: 'day', slots, name: items.map((i) => i.name).join(' + ') }),
-      });
+      const name = items.map((i) => i.name).join(' + ');
+      await Promise.all(selectedDays.map((dayIndex) =>
+        fetch('/api/outfit_plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: getNextWeekday(dayIndex), timeSlot: 'day', slots, name }),
+        }).then((res) => {
+          if (!res.ok) throw new Error('Failed to schedule');
+        }),
+      ));
       onScheduled();
-    } catch { /* silently fail */ } finally { setScheduling(false); setConfirmDay(null); }
+    } catch { /* silently fail */ } finally { setScheduling(false); setShowModal(false); setSelectedDays([]); }
   };
 
   return (
     <>
       <div className="mt-3 p-3 bg-surface-container-lowest border border-outline-variant rounded-lg">
-        <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-2">Quick Add to Next Week</p>
+        <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-2">Schedule Weekly</p>
         <div className="flex justify-between gap-1">
           {days.map((day, i) => (
-            <button key={i} onClick={() => setConfirmDay(dayIndices[i])} disabled={scheduling}
-              className="flex-1 py-1 rounded border border-outline-variant text-sm hover:bg-primary hover:text-on-primary transition-colors disabled:opacity-50">
+            <button key={i} onClick={() => toggleDay(dayIndices[i])} disabled={scheduling}
+              className={`flex-1 py-1 rounded border text-sm transition-colors disabled:opacity-50 ${
+                selectedDays.includes(dayIndices[i])
+                  ? 'bg-primary text-on-primary border-primary'
+                  : 'border-outline-variant hover:bg-primary hover:text-on-primary'
+              }`}>
               {day}
             </button>
           ))}
         </div>
+        {selectedDays.length > 0 && (
+          <button
+            onClick={() => setShowModal(true)}
+            disabled={scheduling}
+            className="mt-2 w-full bg-primary text-on-primary text-sm py-1.5 rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50"
+          >
+            Schedule Weekly
+          </button>
+        )}
       </div>
       <ConfirmModal
-        open={confirmDay !== null}
+        open={showModal}
         title="Schedule Outfit"
-        message={`Schedule "${items.map((i) => i.name).join(' + ')}" to ${days[dayIndices.indexOf(confirmDay as number)]}?`}
-        confirmLabel="Schedule"
+        message={`Schedule "${items.map((i) => i.name).join(' + ')}" to ${selectedDays.map((d) => dayLabels[d]).join(', ')}?`}
+        confirmLabel={selectedDays.length > 1 ? `Schedule ${selectedDays.length} days` : 'Schedule'}
         cancelLabel="Cancel"
+        confirmVariant="primary"
         onConfirm={handleConfirm}
-        onCancel={() => setConfirmDay(null)}
+        onCancel={() => { setShowModal(false); setSelectedDays([]); }}
         loading={scheduling}
       />
     </>
@@ -185,6 +214,10 @@ export default function OutfitsPage() {
   const [mounted, setMounted] = useState(false);
   const [schedulingCombo, setSchedulingCombo] = useState<string | null>(null);
   const [totalItems, setTotalItems] = useState(0);
+
+  const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
+  const [archivedKeys, setArchivedKeys] = useState<Set<string>>(new Set());
+  const [filterMode, setFilterMode] = useState<'all' | 'favorites' | 'archived'>('favorites');
 
   // New state for Impact Meter + Planned Outfits
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -240,6 +273,32 @@ export default function OutfitsPage() {
       if (res.ok) setDna(await res.json());
     } catch { /* silently fail */ } finally { setLoadingDna(false); }
   };
+
+  // Load favorite combos from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('outfit_favorites');
+      if (stored) setFavoriteKeys(new Set(JSON.parse(stored)));
+    } catch {}
+  }, []);
+
+  // Persist favorite combos
+  useEffect(() => {
+    localStorage.setItem('outfit_favorites', JSON.stringify([...favoriteKeys]));
+  }, [favoriteKeys]);
+
+  // Load archived combos from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('outfit_archived');
+      if (stored) setArchivedKeys(new Set(JSON.parse(stored)));
+    } catch {}
+  }, []);
+
+  // Persist archived combos
+  useEffect(() => {
+    localStorage.setItem('outfit_archived', JSON.stringify([...archivedKeys]));
+  }, [archivedKeys]);
 
   // Fetch planned outfits
   useEffect(() => {
@@ -413,6 +472,30 @@ export default function OutfitsPage() {
       .catch(() => {});
   };
 
+  const toggleFavorite = (key: string) => {
+    setFavoriteKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleArchive = (key: string) => {
+    setArchivedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const visibleCombos = filterMode === 'favorites'
+    ? frequentCombos.filter((c) => favoriteKeys.has(c.key))
+    : filterMode === 'archived'
+      ? frequentCombos.filter((c) => archivedKeys.has(c.key))
+      : frequentCombos.filter((c) => !archivedKeys.has(c.key));
+
   const handleQuickSwap = async (planId: string, date: string) => {
     await fetch(`/api/outfit_plans/${planId}`, { method: 'DELETE' });
     setPlans((prev) => prev.filter((p) => p.id !== planId));
@@ -562,16 +645,52 @@ export default function OutfitsPage() {
             {/* Common Combinations */}
             {frequentCombos.length > 0 && (
               <section className={`transition-all duration-700 delay-200 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-                <h2 className="text-xl font-bold text-on-surface font-headline mb-6">Common Combinations</h2>
+                <div className="flex items-center gap-2 mb-6">
+                  <h2 className="text-xl font-bold text-on-surface font-headline">Common Combinations</h2>
+                  <div className="flex ml-auto gap-1 bg-surface-container-high rounded-lg p-0.5">
+                    <button
+                      onClick={() => setFilterMode('favorites')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'favorites' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      Favorites ({frequentCombos.filter((c) => favoriteKeys.has(c.key)).length})
+                    </button>
+                    <button
+                      onClick={() => setFilterMode('all')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'all' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      All ({frequentCombos.filter((c) => !archivedKeys.has(c.key)).length})
+                    </button>
+                    <button
+                      onClick={() => setFilterMode('archived')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'archived' ? 'bg-white text-on-surface shadow-sm' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      Archive ({frequentCombos.filter((c) => archivedKeys.has(c.key)).length})
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {frequentCombos.map((combo) => {
-                    const lastDay = new Date(combo.last_worn).getDay();
-                    const isWeekend = lastDay === 0 || lastDay === 6;
+                  {visibleCombos.map((combo) => {
                     const showPicker = schedulingCombo === combo.key;
                     const badge = combo.frequency >= 10 ? 'High Rotation' : combo.frequency >= 5 ? 'Regular' : null;
 
                     return (
-                      <div key={combo.key} className="group bg-surface-bright border border-outline-variant p-4 rounded-xl hover:shadow-lg transition-all duration-300">
+                      <div key={combo.key} className="group bg-surface-bright border border-outline-variant p-4 rounded-xl hover:shadow-lg transition-all duration-300 relative">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleFavorite(combo.key); }}
+                          className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-white transition z-10"
+                        >
+                          <span className={`material-symbols-outlined text-sm ${
+                            favoriteKeys.has(combo.key) ? 'text-red-500' : 'text-gray-400'
+                          }`} style={{ fontVariationSettings: favoriteKeys.has(combo.key) ? "'FILL' 1" : "'FILL' 0" }}>
+                            favorite
+                          </span>
+                        </button>
                         <ComboImageGrid items={combo.items} />
                         <div className="flex justify-between items-start mb-4 mt-4">
                           <div>
@@ -589,11 +708,17 @@ export default function OutfitsPage() {
                           className="w-full border border-primary text-primary text-sm py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-primary hover:text-on-primary transition-colors"
                         >
                           <span className="material-symbols-outlined text-sm">calendar_month</span>
-                          {isWeekend ? 'Schedule to Weekdays' : 'Schedule to Weekend'}
+                          Schedule Weekly
                         </button>
                         {showPicker && (
                           <MiniCalendarPicker items={combo.items} onScheduled={() => { setSchedulingCombo(null); refreshPlans(); }} />
                         )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleArchive(combo.key); }}
+                          className="absolute top-3 left-3 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-gray-500 transition-all z-10"
+                        >
+                          <span className="material-symbols-outlined text-sm">archive</span>
+                        </button>
                       </div>
                     );
                   })}

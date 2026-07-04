@@ -24,7 +24,7 @@ export async function DELETE(
   // Fetch the plan to verify ownership and get date+timeSlot for wear_logs cleanup
   const { data: plan, error: fetchError } = await supabase
     .from('outfit_plans')
-    .select('id, date, time_slot')
+    .select('id, date, time_slot, slots')
     .eq('id', id)
     .eq('user_id', userId)
     .maybeSingle();
@@ -37,6 +37,16 @@ export async function DELETE(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
+  // Extract item IDs from the plan before deleting
+  const planItemIds: string[] = [];
+  if (plan.slots) {
+    for (const item of Object.values(plan.slots)) {
+      if (item && typeof item === 'object' && 'id' in item) {
+        planItemIds.push((item as { id: string }).id);
+      }
+    }
+  }
+
   // Delete associated wear_logs for this date + time_slot
   const { error: wearLogError } = await supabase
     .from('wear_logs')
@@ -47,6 +57,17 @@ export async function DELETE(
 
   if (wearLogError) {
     console.error('Failed to delete wear logs:', wearLogError);
+  }
+
+  // Decrement wear counts for the plan's items
+  if (planItemIds.length > 0) {
+    const { error: decError } = await supabase.rpc(
+      'decrement_clothes_wear_counts',
+      { p_user_id: userId, p_cloth_ids: planItemIds },
+    );
+    if (decError) {
+      console.error('Failed to decrement wear counts:', decError);
+    }
   }
 
   // Delete the outfit plan

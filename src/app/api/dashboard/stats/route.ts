@@ -29,6 +29,7 @@ export async function GET() {
       itemsOverTimeResult,
       pledgesOverTimeResult,
       recentResult,
+      wearLogsResult,
     ] = await Promise.all([
       supabase
         .from('clothes')
@@ -61,6 +62,11 @@ export async function GET() {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(5),
+      supabase
+        .from('wear_logs')
+        .select('cloth_id, worn_at')
+        .eq('user_id', userId)
+        .gte('worn_at', twelveMonthsAgo),
     ]);
 
     const clothes = clothesResult.data || [];
@@ -68,6 +74,7 @@ export async function GET() {
     const itemsTimeData = itemsOverTimeResult.data || [];
     const pledgesTimeData = pledgesOverTimeResult.data || [];
     const recentPledges = recentResult.data || [];
+    const wearLogs = wearLogsResult.data || [];
 
     const itemsWithPrice = clothes.filter(
       (c: { price: number | null }) => c.price != null,
@@ -401,6 +408,79 @@ export async function GET() {
       }),
     );
 
+    // Wearing habits — monthly wears
+    const wearMonths = new Map<string, { wears: number; items: Set<string> }>();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      wearMonths.set(key, { wears: 0, items: new Set() });
+    }
+    for (const log of wearLogs) {
+      const d = new Date(log.worn_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (wearMonths.has(key)) {
+        const entry = wearMonths.get(key)!;
+        entry.wears++;
+        entry.items.add(log.cloth_id);
+      }
+    }
+
+    const wearsOverTime = Array.from(wearMonths.entries()).map(([month, data]) => ({
+      month,
+      wears: data.wears,
+      items_worn: data.items.size,
+    }));
+
+    const wearEntries = Array.from(wearMonths.entries());
+    const thisMonthWears = wearEntries.length > 0 ? wearEntries[wearEntries.length - 1][1].wears : 0;
+    const lastMonthWears = wearEntries.length > 1 ? wearEntries[wearEntries.length - 2][1].wears : 0;
+    const wearChangePct = lastMonthWears > 0
+      ? Math.round(((thisMonthWears - lastMonthWears) / lastMonthWears) * 100)
+      : thisMonthWears > 0 ? 100 : 0;
+
+    // Gemini AI wearing insight
+    let wearingInsight = '';
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const hasWearData = wearsOverTime.some((m) => m.wears > 0);
+    if (geminiKey && hasWearData) {
+      try {
+        const monthsSummary = wearsOverTime
+          .slice(-6)
+          .map((m) => {
+            const label = new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            return `${label}: ${m.wears} wears, ${m.items_worn} items`;
+          })
+          .join(', ');
+
+        const prompt = `You are a wardrobe analyst. The user's wearing habits over the last 6 months: ${monthsSummary}. Current month: ${thisMonthWears} wears, previous month: ${lastMonthWears} wears (${wearChangePct >= 0 ? '+' : ''}${wearChangePct}% change). Give 1-2 sentences of personalized insight about their wearing patterns and a practical recommendation. Be concise.`;
+
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
+        const response = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          wearingInsight = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        }
+      } catch {
+        // Use fallback below
+      }
+    }
+
+    if (!wearingInsight) {
+      if (!hasWearData) {
+        wearingInsight = 'Start logging outfits in the Planner to see your wearing habits and get personalized insights.';
+      } else if (wearChangePct > 20) {
+        wearingInsight = `You're wearing your clothes ${wearChangePct}% more this month than last — great rotation! Keep exploring new combinations.`;
+      } else if (wearChangePct < -20) {
+        wearingInsight = `Your wear count dropped ${Math.abs(wearChangePct)}% this month. Try styling a few items you haven't worn lately to refresh your rotation.`;
+      } else {
+        wearingInsight = 'Your wearing habits are consistent month over month. Try experimenting with new outfit combinations to keep things fresh.';
+      }
+    }
+
     return NextResponse.json({
       totals,
       categories: categoryData,
@@ -415,6 +495,11 @@ export async function GET() {
       wardrobe,
       most_worn: mostWorn,
       least_worn: leastWorn,
+      wears_over_time: wearsOverTime,
+      wearing_insight: wearingInsight,
+      this_month_wears: thisMonthWears,
+      last_month_wears: lastMonthWears,
+      wear_change_pct: wearChangePct,
     });
   } catch (err) {
     console.error('GET /api/dashboard/stats error:', err);
