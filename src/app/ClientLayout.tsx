@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { SessionProvider } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
+import Providers from './Providers';
 import Sidebar from './components/Sidebar';
 import BottomSheet from './components/BottomSheet';
 import MobileTopBar from './components/MobileTopBar';
@@ -37,18 +37,16 @@ export default function ClientLayout({
   const hideSidebar =
     pathname === '/auth/login' || pathname === '/auth/register';
 
-  if (hideSidebar) {
-    return (
-      <SessionProvider>
-        <div className="min-h-screen">{children}</div>
-        <Toaster />
-      </SessionProvider>
-    );
-  }
-
   return (
-    <SessionProvider>
-      <div className="flex h-screen bg-background overflow-hidden">
+    <Providers>
+      {hideSidebar ? (
+        <>
+          <div className="min-h-screen">{children}</div>
+          <Toaster />
+        </>
+      ) : (
+        <>
+        <div className="flex h-screen bg-background overflow-hidden">
         {/* Desktop Sidebar */}
         <aside className="hidden lg:block flex-shrink-0 relative z-20">
           <div className="h-full p-3">
@@ -88,6 +86,8 @@ export default function ClientLayout({
         </div>
       </div>
       <Toaster />
-    </SessionProvider>
+      </>
+    )}
+    </Providers>
   );
 }
