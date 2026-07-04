@@ -9,7 +9,7 @@ export default function Loader({
     <div className="flex items-center justify-center p-6">
       <div className="flex flex-col items-center">
         <svg
-          className="animate-spin h-10 w-10 text-blue-600"
+          className="animate-spin h-10 w-10 text-black"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"

@@ -88,7 +88,23 @@ export default function GoogleEventsPanel({ date, enabled, connected }: Props) {
           Connect Google Calendar to see events here.
         </p>
       ) : loading ? (
-        <p className="text-xs text-slate-400">Loading events...</p>
+        <div className="space-y-2 animate-pulse">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-surface-variant" />
+            <div className="h-3 bg-surface-variant rounded w-8" />
+            <div className="h-3 bg-surface-variant rounded flex-1" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-surface-variant" />
+            <div className="h-3 bg-surface-variant rounded w-10" />
+            <div className="h-3 bg-surface-variant rounded flex-1" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-surface-variant" />
+            <div className="h-3 bg-surface-variant rounded w-6" />
+            <div className="h-3 bg-surface-variant rounded w-3/4" />
+          </div>
+        </div>
       ) : error ? (
         <p className="text-xs text-red-500">{error}</p>
       ) : events.length === 0 ? (

@@ -30,8 +30,11 @@ const DynamicLeafletMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex items-center justify-center bg-gray-50 text-gray-400">
-        Loading map module...
+      <div className="w-full h-full bg-surface-variant rounded-2xl animate-pulse flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+          <div className="h-3 bg-surface-variant rounded w-32" />
+        </div>
       </div>
     ),
   },

@@ -208,7 +208,24 @@ export default function EditWardrobePage() {
   };
 
   if (!formData) {
-    return <p className="text-center p-10">Loading...</p>;
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-10 animate-pulse">
+        <div className="h-4 bg-surface-variant rounded w-16 mb-6" />
+        <div className="h-8 bg-surface-variant rounded w-48 mb-6" />
+        <div className="h-6 bg-surface-variant rounded w-32 mb-8" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="aspect-[3/4] bg-surface-variant rounded-2xl" />
+          <div className="space-y-4">
+            <div className="h-4 bg-surface-variant rounded w-3/4" />
+            <div className="h-4 bg-surface-variant rounded w-1/2" />
+            <div className="h-10 bg-surface-variant rounded-2xl w-full" />
+            <div className="h-4 bg-surface-variant rounded w-2/3" />
+            <div className="h-4 bg-surface-variant rounded w-1/3" />
+            <div className="h-10 bg-surface-variant rounded-2xl w-full mt-4" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const purchaseDateValue = formData.purchase_date
