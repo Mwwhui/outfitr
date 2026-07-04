@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -45,9 +46,7 @@ const USER_SECTIONS: NavSection[] = [
   },
   {
     title: 'Insights',
-    items: [
-      { icon: 'dashboard', label: 'Dashboard', href: '/dashboard' },
-    ],
+    items: [{ icon: 'dashboard', label: 'Dashboard', href: '/dashboard' }],
   },
 ];
 
@@ -62,9 +61,7 @@ const PARTNER_SECTIONS: NavSection[] = [
   },
   {
     title: 'Insights',
-    items: [
-      { icon: 'dashboard', label: 'Dashboard', href: '/dashboard' },
-    ],
+    items: [{ icon: 'dashboard', label: 'Dashboard', href: '/dashboard' }],
   },
 ];
 
@@ -78,7 +75,9 @@ function usePledgeBadges() {
       const res = await fetch('/api/home/alerts');
       if (!res.ok) return;
       const data = await res.json();
-      setPrelovedCount((data.pledges_pending || 0) + (data.pledges_accepted || 0));
+      setPrelovedCount(
+        (data.pledges_pending || 0) + (data.pledges_accepted || 0),
+      );
       setActivityCount(data.pledges_total || 0);
       lastFetchRef.current = Date.now();
     } catch {
@@ -139,7 +138,9 @@ function NavPill({
           : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
       } justify-center ${collapsed ? '' : 'lg:justify-start'}`}
     >
-      <span className="relative z-10 material-symbols-outlined text-lg">{item.icon}</span>
+      <span className="relative z-10 material-symbols-outlined text-lg">
+        {item.icon}
+      </span>
       {!collapsed && (
         <span className="relative z-10 text-sm font-medium flex-1 text-left">
           {item.label}
@@ -158,7 +159,12 @@ function NavPill({
   );
 }
 
-export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggleCollapse }: SidebarProps) {
+export default function Sidebar({
+  mobile,
+  onNavigate,
+  collapsed = false,
+  onToggleCollapse,
+}: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -182,7 +188,10 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
     onNavigate?.();
   };
 
+  const queryClient = useQueryClient();
+
   const handleLogout = async () => {
+    queryClient.clear();
     await signOut({ redirect: false });
     router.push('/auth/login');
     onNavigate?.();
@@ -259,8 +268,12 @@ export default function Sidebar({ mobile, onNavigate, collapsed = false, onToggl
             onClick={() => handleNavigate(quickAction.href)}
             className="w-full flex items-center justify-center gap-0 lg:gap-2 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
           >
-            <span className="material-symbols-outlined text-sm">{quickAction.icon}</span>
-            {!collapsed && <span className="hidden lg:inline">{quickAction.label}</span>}
+            <span className="material-symbols-outlined text-sm">
+              {quickAction.icon}
+            </span>
+            {!collapsed && (
+              <span className="hidden lg:inline">{quickAction.label}</span>
+            )}
           </button>
         </motion.div>
       </nav>
