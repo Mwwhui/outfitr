@@ -155,7 +155,7 @@ export default function PartnerDrawer({
                         : 'border-gray-200 hover:border-gray-300 bg-white/80'
                     }`}
                   >
-                    <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0 flex items-center justify-center text-2xl overflow-hidden">
+                    <div className="w-16 h-16 rounded-xl bg-gray-100 flex-shrink-0 flex items-center justify-center text-2xl overflow-hidden relative">
                       {item.image_url ? (
                         <Image
                           fill
