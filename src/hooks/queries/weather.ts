@@ -122,12 +122,28 @@ function getCurrentPosition(): Promise<GeolocationCoordinates> {
   });
 }
 
+async function fetchIpLocation(): Promise<{ latitude: number; longitude: number }> {
+  const res = await fetch('http://ip-api.com/json/');
+  if (!res.ok) throw new Error('IP geolocation failed');
+  const data = await res.json();
+  if (!data?.lat || !data?.lon) throw new Error('Invalid IP geolocation response');
+  return { latitude: data.lat, longitude: data.lon };
+}
+
+async function resolveCoords(): Promise<{ latitude: number; longitude: number }> {
+  try {
+    return await getCurrentPosition();
+  } catch {
+    return await fetchIpLocation();
+  }
+}
+
 export function useWeather() {
   return useQuery({
     queryKey: ['weather'],
     queryFn: async (): Promise<WeatherResult | null> => {
       try {
-        const { latitude, longitude } = await getCurrentPosition();
+        const { latitude, longitude } = await resolveCoords();
         const res = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&hourly=weather_code,temperature_2m&forecast_days=1`,
         );
