@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { usePartners } from '@/hooks/queries/partners';
 import { useClothes } from '@/hooks/queries/wardrobe';
+import { useCreatePledge } from '@/hooks/mutations/pledges';
 // Sub-components
 import ActionCategoryCards, {
   ActionCategory,
@@ -79,6 +80,7 @@ export default function PreLovedPage() {
   const { data: allClothes = [], isLoading: clothesLoading } = useClothes(
     session?.user?.id,
   );
+  const createPledge = useCreatePledge(session?.user?.id);
 
   const wardrobeItems: ClothesItem[] = useMemo(
     () => allClothes.filter((c: any) => c.status !== 'pending_action'),
@@ -144,17 +146,12 @@ export default function PreLovedPage() {
 
   const handleConfirmPledge = useCallback(
     async (itemIds: string[], partnerId: string, actionType: string) => {
-      const res = await fetch('/api/pledges', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ partnerId, itemIds, actionType }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to submit pledge');
-        return;
+      try {
+        await createPledge.mutateAsync({ partnerId, itemIds, actionType });
+        toast.success('Pledge submitted! Check your email for confirmation.');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to submit pledge');
       }
-      toast.success('Pledge submitted! Check your email for confirmation.');
     },
     [],
   );

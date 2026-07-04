@@ -3,12 +3,12 @@
 import { useState, useEffect, useReducer, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   useCategories,
   useSuggestions,
   useSimilarItems,
 } from '@/hooks/queries/wardrobe';
+import { useCreateClothing } from '@/hooks/mutations/clothing';
 import {
   SEASONS,
   SIZES,
@@ -63,7 +63,6 @@ function formReducer(state: FormFields, next: Partial<FormFields>): FormFields {
 export default function UploadClothesPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const queryClient = useQueryClient();
   const [fields, setField] = useReducer(formReducer, initialForm);
 
   const [customBrand, setCustomBrand] = useState(false);
@@ -108,6 +107,7 @@ export default function UploadClothesPage() {
     undefined,
     session?.user?.id,
   );
+  const createClothing = useCreateClothing(session?.user?.id);
 
   const cam = useCameraScanner();
   const fileKeyRef = useRef('');
@@ -384,33 +384,25 @@ export default function UploadClothesPage() {
       if (!uploadRes.ok) throw new Error(uploadData.error || 'Upload failed');
       const imageUrl = uploadData.url;
 
-      const saveRes = await fetch('/api/clothes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: session.user.id,
-          name: fields.name,
-          type: fields.type,
-          color: fields.color,
-          season: fields.season || null,
-          size: fields.size || null,
-          brand: fields.brand || null,
-          price: fields.price === '' ? null : Number(fields.price),
-          material: fields.material || null,
-          favorite: false,
-          image_url: imageUrl,
-          use_case: fields.useCases,
-          description: fields.description || null,
-          purchase_date: fields.purchaseDate || null,
-          location: fields.location || null,
-          notes: fields.notes || null,
-        }),
+      const created = await createClothing.mutateAsync({
+        user_id: session.user.id,
+        name: fields.name,
+        type: fields.type,
+        color: fields.color,
+        season: fields.season || null,
+        size: fields.size || null,
+        brand: fields.brand || null,
+        price: fields.price === '' ? null : Number(fields.price),
+        material: fields.material || null,
+        favorite: false,
+        image_url: imageUrl,
+        use_case: fields.useCases,
+        description: fields.description || null,
+        purchase_date: fields.purchaseDate || null,
+        location: fields.location || null,
+        notes: fields.notes || null,
       });
-      if (!saveRes.ok) {
-        const err = await saveRes.json();
-        throw new Error(err.error || 'Failed to save clothing');
-      }
-      router.push('/wardrobe');
+      router.push(`/wardrobe/${created.id}`);
     } catch (err) {
       console.error(err);
       setFormError(err instanceof Error ? err.message : 'Something went wrong');

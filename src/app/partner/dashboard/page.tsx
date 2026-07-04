@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { usePartnerPledges } from '@/hooks/queries/partners';
+import { useUpdatePledgeStatus } from '@/hooks/mutations/pledges';
 import PledgeCard, { Pledge } from '../../components/partner/PledgeCard';
 
 type Tab = 'all' | 'pending' | 'accepted' | 'rejected' | 'fulfilled';
@@ -24,6 +25,7 @@ export default function PartnerDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('pending');
 
   const { data: pledges = [], isLoading, refetch } = usePartnerPledges(session?.user?.id, activeTab !== 'all' ? activeTab : undefined);
+  const updatePledge = useUpdatePledgeStatus(session?.user?.id, activeTab !== 'all' ? activeTab : undefined);
 
   if (status === 'unauthenticated') {
     router.push('/auth/login');
@@ -38,79 +40,40 @@ export default function PartnerDashboard() {
   const handleAccept = useCallback(
     async (id: string) => {
       try {
-        const res = await fetch(`/api/partner/pledges/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'accept' }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          toast.error(err.error || 'Failed to accept');
-          return;
-        }
-
+        await updatePledge.mutateAsync({ id, action: 'accept' });
         toast.success('Pledge accepted! QR code sent to user.');
-        refetch();
       } catch (err) {
         console.error('Error accepting pledge:', err);
-        toast.error('Something went wrong');
+        toast.error(err instanceof Error ? err.message : 'Something went wrong');
       }
     },
-    [refetch],
+    [updatePledge],
   );
 
   const handleFulfill = useCallback(
     async (id: string, token: string) => {
       try {
-        const res = await fetch(`/api/partner/pledges/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'fulfill', token }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          toast.error(err.error || 'Failed to fulfill');
-          return;
-        }
-
+        await updatePledge.mutateAsync({ id, action: 'fulfill', token });
         toast.success('Pledge fulfilled! User notified.');
-        refetch();
       } catch (err) {
         console.error('Error fulfilling pledge:', err);
-        toast.error('Something went wrong');
+        toast.error(err instanceof Error ? err.message : 'Something went wrong');
       }
     },
-    [refetch],
+    [updatePledge],
   );
 
   const handleReject = useCallback(
     async (id: string, reason: string) => {
       try {
-        const res = await fetch(`/api/partner/pledges/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'reject',
-            rejection_reason: reason || undefined,
-          }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          toast.error(err.error || 'Failed to reject');
-          return;
-        }
-
+        await updatePledge.mutateAsync({ id, action: 'reject', rejection_reason: reason || undefined });
         toast.success('Pledge rejected. User notified.');
-        refetch();
       } catch (err) {
         console.error('Error rejecting pledge:', err);
-        toast.error('Something went wrong');
+        toast.error(err instanceof Error ? err.message : 'Something went wrong');
       }
     },
-    [refetch],
+    [updatePledge],
   );
 
   if (status === 'loading') {

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useClothes } from '@/hooks/queries/wardrobe';
 import { useOutfitPlans } from '@/hooks/queries/calendar';
 import { useWeather } from '@/hooks/queries/weather';
+import { useCreateOutfitPlan, useDeleteOutfitPlan } from '@/hooks/mutations/outfitPlans';
 import Loader from '../components/Loader';
 import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
@@ -98,6 +99,8 @@ export default function PlannerPage() {
   );
   const { data: weatherResult, isLoading: panelWeatherLoading } = useWeather(showSuggestions && status === 'authenticated');
   const panelWeather = weatherResult?.current ?? null;
+  const createPlan = useCreateOutfitPlan(session?.user?.id);
+  const deletePlan = useDeleteOutfitPlan(session?.user?.id);
 
   useEffect(() => {
     const qpDate = searchParams.get('date');
@@ -307,15 +310,11 @@ export default function PlannerPage() {
       }
       setSlots(newSlots);
 
-      await fetch('/api/outfit_plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: selectedDate,
-          timeSlot,
-          slots: newSlots,
-          name: outfitName || `${panelOccasion} suggestion`,
-        }),
+      await createPlan.mutateAsync({
+        date: selectedDate,
+        timeSlot,
+        slots: newSlots,
+        name: outfitName || `${panelOccasion} suggestion`,
       });
 
       toast.success('Outfit applied!');
@@ -335,19 +334,13 @@ export default function PlannerPage() {
     if (!planId) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/outfit_plans/${planId}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        toast.error('Failed to delete outfit');
-        return;
-      }
+      await deletePlan.mutateAsync(planId);
       toast.success('Outfit deleted');
       setPlanId(null);
       setSlots(EMPTY_SLOTS);
       setOutfitName('');
     } catch {
-      toast.error('Network error');
+      toast.error('Failed to delete outfit');
     } finally {
       setDeleting(false);
       setConfirmDelete(false);
@@ -358,28 +351,18 @@ export default function PlannerPage() {
     const toastId = toast.loading('Saving outfit...');
 
     try {
-      const res = await fetch('/api/outfit_plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: selectedDate,
-          timeSlot,
-          slots,
-          name: outfitName,
-        }),
+      await createPlan.mutateAsync({
+        date: selectedDate,
+        timeSlot,
+        slots,
+        name: outfitName,
       });
-
-      if (!res.ok) {
-        toast.error('Failed to save outfit', { id: toastId });
-        return;
-      }
-
       toast.success(
         timeSlot === 'day' ? 'Day outfit saved!' : 'Night outfit saved!',
         { id: toastId },
       );
     } catch {
-      toast.error('Network error', { id: toastId });
+      toast.error('Failed to save outfit', { id: toastId });
     }
   }
 

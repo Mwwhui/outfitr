@@ -3,13 +3,13 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   useOutfitPlans,
   useGoogleStatus,
   type OutfitPlanRow,
 } from '@/hooks/queries/calendar';
+import { useDeleteOutfitPlan } from '@/hooks/mutations/outfitPlans';
 import Loader from '../components/Loader';
 import GoogleCalendarConnectCard from '../components/GoogleCalendarConnectCard';
 import GoogleEventsPanel from '../components/GoogleEventsPanel';
@@ -135,7 +135,6 @@ export default function CalendarPage() {
     return toISODate(ge);
   }, [viewMonth]);
 
-  const queryClient = useQueryClient();
   const { data: plans, isLoading: plansLoading } = useOutfitPlans(
     session?.user?.id,
     gridStart,
@@ -151,6 +150,7 @@ export default function CalendarPage() {
 
   const { data: googleConnected } = useGoogleStatus(session?.user?.id, status === 'authenticated');
   const isGoogleConnected = googleConnected ?? false;
+  const deletePlan = useDeleteOutfitPlan(session?.user?.id);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -206,14 +206,9 @@ export default function CalendarPage() {
   const handleDeletePlan = async (planId: string) => {
     setDeletingPlanId(planId);
     try {
-      const res = await fetch(`/api/outfit_plans/${planId}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('Failed to delete');
-      queryClient.invalidateQueries({ queryKey: ['outfit-plans'] });
+      await deletePlan.mutateAsync(planId);
       toast.success('Outfit deleted');
-    } catch (e) {
-      console.error('Delete outfit plan failed:', e);
+    } catch {
       toast.error('Failed to delete outfit');
     } finally {
       setDeletingPlanId(null);

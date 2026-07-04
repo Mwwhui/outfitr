@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { useUpdatePledgeStatus } from '@/hooks/mutations/pledges';
 import type { IDetectedBarcode, IScannerError } from '@yudiel/react-qr-scanner';
 
 const Scanner = dynamic(
@@ -63,6 +64,7 @@ export default function PartnerScanPage() {
 
   const processingRef = useRef(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fulfillMutation = useUpdatePledgeStatus(session?.user?.id);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/auth/login');
@@ -153,18 +155,11 @@ export default function PartnerScanPage() {
     setPhase('processing');
 
     try {
-      const res = await fetch(`/api/partner/pledges/${pendingPledgeId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'fulfill', token: pendingToken }),
+      await fulfillMutation.mutateAsync({
+        id: pendingPledgeId,
+        action: 'fulfill',
+        token: pendingToken,
       });
-
-      if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: 'Request failed' }));
-        throw new Error(err.error || `Error ${res.status}`);
-      }
 
       setPhase('success');
       toast.success('Pledge fulfilled!');
@@ -176,7 +171,7 @@ export default function PartnerScanPage() {
       setPhase('error');
       resetTimerRef.current = setTimeout(resetScanner, 3000);
     }
-  }, [pendingPledgeId, pendingToken, resetScanner]);
+  }, [pendingPledgeId, pendingToken, fulfillMutation, resetScanner]);
 
   const handleError = useCallback((error: IScannerError) => {
     console.error('Scanner error:', error);

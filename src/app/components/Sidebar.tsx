@@ -3,10 +3,10 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { clothesOptions, clustersOptions } from '@/hooks/queries/wardrobe';
 import { dashboardStatsOptions } from '@/hooks/queries/dashboard';
-import { monthlyInsightsOptions, pledgesOptions } from '@/hooks/queries/home';
+import { useAlerts, monthlyInsightsOptions, pledgesOptions, alertsOptions } from '@/hooks/queries/home';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -68,54 +68,6 @@ const PARTNER_SECTIONS: NavSection[] = [
   },
 ];
 
-function usePledgeBadges() {
-  const [prelovedCount, setPrelovedCount] = useState(0);
-  const [activityCount, setActivityCount] = useState(0);
-  const lastFetchRef = useRef(0);
-
-  const fetchCounts = useCallback(async () => {
-    try {
-      const res = await fetch('/api/home/alerts');
-      if (!res.ok) return;
-      const data = await res.json();
-      setPrelovedCount(
-        (data.pledges_pending || 0) + (data.pledges_accepted || 0),
-      );
-      setActivityCount(data.pledges_total || 0);
-      lastFetchRef.current = Date.now();
-    } catch {
-      // silently fail
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCounts();
-
-    const interval = setInterval(fetchCounts, 300000);
-
-    const handleFocus = () => {
-      if (Date.now() - lastFetchRef.current < 60000) return;
-      fetchCounts();
-    };
-    const handleVisibility = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (Date.now() - lastFetchRef.current < 60000) return;
-      fetchCounts();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [fetchCounts]);
-
-  return { prelovedCount, activityCount };
-}
-
 function NavPill({
   item,
   isActive,
@@ -175,7 +127,9 @@ export default function Sidebar({
   const pathname = usePathname();
   const { data: session } = useSession();
   const isPartner = session?.user?.role === 'partner';
-  const { prelovedCount, activityCount } = usePledgeBadges();
+  const { data: alerts } = useAlerts(session?.user?.id);
+  const prelovedCount = alerts?.preloved ?? 0;
+  const activityCount = alerts?.activity ?? 0;
 
   const sections = isPartner ? PARTNER_SECTIONS : USER_SECTIONS;
 

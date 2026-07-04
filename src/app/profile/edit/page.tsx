@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
+import { useUpdateProfile } from "@/hooks/mutations/profile";
 import toast from "react-hot-toast";
 
 type FormErrors = Partial<Record<keyof typeof INITIAL_FORM, string>>;
@@ -32,6 +33,7 @@ export default function EditProfilePage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const initRef = useRef(false);
+  const updateProfile = useUpdateProfile(session?.user?.id);
 
   const { data: profileData, isLoading: profileLoading, isError: profileError } = useQuery({
     queryKey: ['profile', session?.user?.id],
@@ -155,22 +157,15 @@ export default function EditProfilePage() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/user/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: form.username,
-          first_name: form.first_name,
-          last_name: form.last_name,
-          dob: form.dob,
-          nationality: form.nationality,
-          gender: form.gender,
-          contact_no: form.contact_no,
-        }),
+      await updateProfile.mutateAsync({
+        username: form.username,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        dob: form.dob,
+        nationality: form.nationality,
+        gender: form.gender,
+        contact_no: form.contact_no,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update profile");
 
       setOriginalForm({ ...form });
       toast.success("Profile updated successfully!");

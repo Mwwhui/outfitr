@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useWeather } from '@/hooks/queries/weather';
 import { useClothes, type ClothingItem } from '@/hooks/queries/wardrobe';
 import { useOutfitPlans } from '@/hooks/queries/calendar';
+import { useCreateOutfitPlan, useDeleteOutfitPlan } from '@/hooks/mutations/outfitPlans';
 import {
   useFrequentCombos,
   useOutfitDNA,
@@ -124,9 +125,11 @@ function itemsToPlannerParams(
 function MiniCalendarPicker({
   items,
   onScheduled,
+  createPlan,
 }: {
   items: ComboItem[];
   onScheduled: () => void;
+  createPlan: ReturnType<typeof useCreateOutfitPlan>;
 }) {
   const [scheduling, setScheduling] = useState(false);
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
@@ -192,17 +195,11 @@ function MiniCalendarPicker({
       const name = items.map((i) => i.name).join(' + ');
       await Promise.all(
         selectedDays.map((dayIndex) =>
-          fetch('/api/outfit_plans', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              date: getNextWeekday(dayIndex),
-              timeSlot: 'day',
-              slots,
-              name,
-            }),
-          }).then((res) => {
-            if (!res.ok) throw new Error('Failed to schedule');
+          createPlan.mutateAsync({
+            date: getNextWeekday(dayIndex),
+            timeSlot: 'day',
+            slots,
+            name,
           }),
         ),
       );
@@ -292,6 +289,8 @@ export default function OutfitsPage() {
     fetchStatus: dnaFetchStatus,
   } = useOutfitDNA(session?.user?.id);
   const { data: weatherResult } = useWeather(status === 'authenticated');
+  const createPlan = useCreateOutfitPlan(session?.user?.id);
+  const deletePlan = useDeleteOutfitPlan(session?.user?.id);
   const { data: plans = [], refetch: refetchPlans } = useOutfitPlans(
     session?.user?.id,
     new Date().toISOString().slice(0, 10),
@@ -559,8 +558,7 @@ export default function OutfitsPage() {
         : frequentCombos.filter((c) => !archivedKeys.has(c.key));
 
   const handleQuickSwap = async (planId: string, date: string) => {
-    await fetch(`/api/outfit_plans/${planId}`, { method: 'DELETE' });
-    queryClient.invalidateQueries({ queryKey: ['outfit-plans'] });
+    await deletePlan.mutateAsync(planId);
     router.push(`/planner?date=${date}&timeSlot=day`);
   };
 
@@ -904,13 +902,14 @@ export default function OutfitsPage() {
                           Schedule Weekly
                         </button>
                         {showPicker && (
-                          <MiniCalendarPicker
-                            items={combo.items}
-                            onScheduled={() => {
-                              setSchedulingCombo(null);
-                              refreshPlans();
-                            }}
-                          />
+    <MiniCalendarPicker
+      items={combo.items}
+      onScheduled={() => {
+        setSchedulingCombo(null);
+        refreshPlans();
+      }}
+      createPlan={createPlan}
+    />
                         )}
                         <button
                           onClick={(e) => {

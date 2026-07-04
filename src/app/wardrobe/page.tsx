@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { clothesOptions, clustersOptions, useClothes, useCategories, useClusters, type ClothingItem } from "@/hooks/queries/wardrobe";
+import { useToggleFavorite } from '@/hooks/mutations/clothing';
 import Loader from "../components/Loader";
 import WardrobeFilters from "../components/WardrobeFilters";
 import DuplicateCompareModal from "../components/DuplicateCompareModal";
@@ -18,6 +19,7 @@ export default function WardrobePage() {
   const { data: categories } = useCategories();
   const { data: clothes, isLoading: clothesLoading } = useClothes(session?.user?.id);
   const { data: clusterData, isLoading: clustersLoading } = useClusters(session?.user?.id);
+  const toggleFavorite = useToggleFavorite(session?.user?.id);
 
   const [filters, setFilters] = useState({
     category: "",
@@ -283,21 +285,9 @@ export default function WardrobePage() {
 
                   {/* Favourite toggle */}
                   <button
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.stopPropagation();
-                      const updatedFav = !item.favorite;
-
-                      queryClient.setQueryData(['clothes'], (old: ClothingItem[] | undefined) =>
-                        old?.map((c) =>
-                          c.id === item.id ? { ...c, favorite: updatedFav } : c
-                        )
-                      );
-
-                      await fetch(`/api/clothes/${item.id}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ favorite: updatedFav }),
-                      });
+                      toggleFavorite.mutate({ id: item.id, favorite: !item.favorite });
                     }}
                     className="p-1"
                     aria-label="Toggle favourite"
@@ -348,6 +338,7 @@ export default function WardrobePage() {
       <DuplicateCompareModal
         open={!!compareGroup}
         group={compareGroup}
+        userId={session?.user?.id}
         onClose={() => {
           setCompareGroup(null);
                       queryClient.invalidateQueries(clothesOptions(session?.user?.id));

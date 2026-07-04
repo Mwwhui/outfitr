@@ -4,8 +4,10 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { useWeather, getWeatherIcon } from '@/hooks/queries/weather';
 import { useCalendarEvents } from '@/hooks/queries/calendar';
+import { useCreateOutfitPlan } from '@/hooks/mutations/outfitPlans';
 import {
   useMonthlyInsights,
   useOutfitSuggestion,
@@ -64,6 +66,7 @@ function SkeletonCard() {
 export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Hooks
   const { data: weatherData, isLoading: weatherLoading } = useWeather(status === 'authenticated');
@@ -99,6 +102,7 @@ export default function HomePage() {
   );
   const { data: pledgesData } = usePledges(session?.user?.id);
   const { data: sustainability } = useSustainabilityStory(session?.user?.id);
+  const logWearPlan = useCreateOutfitPlan(session?.user?.id);
 
   // Local state only
   const [loggingWear, setLoggingWear] = useState(false);
@@ -131,30 +135,32 @@ export default function HomePage() {
         slots[`slot_${i}`] = { id: item.id, name: item.name };
       });
 
-      const res = await fetch('/api/outfit_plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: new Date().toISOString().slice(0, 10),
-          timeSlot: getTimeSlot(),
-          slots,
-          name: outfit.items.map((i) => i.name).join(' + '),
-        }),
+      const userId = session?.user?.id;
+      await logWearPlan.mutateAsync({
+        date: new Date().toISOString().slice(0, 10),
+        timeSlot: getTimeSlot(),
+        slots,
+        name: outfit.items.map((i) => i.name).join(' + '),
       });
 
-      if (res.ok) {
-        setOutfitFeedback({
-          weather: weatherData?.current
-            ? {
-                temp: weatherData.current.temperature,
-                condition: weatherData.current.description,
-              }
-            : null,
-          occasion: detectedOccasion || getTimeSlot(),
-          score: outfit.score || 0,
-          wearCount: insights?.most_worn[0]?.total_wears || 0,
-        });
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: ['frequent-combos', userId] });
+        queryClient.invalidateQueries({ queryKey: ['monthly-insights', userId] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats', userId] });
+        queryClient.invalidateQueries({ queryKey: ['sustainability-story', userId] });
       }
+
+      setOutfitFeedback({
+        weather: weatherData?.current
+          ? {
+              temp: weatherData.current.temperature,
+              condition: weatherData.current.description,
+            }
+          : null,
+        occasion: detectedOccasion || getTimeSlot(),
+        score: outfit.score || 0,
+        wearCount: insights?.most_worn[0]?.total_wears || 0,
+      });
     } catch {
       // silently fail
     } finally {

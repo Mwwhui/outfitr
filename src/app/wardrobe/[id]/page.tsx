@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
 import {
@@ -13,6 +12,7 @@ import {
   useSuggestions,
   useSimilarItems,
 } from '@/hooks/queries/wardrobe';
+import { useUpdateClothing, useDeleteClothing } from '@/hooks/mutations/clothing';
 import ConfirmModal from '../../components/ConfirmModal';
 
 type Clothes = ItemDetail;
@@ -34,7 +34,6 @@ export default function EditWardrobePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const { data: session } = useSession();
-  const queryClient = useQueryClient();
   const id = params?.id;
   const userId = session?.user?.id;
   const formInitRef = useRef(false);
@@ -56,6 +55,8 @@ export default function EditWardrobePage() {
     id,
     userId,
   );
+  const updateClothing = useUpdateClothing(userId);
+  const deleteClothing = useDeleteClothing(userId);
 
   const [formData, setFormData] = useState<Clothes | null>(null);
   const [saving, setSaving] = useState(false);
@@ -164,10 +165,9 @@ export default function EditWardrobePage() {
 
     setSaving(true);
 
-    await fetch(`/api/clothes/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    try {
+      await updateClothing.mutateAsync({
+        id,
         name: formData.name,
         type: formData.type,
         color: formData.color,
@@ -178,32 +178,31 @@ export default function EditWardrobePage() {
         material: formData.material,
         favorite: formData.favorite ?? false,
         image_url: formData.image_url,
-        use_case: formData.use_case,
+        use_case: formData.use_case || [],
         categories: formData.categories,
         description: formData.description,
         purchase_date: formData.purchase_date,
         location: formData.location,
         notes: formData.notes,
-      }),
-    });
-
-    setSaving(false);
-    queryClient.invalidateQueries({ queryKey: ['clothes', userId] });
-    queryClient.invalidateQueries({ queryKey: ['item', userId, id] });
-    router.push('/wardrobe');
+      });
+      router.push('/wardrobe');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/clothes/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
+      await deleteClothing.mutateAsync(id);
       toast.success('Item deleted');
       router.push('/wardrobe');
     } catch {
       toast.error('Failed to delete item');
-      setDeleting(false);
     } finally {
+      setDeleting(false);
       setConfirmDelete(false);
     }
   };

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { useBatchUpdateStatus } from '@/hooks/mutations/clothing';
 
 interface ClusterItem {
   id: string;
@@ -23,6 +24,7 @@ interface Props {
   open: boolean;
   group: DuplicateGroup | null;
   onClose: () => void;
+  userId?: string;
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -31,10 +33,11 @@ const COLOR_MAP: Record<string, string> = {
   purple: '#a855f7', orange: '#f97316', yellow: '#eab308',
 };
 
-export default function DuplicateCompareModal({ open, group, onClose }: Props) {
+export default function DuplicateCompareModal({ open, group, onClose, userId }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const batchUpdate = useBatchUpdateStatus(userId);
 
   if (!open || !group) return null;
 
@@ -70,19 +73,11 @@ export default function DuplicateCompareModal({ open, group, onClose }: Props) {
     setDeleting(true);
 
     try {
-      const results = await Promise.allSettled(
-        deleteIds.map((id) =>
-          fetch(`/api/clothes/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'pending_action' }),
-          }).then((res) => {
-            if (!res.ok) throw new Error('Failed');
-          })
-        )
-      );
+      const { succeeded, failed } = await batchUpdate.mutateAsync({
+        ids: deleteIds,
+        status: 'pending_action',
+      });
 
-      const failed = results.filter((r) => r.status === 'rejected').length;
       if (failed > 0) {
         toast.error(`Failed to move ${failed} item${failed > 1 ? 's' : ''}`);
       } else {
@@ -95,15 +90,10 @@ export default function DuplicateCompareModal({ open, group, onClose }: Props) {
         toast((t) => (
           <button
             onClick={async () => {
-              await Promise.allSettled(
-                deleteIds.map((id) =>
-                  fetch(`/api/clothes/${id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: null }),
-                  })
-                )
-              );
+              await batchUpdate.mutateAsync({
+                ids: deleteIds,
+                status: null,
+              });
               toast.dismiss(t.id);
               toast.success('Items restored to wardrobe');
             }}

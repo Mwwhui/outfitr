@@ -203,3 +203,26 @@ export const sustainabilityStoryOptions = (userId?: string) =>
 export function useSustainabilityStory(userId?: string) {
   return useQuery(sustainabilityStoryOptions(userId));
 }
+
+export const alertsOptions = (userId?: string) =>
+  queryOptions({
+    queryKey: ['alerts', userId],
+    queryFn: async (): Promise<{ preloved: number; activity: number }> => {
+      const res = await fetch('/api/home/alerts');
+      if (!res.ok) return { preloved: 0, activity: 0 };
+      const data = await res.json();
+      return {
+        preloved: (data.pledges_pending || 0) + (data.pledges_accepted || 0),
+        activity: data.pledges_total || 0,
+      };
+    },
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    retry: 1,
+    enabled: !!userId,
+    placeholderData: (previous) => previous,
+  });
+
+export function useAlerts(userId?: string) {
+  return useQuery(alertsOptions(userId));
+}
