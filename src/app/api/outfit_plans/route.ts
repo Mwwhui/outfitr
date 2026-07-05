@@ -135,7 +135,11 @@ export async function POST(req: Request) {
       }
 
       const origin = new URL(req.url).origin;
-      fetch(`${origin}/api/clothes/score-unused`, { method: 'POST' }).catch(
+      fetch(`${origin}/api/clothes/score-unused`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      }).catch(
         (err: Error) => console.error('score-unused trigger failed:', err),
       );
     }

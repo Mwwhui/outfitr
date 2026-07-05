@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -98,11 +98,17 @@ export default function HomePage() {
   const logWearPlan = useCreateOutfitPlan(session?.user?.id);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const { data: todayPlans } = useOutfitPlans(session?.user?.id, today, today);
+  const { data: todayPlans, isFetching: plansFetching } = useOutfitPlans(
+    session?.user?.id,
+    today,
+    today,
+  );
 
-  // Check if today is already logged on page load
+  // Restore logged state only once on mount — never re-run on refetch
+  const hasRestored = useRef(false);
   useEffect(() => {
-    if (!todayPlans || !outfit) return;
+    if (!todayPlans || !outfit || hasRestored.current) return;
+    hasRestored.current = true;
     const currentSlot = getTimeSlot();
     const existingPlan = todayPlans.find((p) => p.time_slot === currentSlot);
     if (!existingPlan || !existingPlan.slots) return;
@@ -125,7 +131,7 @@ export default function HomePage() {
           image_url: i.image_url || null,
         })),
         score: 0,
-        ai_reasoning: 'Your logged outfit.',
+        ai_reasoning: existingPlan.name || 'Your logged outfit.',
       });
       setLoggedSlot(currentSlot as 'day' | 'night');
       setShowingLogged(true);
@@ -142,6 +148,8 @@ export default function HomePage() {
   const [showingLogged, setShowingLogged] = useState(false);
   const [loadingNext, setLoadingNext] = useState(false);
   const [showLogConfirm, setShowLogConfirm] = useState(false);
+  // Synchronous guard against rapid double-clicks
+  const loggingRef = useRef(false);
 
   // Auth guard
   useEffect(() => {
@@ -149,6 +157,21 @@ export default function HomePage() {
       router.push('/auth/login');
     }
   }, [status, router]);
+
+  // Sync: clear logged state if the plan was deleted from DB
+  // (skips during background refetches to avoid placeholder data races)
+  useEffect(() => {
+    if (!todayPlans || !loggedSlot || !showingLogged || plansFetching) return;
+    const planStillExists = todayPlans.some(
+      (p) => p.time_slot === loggedSlot,
+    );
+    if (!planStillExists) {
+      setLoggedOutfit(null);
+      setLoggedSlot(null);
+      setShowingLogged(false);
+      setNextOutfit(null);
+    }
+  }, [todayPlans, loggedSlot, showingLogged, plansFetching]);
 
   const loading =
     status === 'loading' ||
@@ -160,9 +183,11 @@ export default function HomePage() {
   const nextSlotLabel = currentSlot === 'day' ? 'night' : null;
 
   const handleLogWear = useCallback(async () => {
+    if (loggingRef.current) return;
     const isLoggingNext = !showingLogged && nextOutfit !== null;
     const outfitToLog = isLoggingNext ? nextOutfit : outfit;
-    if (!outfitToLog?.items.length || loggingWear) return;
+    if (!outfitToLog?.items.length) return;
+    loggingRef.current = true;
     setLoggingWear(true);
     try {
       const keyMap: Record<string, string> = {
@@ -210,6 +235,7 @@ export default function HomePage() {
         });
         queryClient.invalidateQueries({ queryKey: ['outfit-suggest', userId] });
         queryClient.invalidateQueries({ queryKey: ['outfit-plans', userId] });
+        queryClient.invalidateQueries({ queryKey: ['outfit-dna', userId] });
       }
 
       setLoggedOutfit(outfitToLog);
@@ -222,13 +248,13 @@ export default function HomePage() {
       toast.error('Failed to log outfit');
     } finally {
       setLoggingWear(false);
+      loggingRef.current = false;
     }
   }, [
     outfit,
     nextOutfit,
     showingLogged,
     nextSlotLabel,
-    loggingWear,
     session?.user?.id,
     queryClient,
     logWearPlan,
@@ -564,7 +590,11 @@ export default function HomePage() {
       <ConfirmModal
         open={showLogConfirm}
         title="Log this outfit?"
-        message={`Record ${outfitName || 'this outfit'} for ${currentSlot === 'day' ? 'today' : 'tonight'}.`}
+        message={`Record ${outfitName || 'this outfit'} for ${(() => {
+          const isLoggingNext = !showingLogged && nextOutfit !== null;
+          const ts = isLoggingNext && nextSlotLabel ? nextSlotLabel : currentSlot;
+          return ts === 'day' ? 'today' : 'tonight';
+        })()}.`}
         confirmLabel="Log Wear"
         confirmVariant="primary"
         onConfirm={handleLogWear}

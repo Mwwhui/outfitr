@@ -11,9 +11,21 @@ const supabase = createClient(
 const UNUSED_THRESHOLD = 30; // score above this → flagged unused
 const WEAR_LOG_DAYS = 90; // look back window
 
-export async function POST() {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+export async function POST(req: Request) {
+  let userId: string | undefined;
+
+  // Accept userId from body (for internal fire-and-forget calls from outfit_plans)
+  try {
+    const body = await req.json();
+    userId = body.userId;
+  } catch {
+    // body not JSON — ignore
+  }
+
+  if (!userId) {
+    const session = await getServerSession(authOptions);
+    userId = session?.user?.id;
+  }
 
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
