@@ -22,6 +22,7 @@ import {
 import StyleLabImpactMeter from '../components/outfits/StyleLabImpactMeter';
 import PlannedOutfitsSidebar from '../components/outfits/PlannedOutfitsSidebar';
 import ConfirmModal from '../components/ConfirmModal';
+import toast from 'react-hot-toast';
 
 interface ComboItem {
   id: string;
@@ -209,7 +210,7 @@ function MiniCalendarPicker({
       );
       onScheduled();
     } catch {
-      /* silently fail */
+      toast.error('Failed to schedule some days. Please try again.');
     } finally {
       setScheduling(false);
       setShowModal(false);
@@ -301,7 +302,7 @@ export default function OutfitsPage() {
   const { data: plans = [], refetch: refetchPlans } = useOutfitPlans(
     session?.user?.id,
     new Date().toISOString().slice(0, 10),
-    new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+    new Date(Date.now() + 8 * 86400000).toISOString().slice(0, 10),
   );
   const { data: clothesData } = useClothes(session?.user?.id);
 
