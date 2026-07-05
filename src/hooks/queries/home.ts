@@ -39,10 +39,14 @@ export interface InsightsData {
   }>;
   shopping_list: Array<{
     item_type: string;
+    specific_name: string;
     color: string;
-    reason: string;
+    material: string;
+    use_case: string;
+    image_url: string | null;
     search_query: string;
     priority: 'high' | 'medium' | 'low';
+    reason_category: 'seasonal_gap' | 'category_balance' | 'color_diversity';
   }>;
   seasonal_tip: {
     season: string;
@@ -51,7 +55,7 @@ export interface InsightsData {
     missing_types: string[];
     coverage_pct: number;
     coverage_detail: string;
-    missing_tooltips: Array<{ type: string; suggestion: string; reason: string }>;
+    missing_tooltips: Array<{ type: string; suggestion: string; reason: string; searchQuery: string }>;
     transition_tip: string;
   };
   wardrobe_health: {
