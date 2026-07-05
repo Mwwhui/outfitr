@@ -283,7 +283,7 @@ export default function OutfitsPage() {
   const [archivedKeys, setArchivedKeys] = useState<Set<string>>(new Set());
   const [filterMode, setFilterMode] = useState<
     'all' | 'favorites' | 'archived'
-  >('favorites');
+  >('all');
   const [dnaLoaded, setDnaLoaded] = useState(false);
 
   const { data: freqData, isLoading: combosLoading } = useFrequentCombos(
@@ -369,13 +369,27 @@ export default function OutfitsPage() {
     }),
   );
 
+  const enrichedFrequentCombos = useMemo(() => {
+    return frequentCombos.map((combo) => ({
+      ...combo,
+      items: combo.items.map((item) => {
+        const cloth = clothes.find((c) => c.id === item.id);
+        return {
+          ...item,
+          image_url: cloth?.image_url || item.image_url,
+          color: cloth?.color || item.color,
+        };
+      }),
+    }));
+  }, [frequentCombos, clothes]);
+
   const totalItems = useMemo(() => {
     const ids = new Set<string>();
-    for (const combo of frequentCombos) {
+    for (const combo of enrichedFrequentCombos) {
       for (const item of combo.items) ids.add(item.id);
     }
     return ids.size;
-  }, [frequentCombos]);
+  }, [enrichedFrequentCombos]);
 
   useEffect(() => {
     setMounted(true);
@@ -560,10 +574,10 @@ export default function OutfitsPage() {
 
   const visibleCombos =
     filterMode === 'favorites'
-      ? frequentCombos.filter((c) => favoriteKeys.has(c.key))
+      ? enrichedFrequentCombos.filter((c) => favoriteKeys.has(c.key))
       : filterMode === 'archived'
-        ? frequentCombos.filter((c) => archivedKeys.has(c.key))
-        : frequentCombos.filter((c) => !archivedKeys.has(c.key));
+        ? enrichedFrequentCombos.filter((c) => archivedKeys.has(c.key))
+        : enrichedFrequentCombos.filter((c) => !archivedKeys.has(c.key));
 
   const handleQuickSwap = async (planId: string, date: string) => {
     await deletePlan.mutateAsync(planId);
@@ -643,13 +657,13 @@ export default function OutfitsPage() {
                       {dna.style_summary}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-4 items-center">
-                      {frequentCombos.length > 0 && (
+            {enrichedFrequentCombos.length > 0 && (
                         <>
                           <div className="flex gap-1">
                             {(() => {
                               const colors = [
                                 ...new Set(
-                                  frequentCombos
+                                  enrichedFrequentCombos
                                     .flatMap((c) => c.items)
                                     .filter((i) => i.color)
                                     .map((i) => i.color!),
@@ -795,21 +809,6 @@ export default function OutfitsPage() {
                   </h2>
                   <div className="flex ml-auto gap-1 bg-surface-container-high rounded-lg p-0.5">
                     <button
-                      onClick={() => setFilterMode('favorites')}
-                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
-                        filterMode === 'favorites'
-                          ? 'bg-white text-on-surface shadow-sm'
-                          : 'text-on-surface-variant'
-                      }`}
-                    >
-                      Favorites (
-                      {
-                        frequentCombos.filter((c) => favoriteKeys.has(c.key))
-                          .length
-                      }
-                      )
-                    </button>
-                    <button
                       onClick={() => setFilterMode('all')}
                       className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
                         filterMode === 'all'
@@ -819,7 +818,22 @@ export default function OutfitsPage() {
                     >
                       All (
                       {
-                        frequentCombos.filter((c) => !archivedKeys.has(c.key))
+                        enrichedFrequentCombos.filter((c) => !archivedKeys.has(c.key))
+                          .length
+                      }
+                      )
+                    </button>
+                    <button
+                      onClick={() => setFilterMode('favorites')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'favorites'
+                          ? 'bg-white text-on-surface shadow-sm'
+                          : 'text-on-surface-variant'
+                      }`}
+                    >
+                      Favorites (
+                      {
+                        enrichedFrequentCombos.filter((c) => favoriteKeys.has(c.key))
                           .length
                       }
                       )
@@ -834,7 +848,7 @@ export default function OutfitsPage() {
                     >
                       Archive (
                       {
-                        frequentCombos.filter((c) => archivedKeys.has(c.key))
+                        enrichedFrequentCombos.filter((c) => archivedKeys.has(c.key))
                           .length
                       }
                       )
