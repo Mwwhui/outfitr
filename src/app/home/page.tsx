@@ -6,13 +6,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWeather, getWeatherIcon } from '@/hooks/queries/weather';
-import { useCalendarEvents } from '@/hooks/queries/calendar';
+import { useCalendarEvents, useOutfitPlans } from '@/hooks/queries/calendar';
 import { useCreateOutfitPlan } from '@/hooks/mutations/outfitPlans';
 import {
   useMonthlyInsights,
   useOutfitSuggestion,
   usePledges,
   useSustainabilityStory,
+  type OutfitSuggestion,
 } from '@/hooks/queries/home';
 import TodaysEnsemble from '../components/home/TodaysEnsemble';
 import ActionRequired from '../components/home/ActionRequired';
@@ -24,13 +25,13 @@ import SustainabilityStory from '../components/home/SustainabilityStory';
 import WardrobeAnalytics from '../components/home/WardrobeAnalytics';
 import WeatherAlert from '../components/home/WeatherAlert';
 import TodayEvents from '../components/home/TodayEvents';
-import OutfitFeedback from '../components/home/OutfitFeedback';
+import ConfirmModal from '../components/ConfirmModal';
+import toast from 'react-hot-toast';
 
 function getTimeSlot(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'morning';
-  if (hour < 17) return 'afternoon';
-  return 'evening';
+  if (hour < 18) return 'day';
+  return 'night';
 }
 
 function detectOccasionFromEvents(
@@ -69,8 +70,12 @@ export default function HomePage() {
   const queryClient = useQueryClient();
 
   // Hooks
-  const { data: weatherData, isLoading: weatherLoading } = useWeather(status === 'authenticated');
-  const { data: calendar, isLoading: calendarLoading } = useCalendarEvents(session?.user?.id);
+  const { data: weatherData, isLoading: weatherLoading } = useWeather(
+    status === 'authenticated',
+  );
+  const { data: calendar, isLoading: calendarLoading } = useCalendarEvents(
+    session?.user?.id,
+  );
   const {
     data: insights,
     isLoading: insightsLoading,
@@ -78,21 +83,9 @@ export default function HomePage() {
   } = useMonthlyInsights(session?.user?.id);
 
   const detectedOccasion = useMemo(() => {
-    if (!calendar)
-      return getTimeSlot() === 'evening'
-        ? 'formal'
-        : getTimeSlot() === 'afternoon'
-          ? 'business'
-          : 'casual';
-    const fromCalendar = detectOccasionFromEvents(calendar.events);
-    return (
-      fromCalendar ||
-      (getTimeSlot() === 'evening'
-        ? 'formal'
-        : getTimeSlot() === 'afternoon'
-          ? 'business'
-          : 'casual')
-    );
+    const defaultOccasion = getTimeSlot() === 'night' ? 'formal' : 'casual';
+    if (!calendar) return defaultOccasion;
+    return detectOccasionFromEvents(calendar.events) || defaultOccasion;
   }, [calendar]);
 
   const { data: outfit } = useOutfitSuggestion(
@@ -104,14 +97,51 @@ export default function HomePage() {
   const { data: sustainability } = useSustainabilityStory(session?.user?.id);
   const logWearPlan = useCreateOutfitPlan(session?.user?.id);
 
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const { data: todayPlans } = useOutfitPlans(session?.user?.id, today, today);
+
+  // Check if today is already logged on page load
+  useEffect(() => {
+    if (!todayPlans || !outfit) return;
+    const currentSlot = getTimeSlot();
+    const existingPlan = todayPlans.find((p) => p.time_slot === currentSlot);
+    if (!existingPlan || !existingPlan.slots) return;
+
+    const items = Object.values(existingPlan.slots).filter(Boolean) as Array<{
+      id: string;
+      name: string;
+      image_url?: string | null;
+      type?: string;
+      color?: string | null;
+    }>;
+
+    if (items.length > 0) {
+      setLoggedOutfit({
+        items: items.map((i) => ({
+          id: i.id,
+          name: i.name,
+          type: i.type || '',
+          color: i.color || null,
+          image_url: i.image_url || null,
+        })),
+        score: 0,
+        ai_reasoning: 'Your logged outfit.',
+      });
+      setLoggedSlot(currentSlot as 'day' | 'night');
+      setShowingLogged(true);
+    }
+  }, [todayPlans, outfit]);
+
   // Local state only
   const [loggingWear, setLoggingWear] = useState(false);
-  const [outfitFeedback, setOutfitFeedback] = useState<{
-    weather: { temp: number; condition: string } | null;
-    occasion: string;
-    score: number;
-    wearCount: number;
-  } | null>(null);
+  const [loggedOutfit, setLoggedOutfit] = useState<OutfitSuggestion | null>(
+    null,
+  );
+  const [loggedSlot, setLoggedSlot] = useState<'day' | 'night' | null>(null);
+  const [nextOutfit, setNextOutfit] = useState<OutfitSuggestion | null>(null);
+  const [showingLogged, setShowingLogged] = useState(false);
+  const [loadingNext, setLoadingNext] = useState(false);
+  const [showLogConfirm, setShowLogConfirm] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -126,47 +156,116 @@ export default function HomePage() {
     weatherLoading ||
     calendarLoading;
 
+  const currentSlot = getTimeSlot();
+  const nextSlotLabel = currentSlot === 'day' ? 'night' : null;
+
   const handleLogWear = useCallback(async () => {
-    if (!outfit?.items.length || loggingWear) return;
+    const isLoggingNext = !showingLogged && nextOutfit !== null;
+    const outfitToLog = isLoggingNext ? nextOutfit : outfit;
+    if (!outfitToLog?.items.length || loggingWear) return;
     setLoggingWear(true);
     try {
-      const slots: Record<string, { id: string; name: string }> = {};
-      outfit.items.forEach((item, i) => {
-        slots[`slot_${i}`] = { id: item.id, name: item.name };
-      });
+      const keyMap: Record<string, string> = {
+        Tops: 'top',
+        Bottoms: 'bottom',
+        Outerwear: 'outerwear',
+        'One-Piece': 'onepiece',
+        Shoes: 'shoes',
+        Accessories: 'accessories',
+      };
+      const slots: Record<string, Record<string, unknown>> = {};
+      for (const item of outfitToLog.items) {
+        const key = keyMap[item.type] || `slot_${Object.keys(slots).length}`;
+        slots[key] = {
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          color: item.color,
+          image_url: item.image_url,
+        };
+      }
 
       const userId = session?.user?.id;
+      const timeSlotToSave =
+        isLoggingNext && nextSlotLabel ? nextSlotLabel : getTimeSlot();
       await logWearPlan.mutateAsync({
         date: new Date().toISOString().slice(0, 10),
-        timeSlot: getTimeSlot(),
+        timeSlot: timeSlotToSave,
         slots,
-        name: outfit.items.map((i) => i.name).join(' + '),
+        name: outfitToLog.items.map((i) => i.name).join(' + '),
       });
 
       if (userId) {
-        queryClient.invalidateQueries({ queryKey: ['frequent-combos', userId] });
-        queryClient.invalidateQueries({ queryKey: ['monthly-insights', userId] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats', userId] });
-        queryClient.invalidateQueries({ queryKey: ['sustainability-story', userId] });
+        queryClient.invalidateQueries({
+          queryKey: ['frequent-combos', userId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['monthly-insights', userId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['dashboard-stats', userId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['sustainability-story', userId],
+        });
+        queryClient.invalidateQueries({ queryKey: ['outfit-suggest', userId] });
+        queryClient.invalidateQueries({ queryKey: ['outfit-plans', userId] });
       }
 
-      setOutfitFeedback({
-        weather: weatherData?.current
-          ? {
-              temp: weatherData.current.temperature,
-              condition: weatherData.current.description,
-            }
-          : null,
-        occasion: detectedOccasion || getTimeSlot(),
-        score: outfit.score || 0,
-        wearCount: insights?.most_worn[0]?.total_wears || 0,
-      });
+      setLoggedOutfit(outfitToLog);
+      setLoggedSlot(timeSlotToSave as 'day' | 'night');
+      setShowingLogged(true);
+      setNextOutfit(null);
+      setShowLogConfirm(false);
+      toast.success('Outfit logged!');
     } catch {
-      // silently fail
+      toast.error('Failed to log outfit');
     } finally {
       setLoggingWear(false);
     }
-  }, [outfit, loggingWear, detectedOccasion, weatherData, insights]);
+  }, [
+    outfit,
+    nextOutfit,
+    showingLogged,
+    nextSlotLabel,
+    loggingWear,
+    session?.user?.id,
+    queryClient,
+    logWearPlan,
+  ]);
+
+  const handleGetNextSlotSuggestion = useCallback(async () => {
+    if (!nextSlotLabel || loadingNext) return;
+    setLoadingNext(true);
+    try {
+      const nextOccasion = nextSlotLabel === 'night' ? 'formal' : 'casual';
+      const res = await fetch('/api/outfits/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          occasion: nextOccasion,
+          weather: weatherData?.current
+            ? {
+                temperature: weatherData.current.temperature,
+                weathercode: weatherData.current.weathercode,
+              }
+            : null,
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setNextOutfit(data.suggestions?.[0] || null);
+      setShowingLogged(false);
+    } catch {
+      // silent
+    } finally {
+      setLoadingNext(false);
+    }
+  }, [nextSlotLabel, loadingNext, weatherData?.current]);
+
+  const handleBackToLogged = useCallback(() => {
+    setShowingLogged(true);
+  }, []);
 
   if (status === 'loading' || loading) {
     return (
@@ -251,10 +350,12 @@ export default function HomePage() {
     (health.category_balance_score + health.color_diversity_score) / 2,
   );
 
-  const outfitName = outfit?.items.map((i) => i.name).join(' + ') || null;
-  const outfitDescription = outfit?.ai_reasoning || null;
-  const outfitItems = outfit?.items || [];
-  const outfitTags = outfit?.items.map((i) => i.type) || [];
+  const displayOutfit = showingLogged ? loggedOutfit : nextOutfit || outfit;
+  const outfitName =
+    displayOutfit?.items.map((i) => i.name).join(' + ') || null;
+  const outfitDescription = displayOutfit?.ai_reasoning || null;
+  const outfitItems = displayOutfit?.items || [];
+  const outfitTags = displayOutfit?.items.map((i) => i.type) || [];
 
   const topWornItem =
     insights.most_worn.length > 0 ? insights.most_worn[0] : null;
@@ -333,8 +434,17 @@ export default function HomePage() {
                     : null
                 }
                 tags={outfitTags}
-                onLogWear={handleLogWear}
+                onLogWear={
+                  showingLogged ? undefined : () => setShowLogConfirm(true)
+                }
                 loggingWear={loggingWear}
+                isLogged={showingLogged && loggedOutfit !== null}
+                loggedSlot={loggedSlot}
+                nextSlotLabel={nextSlotLabel}
+                canGoBack={loggedOutfit !== null && !showingLogged}
+                onGetNext={handleGetNextSlotSuggestion}
+                onBackToLogged={handleBackToLogged}
+                loadingNext={loadingNext}
               />
             ) : (
               <div className="glass-card rounded-lg p-6 text-center text-on-surface-variant">
@@ -451,15 +561,16 @@ export default function HomePage() {
         />
       </div>
 
-      {outfitFeedback && (
-        <OutfitFeedback
-          weather={outfitFeedback.weather}
-          occasion={outfitFeedback.occasion}
-          score={outfitFeedback.score}
-          wearCount={outfitFeedback.wearCount}
-          onDismiss={() => setOutfitFeedback(null)}
-        />
-      )}
+      <ConfirmModal
+        open={showLogConfirm}
+        title="Log this outfit?"
+        message={`Record ${outfitName || 'this outfit'} for ${currentSlot === 'day' ? 'today' : 'tonight'}.`}
+        confirmLabel="Log Wear"
+        confirmVariant="primary"
+        onConfirm={handleLogWear}
+        onCancel={() => setShowLogConfirm(false)}
+        loading={loggingWear}
+      />
     </div>
   );
 }
