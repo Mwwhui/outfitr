@@ -23,6 +23,7 @@ import SeasonalReadiness from '../components/home/SeasonalReadiness';
 import CircularityScore from '../components/home/CircularityScore';
 import SustainabilityStory from '../components/home/SustainabilityStory';
 import WardrobeAnalytics from '../components/home/WardrobeAnalytics';
+import StreakCard from '../components/home/StreakCard';
 import WeatherAlert from '../components/home/WeatherAlert';
 import TodayEvents from '../components/home/TodayEvents';
 import ConfirmModal from '../components/ConfirmModal';
@@ -162,9 +163,7 @@ export default function HomePage() {
   // (skips during background refetches to avoid placeholder data races)
   useEffect(() => {
     if (!todayPlans || !loggedSlot || !showingLogged || plansFetching) return;
-    const planStillExists = todayPlans.some(
-      (p) => p.time_slot === loggedSlot,
-    );
+    const planStillExists = todayPlans.some((p) => p.time_slot === loggedSlot);
     if (!planStillExists) {
       setLoggedOutfit(null);
       setLoggedSlot(null);
@@ -347,7 +346,9 @@ export default function HomePage() {
 
   const health = insights?.wardrobe_health;
   const overallHealth = health
-    ? Math.round((health.category_balance_score + health.color_diversity_score) / 2)
+    ? Math.round(
+        (health.category_balance_score + health.color_diversity_score) / 2,
+      )
     : 0;
 
   const displayOutfit = showingLogged ? loggedOutfit : nextOutfit || outfit;
@@ -358,7 +359,9 @@ export default function HomePage() {
   const outfitTags = displayOutfit?.items.map((i) => i.type) || [];
 
   const topWornItem =
-    insights?.most_worn && insights.most_worn.length > 0 ? insights.most_worn[0] : null;
+    insights?.most_worn && insights.most_worn.length > 0
+      ? insights.most_worn[0]
+      : null;
 
   const pledges = pledgesData?.pledges || [];
   const fallbackPartnerText = pledgesData?.fallback_partner_text || 'Partner';
@@ -371,51 +374,50 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="px-6 md:px-8 lg:px-12 py-8 max-w-[1280px] mx-auto space-y-12">
-        {/* Greeting + Summary */}
-        <section>
-          <h1 className="text-3xl md:text-5xl font-bold text-on-surface font-headline tracking-tight">
-            {insights?.greeting || `Good ${getTimeSlot() === 'day' ? 'Day' : 'Evening'}`}, {userName}.
-          </h1>
-          {insights?.month_theme && (
-            <p className="text-sm text-on-surface-variant mt-1 font-body">
-              {insights.month_theme}
-            </p>
-          )}
-          {insights?.headline && (
-            <p className="text-lg text-on-surface-variant mt-2 font-body">
-              {insights.headline}
-            </p>
-          )}
-          {insights?.summary && (
-            <p className="text-base text-on-surface-variant mt-2 font-body">
-              {insights.summary}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-4 mt-3">
-            {insights?.fun_fact && (
-              <span className="text-sm text-on-surface-variant flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">
-                  lightbulb
-                </span>
-                {insights.fun_fact}
-              </span>
+        {/* Greeting + Streak */}
+        <section className="flex justify-between items-start gap-8 md:gap-16">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-3xl md:text-5xl font-bold text-on-surface font-headline tracking-tight">
+              {insights?.greeting ||
+                `Good ${getTimeSlot() === 'day' ? 'Day' : 'Evening'}`}
+              , {userName}.
+            </h1>
+            {insights?.month_theme && (
+              <p className="text-sm text-on-surface-variant mt-1 font-body">
+                {insights.month_theme}
+              </p>
             )}
-            {insights?.wear_streak_text && (
-              <span className="text-sm text-on-surface-variant flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">
-                  local_fire_department
-                </span>
-                {insights.wear_streak_text}
-              </span>
+            {insights?.headline && (
+              <p className="text-lg text-on-surface-variant mt-2 font-body">
+                {insights.headline}
+              </p>
             )}
-            {insights?.items_in_wardrobe_text && (
-              <span className="text-sm text-on-surface-variant flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">
-                  checkroom
-                </span>
-                {insights.items_in_wardrobe_text}
-              </span>
+            {insights?.summary && (
+              <p className="text-base text-on-surface-variant mt-2 font-body">
+                {insights.summary}
+              </p>
             )}
+            <div className="flex flex-wrap gap-4 mt-3">
+              {insights?.fun_fact && (
+                <span className="text-sm text-on-surface-variant flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">
+                    lightbulb
+                  </span>
+                  {insights.fun_fact}
+                </span>
+              )}
+              {insights?.items_in_wardrobe_text && (
+                <span className="text-sm text-on-surface-variant flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">
+                    checkroom
+                  </span>
+                  {insights.items_in_wardrobe_text}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0 pt-4 lg:pt-6 pr-2 lg:pr-16">
+            <StreakCard currentStreak={insights?.wear_streak ?? 0} />
           </div>
         </section>
 
@@ -429,7 +431,11 @@ export default function HomePage() {
               <TodaysEnsemble
                 items={outfitItems}
                 outfitName={outfitName}
-                description={outfitDescription || insights?.empty_outfit_text || 'No outfit suggestion available'}
+                description={
+                  outfitDescription ||
+                  insights?.empty_outfit_text ||
+                  'No outfit suggestion available'
+                }
                 weather={
                   weatherData?.current
                     ? {
@@ -457,7 +463,9 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-4xl mb-2">
                   checkroom
                 </span>
-                <p className="text-sm mb-3">{insights?.empty_outfit_text || 'Loading suggestions...'}</p>
+                <p className="text-sm mb-3">
+                  {insights?.empty_outfit_text || 'Loading suggestions...'}
+                </p>
                 <Link
                   href={insights?.empty_outfit_cta || '/wardrobe/upload'}
                   className="inline-block bg-primary text-on-primary px-5 py-2 rounded text-sm font-semibold hover:opacity-90 transition"
@@ -593,7 +601,8 @@ export default function HomePage() {
         title="Log this outfit?"
         message={`Record ${outfitName || 'this outfit'} for ${(() => {
           const isLoggingNext = !showingLogged && nextOutfit !== null;
-          const ts = isLoggingNext && nextSlotLabel ? nextSlotLabel : currentSlot;
+          const ts =
+            isLoggingNext && nextSlotLabel ? nextSlotLabel : currentSlot;
           return ts === 'day' ? 'today' : 'tonight';
         })()}.`}
         confirmLabel="Log Wear"
