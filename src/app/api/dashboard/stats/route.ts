@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { supabaseServer } from '@/lib/supabase/server';
+import { callGeminiWithFallback } from '@/lib/gemini';
 
 const supabase = supabaseServer();
 
@@ -16,7 +17,11 @@ export async function GET() {
     const userId = session.user.id;
 
     const now = new Date();
-    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const firstOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1,
+    ).toISOString();
     const twelveMonthsAgo = new Date(
       now.getFullYear() - 1,
       now.getMonth(),
@@ -33,7 +38,9 @@ export async function GET() {
     ] = await Promise.all([
       supabase
         .from('clothes')
-        .select('id, name, type, brand, material, price, wear_count, image_url, created_at, status')
+        .select(
+          'id, name, type, brand, material, price, wear_count, image_url, created_at, status',
+        )
         .eq('user_id', userId)
         .is('deleted_at', null)
         .or('status.is.null,status.eq.available'),
@@ -108,38 +115,33 @@ export async function GET() {
         totalValue > 0 && totalWears > 0
           ? Math.round((totalValue / totalWears) * 100) / 100
           : 0,
-      replacement_saved:
-        totalWears > 0 ? totalWears * (avgPrice || 30) : 0,
+      replacement_saved: totalWears > 0 ? totalWears * (avgPrice || 30) : 0,
     };
 
     const sortedByWear = [...clothes]
-      .filter(
-        (c: { wear_count: number | null }) => (c.wear_count || 0) > 0,
-      )
-      .sort(
-        (a, b) => (b.wear_count || 0) - (a.wear_count || 0),
+      .filter((c: { wear_count: number | null }) => (c.wear_count || 0) > 0)
+      .sort((a, b) => (b.wear_count || 0) - (a.wear_count || 0));
+
+    const mostWorn = sortedByWear
+      .slice(0, 3)
+      .map(
+        (item: {
+          id: string;
+          name: string;
+          type: string;
+          wear_count: number | null;
+          image_url: string | null;
+        }) => ({
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          wear_count: item.wear_count || 0,
+          image_url: item.image_url,
+        }),
       );
 
-    const mostWorn = sortedByWear.slice(0, 3).map(
-      (item: {
-        id: string;
-        name: string;
-        type: string;
-        wear_count: number | null;
-        image_url: string | null;
-      }) => ({
-        id: item.id,
-        name: item.name,
-        type: item.type,
-        wear_count: item.wear_count || 0,
-        image_url: item.image_url,
-      }),
-    );
-
     const leastWorn = [...clothes]
-      .filter(
-        (c: { wear_count: number | null }) => (c.wear_count || 0) === 0,
-      )
+      .filter((c: { wear_count: number | null }) => (c.wear_count || 0) === 0)
       .slice(0, 3)
       .map(
         (item: {
@@ -159,7 +161,11 @@ export async function GET() {
 
     const fulfilledItemCount = pledges
       .filter((p: { status: string }) => p.status === 'fulfilled')
-      .reduce((sum: number, p: { item_ids: string[] }) => sum + (p.item_ids?.length || 0), 0);
+      .reduce(
+        (sum: number, p: { item_ids: string[] }) =>
+          sum + (p.item_ids?.length || 0),
+        0,
+      );
 
     const totals = {
       items: clothes.length,
@@ -183,7 +189,8 @@ export async function GET() {
       sustainability_rate:
         clothes.length + fulfilledItemCount > 0
           ? Math.round(
-              (fulfilledItemCount / (clothes.length + fulfilledItemCount)) * 100,
+              (fulfilledItemCount / (clothes.length + fulfilledItemCount)) *
+                100,
             )
           : 0,
     };
@@ -204,7 +211,8 @@ export async function GET() {
       totals.fulfilled_change_pct =
         prevFulfilled > 0
           ? Math.round(
-              ((totals.pledges_fulfilled - prevFulfilled) / prevFulfilled) * 100,
+              ((totals.pledges_fulfilled - prevFulfilled) / prevFulfilled) *
+                100,
             )
           : 100;
     }
@@ -219,7 +227,8 @@ export async function GET() {
       (p: { status: string }) => p.status === 'fulfilled',
     );
     const itemsDiverted = fulfilledPledges.reduce(
-      (sum: number, p: { item_ids: string[] }) => sum + (p.item_ids?.length || 0),
+      (sum: number, p: { item_ids: string[] }) =>
+        sum + (p.item_ids?.length || 0),
       0,
     );
 
@@ -239,7 +248,8 @@ export async function GET() {
         (s: number, p: { item_ids: string[] }) => s + (p.item_ids?.length || 0),
         0,
       );
-      const estimates = IMPACT_ESTIMATES[action as keyof typeof IMPACT_ESTIMATES];
+      const estimates =
+        IMPACT_ESTIMATES[action as keyof typeof IMPACT_ESTIMATES];
       const co2 = Math.round(count * estimates.co2_kg * 10) / 10;
       const water = count * estimates.water_l;
       const money = count * estimates.money;
@@ -263,9 +273,13 @@ export async function GET() {
     const categoryCount = new Map<string, number>();
 
     for (const item of clothes) {
-      if (item.brand) brandCount.set(item.brand, (brandCount.get(item.brand) || 0) + 1);
+      if (item.brand)
+        brandCount.set(item.brand, (brandCount.get(item.brand) || 0) + 1);
       if (item.material)
-        materialCount.set(item.material, (materialCount.get(item.material) || 0) + 1);
+        materialCount.set(
+          item.material,
+          (materialCount.get(item.material) || 0) + 1,
+        );
       const catName = item.type || 'Uncategorized';
       categoryCount.set(catName, (categoryCount.get(catName) || 0) + 1);
     }
@@ -280,8 +294,14 @@ export async function GET() {
     const categoryColorFallback = '#163422';
 
     const colors = [
-      '#163422', '#d97706', '#2563eb', '#7c3aed',
-      '#059669', '#dc2626', '#0891b2', '#ca8a04',
+      '#163422',
+      '#d97706',
+      '#2563eb',
+      '#7c3aed',
+      '#059669',
+      '#dc2626',
+      '#0891b2',
+      '#ca8a04',
     ];
 
     const categoryData = Array.from(categoryCount.entries())
@@ -293,7 +313,11 @@ export async function GET() {
       .sort((a, b) => b.count - a.count);
 
     const brandData = Array.from(brandCount.entries())
-      .map(([name, count], i) => ({ name, count, color: colors[i % colors.length] }))
+      .map(([name, count], i) => ({
+        name,
+        count,
+        color: colors[i % colors.length],
+      }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
@@ -360,7 +384,8 @@ export async function GET() {
 
     const statusBreakdown = pledgeStatusOrder.map((status) => ({
       status,
-      count: pledges.filter((p: { status: string }) => p.status === status).length,
+      count: pledges.filter((p: { status: string }) => p.status === status)
+        .length,
     }));
 
     const actionTypes = ['donate', 'sell', 'recycle'];
@@ -425,18 +450,25 @@ export async function GET() {
       }
     }
 
-    const wearsOverTime = Array.from(wearMonths.entries()).map(([month, data]) => ({
-      month,
-      wears: data.wears,
-      items_worn: data.items.size,
-    }));
+    const wearsOverTime = Array.from(wearMonths.entries()).map(
+      ([month, data]) => ({
+        month,
+        wears: data.wears,
+        items_worn: data.items.size,
+      }),
+    );
 
     const wearEntries = Array.from(wearMonths.entries());
-    const thisMonthWears = wearEntries.length > 0 ? wearEntries[wearEntries.length - 1][1].wears : 0;
-    const lastMonthWears = wearEntries.length > 1 ? wearEntries[wearEntries.length - 2][1].wears : 0;
-    const wearChangePct = lastMonthWears > 0
-      ? Math.round(((thisMonthWears - lastMonthWears) / lastMonthWears) * 100)
-      : thisMonthWears > 0 ? 100 : 0;
+    const thisMonthWears =
+      wearEntries.length > 0 ? wearEntries[wearEntries.length - 1][1].wears : 0;
+    const lastMonthWears =
+      wearEntries.length > 1 ? wearEntries[wearEntries.length - 2][1].wears : 0;
+    const wearChangePct =
+      lastMonthWears > 0
+        ? Math.round(((thisMonthWears - lastMonthWears) / lastMonthWears) * 100)
+        : thisMonthWears > 0
+          ? 100
+          : 0;
 
     // Gemini AI wearing insight
     let wearingInsight = '';
@@ -447,22 +479,23 @@ export async function GET() {
         const monthsSummary = wearsOverTime
           .slice(-6)
           .map((m) => {
-            const label = new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            const label = new Date(m.month + '-01').toLocaleDateString(
+              'en-US',
+              { month: 'short', year: 'numeric' },
+            );
             return `${label}: ${m.wears} wears, ${m.items_worn} items`;
           })
           .join(', ');
 
         const prompt = `You are a wardrobe analyst. The user's wearing habits over the last 6 months: ${monthsSummary}. Current month: ${thisMonthWears} wears, previous month: ${lastMonthWears} wears (${wearChangePct >= 0 ? '+' : ''}${wearChangePct}% change). Give 1-2 sentences of personalized insight about their wearing patterns and a practical recommendation. Be concise.`;
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
-        const response = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        const response = await callGeminiWithFallback(geminiKey, {
+          contents: [{ parts: [{ text: prompt }] }],
         });
-        if (response.ok) {
+        if (response?.ok) {
           const data = await response.json();
-          wearingInsight = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+          wearingInsight =
+            data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
         }
       } catch {
         // Use fallback below
@@ -471,13 +504,15 @@ export async function GET() {
 
     if (!wearingInsight) {
       if (!hasWearData) {
-        wearingInsight = 'Start logging outfits in the Planner to see your wearing habits and get personalized insights.';
+        wearingInsight =
+          'Start logging outfits in the Planner to see your wearing habits and get personalized insights.';
       } else if (wearChangePct > 20) {
         wearingInsight = `You're wearing your clothes ${wearChangePct}% more this month than last — great rotation! Keep exploring new combinations.`;
       } else if (wearChangePct < -20) {
         wearingInsight = `Your wear count dropped ${Math.abs(wearChangePct)}% this month. Try styling a few items you haven't worn lately to refresh your rotation.`;
       } else {
-        wearingInsight = 'Your wearing habits are consistent month over month. Try experimenting with new outfit combinations to keep things fresh.';
+        wearingInsight =
+          'Your wearing habits are consistent month over month. Try experimenting with new outfit combinations to keep things fresh.';
       }
     }
 

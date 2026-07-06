@@ -1,32 +1,5 @@
 import { NextResponse } from 'next/server';
-
-async function fetchGeminiWithRetry(
-  url: string,
-  body: object,
-  maxRetries = 2,
-): Promise<Response | null> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) return res;
-      if (res.status === 429 || res.status === 503) {
-        const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-      return res;
-    } catch {
-      if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
-      }
-    }
-  }
-  return null;
-}
+import { callGeminiWithFallback } from '@/lib/gemini';
 
 export async function POST(req: Request) {
   try {
@@ -39,16 +12,17 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'Gemini API key is not configured' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Gemini API key is not configured' },
+        { status: 500 },
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const base64Data = buffer.toString('base64');
     const mimeType = file.type;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-
-    const response = await fetchGeminiWithRetry(geminiUrl, {
+    const response = await callGeminiWithFallback(apiKey, {
       contents: [
         {
           parts: [
@@ -74,7 +48,11 @@ export async function POST(req: Request) {
     const data = await response.json();
     let color = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     // Clean up Gemini's messy output: strip quotes, periods, take first line only
-    color = color.replace(/["''`]/g, '').replace(/\.$/, '').split('\n')[0].trim();
+    color = color
+      .replace(/["''`]/g, '')
+      .replace(/\.$/, '')
+      .split('\n')[0]
+      .trim();
 
     return NextResponse.json({ color });
   } catch (error) {

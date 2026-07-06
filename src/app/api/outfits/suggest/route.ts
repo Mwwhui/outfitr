@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { supabaseServer } from '@/lib/supabase/server';
 import { suggestOutfits } from '@/lib/suggestOutfits';
+import { callGeminiWithFallback } from '@/lib/gemini';
 
 export const maxDuration = 30;
 
@@ -157,19 +158,16 @@ Return ONLY valid JSON array:
   ...
 ]`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    });
+    const response = await callGeminiWithFallback(apiKey, {
+      contents: [{ parts: [{ text: prompt }] }],
+    }, 0);
 
     let aiReasoning: Array<{
       index: number;
       reasoning: string;
       style: string;
     }> = [];
-    if (response.ok) {
+    if (response?.ok) {
       const data = await response.json();
       const text =
         data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';

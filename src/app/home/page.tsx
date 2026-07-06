@@ -173,11 +173,8 @@ export default function HomePage() {
     }
   }, [todayPlans, loggedSlot, showingLogged, plansFetching]);
 
-  const loading =
-    status === 'loading' ||
-    insightsLoading ||
-    weatherLoading ||
-    calendarLoading;
+  // Only block on auth + calendar — AI/weather content loads progressively
+  const loading = status === 'loading' || calendarLoading;
 
   const currentSlot = getTimeSlot();
   const nextSlotLabel = currentSlot === 'day' ? 'night' : null;
@@ -323,31 +320,8 @@ export default function HomePage() {
 
   if (status === 'unauthenticated') return null;
 
-  if (insightsError && !insights) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center max-w-md px-6">
-          <span className="material-symbols-outlined text-5xl text-on-surface-variant mb-4 block">
-            error
-          </span>
-          <h2 className="text-xl font-bold text-on-surface mb-2">
-            Could not load your wardrobe
-          </h2>
-          <p className="text-sm text-on-surface-variant mb-6">
-            {insightsError.message}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-primary text-on-primary px-6 py-2.5 rounded text-sm font-semibold hover:opacity-90 transition"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!insights || insights.insufficient_data) {
+  // Show onboarding only when insights fully loaded and indicates insufficient data
+  if (insights && insights.insufficient_data) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center max-w-md px-6">
@@ -371,10 +345,10 @@ export default function HomePage() {
     );
   }
 
-  const health = insights.wardrobe_health;
-  const overallHealth = Math.round(
-    (health.category_balance_score + health.color_diversity_score) / 2,
-  );
+  const health = insights?.wardrobe_health;
+  const overallHealth = health
+    ? Math.round((health.category_balance_score + health.color_diversity_score) / 2)
+    : 0;
 
   const displayOutfit = showingLogged ? loggedOutfit : nextOutfit || outfit;
   const outfitName =
@@ -384,7 +358,7 @@ export default function HomePage() {
   const outfitTags = displayOutfit?.items.map((i) => i.type) || [];
 
   const topWornItem =
-    insights.most_worn.length > 0 ? insights.most_worn[0] : null;
+    insights?.most_worn && insights.most_worn.length > 0 ? insights.most_worn[0] : null;
 
   const pledges = pledgesData?.pledges || [];
   const fallbackPartnerText = pledgesData?.fallback_partner_text || 'Partner';
@@ -400,21 +374,25 @@ export default function HomePage() {
         {/* Greeting + Summary */}
         <section>
           <h1 className="text-3xl md:text-5xl font-bold text-on-surface font-headline tracking-tight">
-            {insights.greeting}, {userName}.
+            {insights?.greeting || `Good ${getTimeSlot() === 'day' ? 'Day' : 'Evening'}`}, {userName}.
           </h1>
-          <p className="text-sm text-on-surface-variant mt-1 font-body">
-            {insights.month_theme}
-          </p>
-          <p className="text-lg text-on-surface-variant mt-2 font-body">
-            {insights.headline}
-          </p>
-          {insights.summary && (
+          {insights?.month_theme && (
+            <p className="text-sm text-on-surface-variant mt-1 font-body">
+              {insights.month_theme}
+            </p>
+          )}
+          {insights?.headline && (
+            <p className="text-lg text-on-surface-variant mt-2 font-body">
+              {insights.headline}
+            </p>
+          )}
+          {insights?.summary && (
             <p className="text-base text-on-surface-variant mt-2 font-body">
               {insights.summary}
             </p>
           )}
           <div className="flex flex-wrap gap-4 mt-3">
-            {insights.fun_fact && (
+            {insights?.fun_fact && (
               <span className="text-sm text-on-surface-variant flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm">
                   lightbulb
@@ -422,7 +400,7 @@ export default function HomePage() {
                 {insights.fun_fact}
               </span>
             )}
-            {insights.wear_streak_text && (
+            {insights?.wear_streak_text && (
               <span className="text-sm text-on-surface-variant flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm">
                   local_fire_department
@@ -430,12 +408,14 @@ export default function HomePage() {
                 {insights.wear_streak_text}
               </span>
             )}
-            <span className="text-sm text-on-surface-variant flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">
-                checkroom
+            {insights?.items_in_wardrobe_text && (
+              <span className="text-sm text-on-surface-variant flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">
+                  checkroom
+                </span>
+                {insights.items_in_wardrobe_text}
               </span>
-              {insights.items_in_wardrobe_text}
-            </span>
+            )}
           </div>
         </section>
 
@@ -449,7 +429,7 @@ export default function HomePage() {
               <TodaysEnsemble
                 items={outfitItems}
                 outfitName={outfitName}
-                description={outfitDescription || insights.empty_outfit_text}
+                description={outfitDescription || insights?.empty_outfit_text || 'No outfit suggestion available'}
                 weather={
                   weatherData?.current
                     ? {
@@ -477,9 +457,9 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-4xl mb-2">
                   checkroom
                 </span>
-                <p className="text-sm mb-3">{insights.empty_outfit_text}</p>
+                <p className="text-sm mb-3">{insights?.empty_outfit_text || 'Loading suggestions...'}</p>
                 <Link
-                  href={insights.empty_outfit_cta}
+                  href={insights?.empty_outfit_cta || '/wardrobe/upload'}
                   className="inline-block bg-primary text-on-primary px-5 py-2 rounded text-sm font-semibold hover:opacity-90 transition"
                 >
                   Add Items
@@ -530,7 +510,7 @@ export default function HomePage() {
             )}
 
             {/* Monthly Story */}
-            {topWornItem && (
+            {topWornItem && health && (
               <MonthlyStory
                 itemName={topWornItem.name}
                 itemImage={topWornItem.image_url}
@@ -539,14 +519,14 @@ export default function HomePage() {
                 costPerWear={health.cost_per_wear}
                 utilizationText={
                   health.cost_per_wear > 0
-                    ? `Cost per wear: $${health.cost_per_wear.toFixed(2)} (${insights.cost_per_wear_trend_text})`
+                    ? `Cost per wear: $${health.cost_per_wear.toFixed(2)} (${insights?.cost_per_wear_trend_text || ''})`
                     : undefined
                 }
               />
             )}
 
             {/* Smart Shopping List */}
-            {insights.shopping_list.length > 0 && (
+            {insights?.shopping_list && insights.shopping_list.length > 0 && (
               <SmartShoppingList items={insights.shopping_list} />
             )}
           </div>
@@ -555,20 +535,34 @@ export default function HomePage() {
         {/* Wardrobe Wellness */}
         <section className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <SeasonalReadiness
-              coveragePct={insights.seasonal_tip.coverage_pct}
-              missingTypes={insights.seasonal_tip.missing_types}
-              tip={insights.seasonal_tip.tip}
-              coverageDetail={insights.seasonal_tip.coverage_detail}
-              missingTooltips={insights.seasonal_tip.missing_tooltips}
-              transitionTip={insights.seasonal_tip.transition_tip}
-            />
-            <CircularityScore
-              score={overallHealth}
-              totalItems={health.total_items}
-              itemsWornThisMonth={health.items_worn_this_month}
-              scoreBreakdown={health.score_breakdown}
-            />
+            {insights?.seasonal_tip ? (
+              <SeasonalReadiness
+                coveragePct={insights.seasonal_tip.coverage_pct}
+                missingTypes={insights.seasonal_tip.missing_types}
+                tip={insights.seasonal_tip.tip}
+                coverageDetail={insights.seasonal_tip.coverage_detail}
+                missingTooltips={insights.seasonal_tip.missing_tooltips}
+                transitionTip={insights.seasonal_tip.transition_tip}
+              />
+            ) : (
+              <div className="bg-surface-container-low rounded-lg p-6 animate-pulse">
+                <div className="h-4 bg-surface-variant rounded w-1/3 mb-4" />
+                <div className="h-16 bg-surface-variant rounded-xl mb-3" />
+              </div>
+            )}
+            {health ? (
+              <CircularityScore
+                score={overallHealth}
+                totalItems={health.total_items}
+                itemsWornThisMonth={health.items_worn_this_month}
+                scoreBreakdown={health.score_breakdown}
+              />
+            ) : (
+              <div className="bg-surface-container-low rounded-lg p-6 animate-pulse">
+                <div className="h-4 bg-surface-variant rounded w-1/3 mb-4" />
+                <div className="h-16 bg-surface-variant rounded-xl mb-3" />
+              </div>
+            )}
             {sustainability && (
               <SustainabilityStory
                 story={sustainability.story}
@@ -580,11 +574,18 @@ export default function HomePage() {
         </section>
 
         {/* Wardrobe Analytics */}
-        <WardrobeAnalytics
-          colors={insights.color_palette}
-          categories={insights.category_balance}
-          topWorn={insights.most_worn}
-        />
+        {insights ? (
+          <WardrobeAnalytics
+            colors={insights.color_palette}
+            categories={insights.category_balance}
+            topWorn={insights.most_worn}
+          />
+        ) : (
+          <div className="bg-surface-container-low rounded-lg p-6 animate-pulse">
+            <div className="h-4 bg-surface-variant rounded w-1/4 mb-4" />
+            <div className="h-40 bg-surface-variant rounded-xl" />
+          </div>
+        )}
       </div>
 
       <ConfirmModal

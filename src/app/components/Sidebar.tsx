@@ -46,6 +46,7 @@ const USER_SECTIONS: NavSection[] = [
     title: 'Discover',
     items: [
       { icon: 'style', label: 'Style Lab', href: '/outfits' },
+      { icon: 'camera', label: 'Scan to Buy', href: '/wardrobe/scan' },
       { icon: 'favorite', label: 'Pre-loved', href: '/pre-loved', badge: 0 },
       { icon: 'history', label: 'Activity', href: '/activity', badge: 0 },
     ],
@@ -150,6 +151,7 @@ export default function Sidebar({
 
   const prefetchPage = useCallback(
     (href: string) => {
+      router.prefetch(href);
       const userId = session?.user?.id;
       switch (href) {
         case '/home':
@@ -193,7 +195,7 @@ export default function Sidebar({
         }
       }
     },
-    [queryClient, session?.user?.id],
+    [router, queryClient, session?.user?.id],
   );
 
   const handleNavigate = (href: string) => {
