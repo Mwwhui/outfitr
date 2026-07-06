@@ -46,6 +46,21 @@ interface SuggestedPairing {
   color: string | null;
 }
 
+interface GhostItem {
+  name: string;
+  image_url: string | null;
+  id: string;
+  wear_count: number;
+}
+
+interface BudgetContext {
+  item_price: number;
+  wardrobe_average: number;
+  wardrobe_median: number;
+  wardrobe_max: number;
+  flag: 'over_budget' | 'within_budget';
+}
+
 interface ScanResult {
   score: number;
   verdict: 'worth_it' | 'consider' | 'skip';
@@ -68,6 +83,8 @@ interface ScanResult {
   } | null;
   similar_items: SimilarItem[];
   suggested_pairings: SuggestedPairing[];
+  ghost_items: GhostItem[];
+  budget_context: BudgetContext | null;
 }
 
 // ---------- Cache ----------
@@ -90,6 +107,116 @@ function getCurrentSeason(): string {
   if (month >= 5 && month <= 7) return 'Summer';
   if (month >= 8 && month <= 10) return 'Fall';
   return 'Winter';
+}
+
+// ---------- YOLO type mapping ----------
+
+const YOLO_CATEGORY_MAP: [RegExp, string][] = [
+  [/shirt|blouse|t[- ]?shirts?|tank\s*top|crop\s*top|top|sweater|hoodie|cardigan|polo|henley|turtleneck|pullover|jumper|sweatshirt|vest/, 'Tops'],
+  [/pants|jeans|trousers|leggings|shorts|skirt|chinos|slacks|joggers|sweatpants|culottes/, 'Bottoms'],
+  [/jacket|coat|blazer|parka|puffer|trench|bomber|denim\s*jacket|leather\s*jacket|windbreaker|raincoat|overcoat/, 'Outerwear'],
+  [/dress|jumpsuit|romper|overalls|bodysuit|gown/, 'One-Piece'],
+  [/shoe|sneaker|boot|sandal|heel|loafer|flats?|mules?|oxford|pump/, 'Shoes'],
+  [/hat|cap|bag|belt|scarf|watch|glasses|sunglasses|jewelry|necklace|earring|bracelet|wallet|backpack/, 'Accessories'],
+];
+
+function mapYoloTypeToCategory(yoloType: string): string {
+  const t = yoloType.toLowerCase().trim();
+  for (const [pattern, category] of YOLO_CATEGORY_MAP) {
+    if (pattern.test(t)) return category;
+  }
+  return 'Tops';
+}
+
+// ---------- Step 1b: YOLO-first garment detection ----------
+
+async function enrichGarmentWithGemini(
+  apiKey: string,
+  category: string,
+  color: string,
+  yoloType: string,
+): Promise<Pick<DetectedGarment, 'material' | 'formality' | 'season' | 'pattern' | 'style_keywords'>> {
+  const prompt = `Given this garment:
+- Type: ${category} (detected as: ${yoloType})
+- Color: ${color}
+
+Return ONLY valid JSON (no markdown):
+{
+  "material": "best guess fabric (cotton, wool, denim, silk, linen, synthetic, leather, knit)",
+  "formality": "casual" | "smart" | "formal",
+  "season": "Spring" | "Summer" | "Autumn" | "Winter" | "All",
+  "pattern": "solid" | "striped" | "plaid" | "floral" | "polka" | "geometric" | "other",
+  "style_keywords": ["up to 3 relevant tags from: minimalist, classic, streetwear, bohemian, sporty, edgy, romantic, preppy, vintage"]
+}`;
+
+  const response = await callGeminiWithFallback(apiKey, {
+    contents: [{ parts: [{ text: prompt }] }],
+  }, 0);
+
+  if (!response || !response.ok) {
+    return { material: '', formality: 'casual', season: 'All', pattern: 'solid', style_keywords: [] };
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+  try {
+    const jsonStr = text.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
+    const parsed = JSON.parse(jsonStr);
+    return {
+      material: typeof parsed.material === 'string' ? parsed.material : '',
+      formality: ['casual', 'smart', 'formal'].includes(parsed.formality) ? parsed.formality : 'casual',
+      season: ['Spring', 'Summer', 'Autumn', 'Winter', 'All'].includes(parsed.season) ? parsed.season : 'All',
+      pattern: typeof parsed.pattern === 'string' ? parsed.pattern : 'solid',
+      style_keywords: Array.isArray(parsed.style_keywords) ? parsed.style_keywords : [],
+    };
+  } catch {
+    return { material: '', formality: 'casual', season: 'All', pattern: 'solid', style_keywords: [] };
+  }
+}
+
+async function detectGarmentWithYolo(
+  apiKey: string,
+  base64Data: string,
+  mimeType: string,
+): Promise<{ garment: DetectedGarment; source: 'yolo' | 'gemini' }> {
+  let yoloResult: { type: string; color: string; confidence: number } | null = null;
+
+  try {
+    const yoloUrl = process.env.NEXT_PUBLIC_YOLO_API_URL;
+    if (yoloUrl) {
+      const buffer = Buffer.from(base64Data, 'base64');
+      const blob = new Blob([buffer], { type: mimeType });
+      const formData = new FormData();
+      formData.append('file', blob, `image.${mimeType.split('/')[1] || 'jpeg'}`);
+
+      const yoloRes = await fetch(`${yoloUrl}/auto-detect`, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (yoloRes.ok) {
+        const data = await yoloRes.json();
+        if (data.confidence >= 0.6 && data.type) {
+          yoloResult = { type: data.type, color: data.color || '', confidence: data.confidence };
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[scan-to-buy] YOLO detection failed:', err);
+  }
+
+  if (yoloResult) {
+    const category = mapYoloTypeToCategory(yoloResult.type);
+    const enrichment = await enrichGarmentWithGemini(apiKey, category, yoloResult.color, yoloResult.type);
+    return {
+      garment: { type: category, color: yoloResult.color, ...enrichment },
+      source: 'yolo',
+    };
+  }
+
+  const garment = await detectGarment(apiKey, base64Data, mimeType);
+  return { garment, source: 'gemini' };
 }
 
 // ---------- Step 1c: Gemini garment detection ----------
@@ -345,7 +472,70 @@ function computeCostPerWear(
   };
 }
 
-// ---------- Step 1h: Gemini verdict ----------
+// ---------- Step 1h: Ghost item check ----------
+
+function computeGhostItems(
+  garment: DetectedGarment,
+  clothes: WearItem[],
+): GhostItem[] {
+  const sameType = clothes.filter(
+    (c) => c.type.toLowerCase() === garment.type.toLowerCase(),
+  );
+
+  const ghosts: GhostItem[] = [];
+  for (const c of sameType) {
+    if (c.wear_count >= 3) continue;
+    if (!c.color || !garment.color) continue;
+    const sim = colorSimilarity(garment.color, c.color);
+    if (sim >= 0.6) {
+      ghosts.push({
+        name: c.name,
+        image_url: c.image_url,
+        id: c.id,
+        wear_count: c.wear_count,
+      });
+    }
+  }
+
+  return ghosts.slice(0, 3);
+}
+
+// ---------- Step 1i: Budget context ----------
+
+function computeBudgetContext(
+  garment: DetectedGarment,
+  clothes: WearItem[],
+  price?: number,
+): BudgetContext | null {
+  if (!price || price <= 0) return null;
+
+  const prices = clothes
+    .map((c) => Number(c.price))
+    .filter((p) => p > 0)
+    .sort((a, b) => a - b);
+
+  if (prices.length === 0) return null;
+
+  const sum = prices.reduce((a, b) => a + b, 0);
+  const avg = Math.round(sum / prices.length);
+  const mid = Math.floor(prices.length / 2);
+  const median = prices.length % 2 === 0
+    ? Math.round((prices[mid - 1] + prices[mid]) / 2)
+    : prices[mid];
+  const max = prices[prices.length - 1];
+
+  const flag: BudgetContext['flag'] = price > avg * 2 ? 'over_budget' : 'within_budget';
+
+  return {
+    item_price: price,
+    wardrobe_average: avg,
+    wardrobe_median: median,
+    wardrobe_max: max,
+    flag,
+  };
+}
+
+// ---------- Step 1j: Gemini verdict ----------
 
 async function generateVerdict(
   apiKey: string,
@@ -552,8 +742,8 @@ export async function POST(req: Request) {
       use_case: c.use_case,
     }));
 
-    // Step 1c: Detect garment
-    const garment = await detectGarment(apiKey, image_base64, mimeType);
+    // Step 1b/c: Detect garment (YOLO-first, Gemini vision fallback)
+    const { garment } = await detectGarmentWithYolo(apiKey, image_base64, mimeType);
 
     // Step 1d: Duplicate check
     const { risk: similarityRisk, similarItems } =
@@ -569,7 +759,13 @@ export async function POST(req: Request) {
     // Step 1g: CPW forecast
     const cpw = computeCostPerWear(garment, clothes, price);
 
-    // Step 1h: Gemini verdict
+    // Step 1h: Ghost item check
+    const ghostItems = computeGhostItems(garment, clothes);
+
+    // Step 1i: Budget context
+    const budgetContext = computeBudgetContext(garment, clothes, price);
+
+    // Step 1j: Gemini verdict
     const verdict = await generateVerdict(
       apiKey,
       garment,
@@ -592,6 +788,8 @@ export async function POST(req: Request) {
       cost_per_wear: cpw,
       similar_items: similarItems,
       suggested_pairings: pairings,
+      ghost_items: ghostItems,
+      budget_context: budgetContext,
     };
 
     // Cache the result

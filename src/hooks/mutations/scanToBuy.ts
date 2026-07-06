@@ -37,6 +37,21 @@ export interface SuggestedPairing {
   color: string | null;
 }
 
+export interface GhostItem {
+  name: string;
+  image_url: string | null;
+  id: string;
+  wear_count: number;
+}
+
+export interface BudgetContext {
+  item_price: number;
+  wardrobe_average: number;
+  wardrobe_median: number;
+  wardrobe_max: number;
+  flag: 'over_budget' | 'within_budget';
+}
+
 export interface ScanResult {
   score: number;
   verdict: 'worth_it' | 'consider' | 'skip';
@@ -47,6 +62,8 @@ export interface ScanResult {
   cost_per_wear: CostPerWear | null;
   similar_items: SimilarItem[];
   suggested_pairings: SuggestedPairing[];
+  ghost_items: GhostItem[];
+  budget_context: BudgetContext | null;
 }
 
 const SCAN_TIMEOUT = 75_000;

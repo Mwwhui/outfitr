@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useScanToBuy, type ScanResult } from '@/hooks/mutations/scanToBuy';
-import { compressImage } from '../upload/upload-utils';
+import { compressImage, drawBoundingBoxes } from '../upload/upload-utils';
 import ScanScoreRing from '@/app/components/wardrobe/ScanScoreRing';
 import ScanBreakdown from '@/app/components/wardrobe/ScanBreakdown';
 import OutfitMultiplierCard from '@/app/components/wardrobe/OutfitMultiplierCard';
@@ -38,6 +38,10 @@ export default function ScanToBuyPage() {
   const [cameraError, setCameraError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
+  const targetBoxesRef = useRef<Array<{ box: [number, number, number, number]; label: string }> | null>(null);
+  const smoothBoxesRef = useRef<Array<{ box: [number, number, number, number]; label: string }> | null>(null);
+  const animFrameRef = useRef(0);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -59,6 +63,118 @@ export default function ScanToBuyPage() {
     if (cameraStream && videoRef.current) {
       videoRef.current.srcObject = cameraStream;
     }
+  }, [cameraStream]);
+
+  // YOLO live bounding box overlay
+  useEffect(() => {
+    if (!cameraStream || !videoRef.current) return;
+
+    const video = videoRef.current;
+    const yoloUrl = process.env.NEXT_PUBLIC_YOLO_API_URL;
+    if (!yoloUrl) return;
+
+    const LERP_SPEED = 0.15;
+    const POLL_MS = 1500;
+
+    const poll = async () => {
+      if (!video.videoWidth) return;
+      try {
+        const cap = document.createElement('canvas');
+        cap.width = video.videoWidth;
+        cap.height = video.videoHeight;
+        const capCtx = cap.getContext('2d');
+        if (!capCtx) return;
+        capCtx.drawImage(video, 0, 0);
+
+        const blob = await new Promise<Blob | null>((resolve) => {
+          cap.toBlob(resolve, 'image/jpeg', 0.7);
+        });
+        if (!blob) return;
+
+        const fd = new FormData();
+        fd.append('file', blob);
+
+        const res = await fetch(`${yoloUrl}/detect`, { method: 'POST', body: fd });
+        if (res.ok) {
+          const data = await res.json();
+          const items = (data.items || []).filter(
+            (i: { confidence?: number }) => (i.confidence ?? 0) > 0.3,
+          );
+          if (items.length > 0) {
+            targetBoxesRef.current = items.map(
+              (i: { box: [number, number, number, number]; yolo_type?: string; type?: string }) => ({
+                box: i.box,
+                label: i.yolo_type || i.type || 'Item',
+              }),
+            );
+          } else {
+            targetBoxesRef.current = null;
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+    };
+
+    const pollTimer = setInterval(poll, POLL_MS);
+    poll();
+
+    const render = () => {
+      const overlay = overlayRef.current;
+      if (!overlay || !video) {
+        animFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      const target = targetBoxesRef.current;
+      if (!target?.length) {
+        const ctx = overlay.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, overlay.width, overlay.height);
+        smoothBoxesRef.current = null;
+      } else {
+        const current = smoothBoxesRef.current;
+        if (!current || current.length !== target.length) {
+          smoothBoxesRef.current = target.map((t) => ({ ...t }));
+        } else {
+          smoothBoxesRef.current = current.map((cb, i) => {
+            const tb = target[i];
+            if (!tb) return cb;
+            return {
+              box: [
+                cb.box[0] + (tb.box[0] - cb.box[0]) * LERP_SPEED,
+                cb.box[1] + (tb.box[1] - cb.box[1]) * LERP_SPEED,
+                cb.box[2] + (tb.box[2] - cb.box[2]) * LERP_SPEED,
+                cb.box[3] + (tb.box[3] - cb.box[3]) * LERP_SPEED,
+              ] as [number, number, number, number],
+              label: tb.label,
+            };
+          });
+        }
+
+        const ctx = overlay.getContext('2d')!;
+        overlay.width = video.clientWidth;
+        overlay.height = video.clientHeight;
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        const boxes = smoothBoxesRef.current;
+        if (boxes?.length) {
+          const sx = overlay.width / (video.videoWidth || 1);
+          const sy = overlay.height / (video.videoHeight || 1);
+          drawBoundingBoxes(ctx, boxes, sx, sy);
+        }
+      }
+
+      animFrameRef.current = requestAnimationFrame(render);
+    };
+
+    animFrameRef.current = requestAnimationFrame(render);
+
+    return () => {
+      if (pollTimer) clearInterval(pollTimer);
+      cancelAnimationFrame(animFrameRef.current);
+      targetBoxesRef.current = null;
+      smoothBoxesRef.current = null;
+    };
   }, [cameraStream]);
 
   // Auto-save scan result to history
@@ -255,16 +371,20 @@ export default function ScanToBuyPage() {
 
             {/* Camera viewfinder */}
             {!imagePreview && cameraStream && (
-              <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden">
+              <div className="relative w-full h-[55vh] min-h-[360px] bg-black rounded-xl overflow-hidden">
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
-                  className="w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <canvas
+                  ref={overlayRef}
+                  className="absolute inset-0 w-full h-full pointer-events-none z-10"
                 />
                 <button
                   onClick={captureFromCamera}
-                  className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white text-black rounded-full w-14 h-14 shadow-lg flex items-center justify-center"
+                  className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white text-black rounded-full w-14 h-14 shadow-lg flex items-center justify-center z-20"
                 >
                   <span className="material-symbols-outlined text-2xl">
                     camera
@@ -275,7 +395,7 @@ export default function ScanToBuyPage() {
                     cameraStream.getTracks().forEach((t) => t.stop());
                     setCameraStream(null);
                   }}
-                  className="absolute top-2 right-2 bg-white/80 rounded-full w-8 h-8 flex items-center justify-center shadow"
+                  className="absolute top-2 right-2 bg-white/80 rounded-full w-8 h-8 flex items-center justify-center shadow z-20"
                 >
                   <span className="material-symbols-outlined text-sm">
                     close
@@ -493,6 +613,98 @@ export default function ScanToBuyPage() {
               <CPWForecast data={result.cost_per_wear} />
             )}
 
+            {result.ghost_items.length > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                <div className="flex items-start gap-2 mb-2">
+                  <span className="material-symbols-outlined text-orange-500 text-sm mt-0.5">
+                    warning
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-orange-700 uppercase tracking-wider">
+                      You already own similar items you rarely wear
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {result.ghost_items.map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => router.push(`/wardrobe/${item.id}`)}
+                      className="shrink-0 flex flex-col items-center gap-1.5 w-20"
+                    >
+                      <div className="w-16 h-16 rounded-lg bg-orange-100 overflow-hidden border border-orange-200">
+                        {item.image_url ? (
+                          <Image
+                            src={item.image_url}
+                            alt={item.name}
+                            width={64}
+                            height={64}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="material-symbols-outlined text-orange-400 text-xl">
+                              checkroom
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-orange-700 text-center leading-tight line-clamp-2">
+                        {item.name}
+                      </span>
+                      <span className="text-[9px] text-orange-500 font-semibold">
+                        worn {item.wear_count}x
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {result.budget_context && (
+              <div className={`rounded-xl border p-4 ${
+                result.budget_context.flag === 'over_budget'
+                  ? 'bg-red-50 border-red-200'
+                  : 'bg-green-50 border-green-200'
+              }`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={`material-symbols-outlined text-sm ${
+                    result.budget_context.flag === 'over_budget'
+                      ? 'text-red-500'
+                      : 'text-green-500'
+                  }`}>
+                    {result.budget_context.flag === 'over_budget' ? 'trending_up' : 'check_circle'}
+                  </span>
+                  <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                    Budget Check
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-on-surface-variant">Item Price</p>
+                    <p className="font-semibold text-on-surface">${result.budget_context.item_price}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-on-surface-variant">Your Avg</p>
+                    <p className="font-semibold text-on-surface">${result.budget_context.wardrobe_average}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-on-surface-variant">Median</p>
+                    <p className="font-semibold text-on-surface">${result.budget_context.wardrobe_median}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-on-surface-variant">Max</p>
+                    <p className="font-semibold text-on-surface">${result.budget_context.wardrobe_max}</p>
+                  </div>
+                </div>
+                {result.budget_context.flag === 'over_budget' && (
+                  <p className="text-xs text-red-600 mt-2 font-semibold">
+                    This is {Math.round(result.budget_context.item_price / result.budget_context.wardrobe_average * 10) / 10}× your average item price.
+                  </p>
+                )}
+              </div>
+            )}
+
             {result.similar_items.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
                 <div className="flex items-start gap-2 mb-2">
@@ -500,7 +712,7 @@ export default function ScanToBuyPage() {
                     info
                   </span>
                   <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">
-                    Similar Items in Your Closet
+                    Similar Items
                   </p>
                 </div>
                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">

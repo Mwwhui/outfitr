@@ -21,6 +21,7 @@ export default function ScanHistoryPage() {
   const { status } = useSession();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -134,7 +135,21 @@ export default function ScanHistoryPage() {
                 }
                 className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-container-low transition"
               >
-                <div className="w-12 h-12 rounded-lg bg-surface-variant overflow-hidden shrink-0">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (entry.image_data_url) setZoomedImage(entry.image_data_url);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                      if (entry.image_data_url) setZoomedImage(entry.image_data_url);
+                    }
+                  }}
+                  className="w-12 h-12 rounded-lg bg-surface-variant overflow-hidden shrink-0 cursor-pointer"
+                >
                   {entry.image_data_url ? (
                     <Image
                       src={entry.image_data_url}
@@ -185,6 +200,20 @@ export default function ScanHistoryPage() {
                       verdict={entry.result.verdict}
                     />
                   </div>
+
+                  {entry.image_data_url && (
+                    <button
+                      onClick={() => setZoomedImage(entry.image_data_url!)}
+                      className="w-full aspect-[4/3] bg-surface-variant rounded-xl overflow-hidden relative"
+                    >
+                      <Image
+                        src={entry.image_data_url}
+                        alt="Scanned item"
+                        fill
+                        className="object-contain"
+                      />
+                    </button>
+                  )}
 
                   <div className="text-center">
                     <p className="text-sm font-semibold text-on-surface leading-relaxed">
@@ -269,6 +298,31 @@ export default function ScanHistoryPage() {
           </button>
         )}
       </div>
+
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
+          onClick={() => setZoomedImage(null)}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setZoomedImage(null);
+            }}
+            className="absolute top-4 right-4 text-white/80 hover:text-white transition z-10"
+          >
+            <span className="material-symbols-outlined text-3xl">close</span>
+          </button>
+          <div className="relative w-[90vw] h-[80vh]">
+            <Image
+              src={zoomedImage}
+              alt="Zoomed scan"
+              fill
+              className="object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
