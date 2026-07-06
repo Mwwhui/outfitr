@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outfitr Scan</title>
+  <script type="module" crossorigin src="/chunks/popup-DD5UxyDR.js"></script>
+  <link rel="modulepreload" crossorigin href="/chunks/auth-CZe-TDDt.js">
+  <link rel="stylesheet" crossorigin href="/assets/popup-xCimUD6M.css">
+</head>
+<body>
+  <div id="app" class="popup-container">
+    <!-- Not connected — Connect CTA -->
+    <div id="state-auth" class="state hidden">
+      <div class="logo-row">
+        <span class="logo">✦</span>
+      </div>
+      <h2>Outfitr Scan</h2>
+      <p class="desc">Connect your extension to scan products against your wardrobe.</p>
+      <button id="connect-btn" class="btn btn-primary">Connect with Outfitr</button>
+      <button id="manual-btn" class="btn btn-text">Paste token manually</button>
+
+      <!-- Manual token fallback (hidden by default) -->
+      <div id="manual-section" class="manual-section hidden">
+        <input id="token-input" type="text" placeholder="Paste your token here" class="input">
+        <button id="save-token-btn" class="btn btn-primary">Save Token</button>
+        <a id="get-token-link" href="#" class="link">Get token from web app →</a>
+      </div>
+    </div>
+
+    <!-- Connecting to web app / Scanning -->
+    <div id="state-connecting" class="state hidden">
+      <div class="scanning-row">
+        <div class="spinner"></div>
+        <span id="scanning-elapsed" class="elapsed hidden"></span>
+      </div>
+      <p id="connecting-msg">Opening Outfitr...</p>
+      <div id="step-dots" class="step-dots hidden">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+      <p id="stuck-warning-popup" class="stuck-warning hidden">Taking longer than usual...</p>
+    </div>
+
+    <!-- Connected, ready to scan -->
+    <div id="state-ready" class="state hidden">
+      <div class="logo-row"><span class="logo check">✓</span></div>
+      <h2>Connected</h2>
+      <p class="desc">Ready to scan. Right-click any product image and select "Scan with Outfitr".</p>
+      <button id="settings-link" class="btn btn-text">Extension Settings</button>
+    </div>
+
+    <!-- Has scan result -->
+    <div id="state-result" class="state hidden">
+      <div class="score-ring-wrap">
+        <svg class="score-ring" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" class="ring-bg" />
+          <circle id="score-circle" cx="60" cy="60" r="52" class="ring-fill" />
+        </svg>
+        <div class="score-overlay">
+          <span id="score-text" class="score-num"></span>
+          <span id="verdict-text" class="verdict-label"></span>
+        </div>
+      </div>
+      <p id="one-liner" class="one-liner"></p>
+      <p id="rate-limit-notice" class="rate-limit-notice hidden">AI rate-limited — using fallback</p>
+      <div id="ghost-row" class="ghost-row hidden">
+        <span class="icon-sm">⚠️</span>
+        <span id="ghost-text"></span>
+      </div>
+      <button id="view-full-btn" class="btn btn-secondary">View Full Analysis</button>
+      <button id="settings-link2" class="btn btn-text">Extension Settings</button>
+    </div>
+
+    <!-- Error state -->
+    <div id="state-error" class="state hidden">
+      <div class="logo-row"><span class="logo error">✕</span></div>
+      <h2>Scan Failed</h2>
+      <p id="error-msg" class="desc"></p>
+      <button id="retry-btn" class="btn btn-primary">Try Again</button>
+    </div>
+  </div>
+</body>
+</html>

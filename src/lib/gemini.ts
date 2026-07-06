@@ -8,11 +8,17 @@ function delay(ms: number) {
 
 const FETCH_TIMEOUT = 15_000;
 
+export interface GeminiResult {
+  response: Response | null;
+  rateLimited: boolean;
+}
+
 export async function callGeminiWithFallback(
   apiKey: string,
   body: object,
   maxRetriesPerModel = 2,
-): Promise<Response | null> {
+): Promise<GeminiResult> {
+  let rateLimited = false;
   for (const model of MODELS) {
     const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
     for (let attempt = 0; attempt <= maxRetriesPerModel; attempt++) {
@@ -26,8 +32,13 @@ export async function callGeminiWithFallback(
           signal: controller.signal,
         });
         clearTimeout(timer);
-        if (res.ok) return res;
-        if (res.status === 429 || res.status === 503) {
+        if (res.ok) return { response: res, rateLimited };
+        if (res.status === 429) {
+          rateLimited = true;
+          await delay(Math.min(2000 * 2 ** attempt, 10000));
+          continue;
+        }
+        if (res.status === 503) {
           await delay(Math.min(2000 * 2 ** attempt, 10000));
           continue;
         }
@@ -42,7 +53,7 @@ export async function callGeminiWithFallback(
       }
     }
   }
-  return null;
+  return { response: null, rateLimited };
 }
 
 export function extractText(response: Response): Promise<string> {

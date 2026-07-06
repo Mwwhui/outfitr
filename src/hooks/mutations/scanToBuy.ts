@@ -64,6 +64,7 @@ export interface ScanResult {
   suggested_pairings: SuggestedPairing[];
   ghost_items: GhostItem[];
   budget_context: BudgetContext | null;
+  rate_limited?: boolean;
 }
 
 const SCAN_TIMEOUT = 75_000;

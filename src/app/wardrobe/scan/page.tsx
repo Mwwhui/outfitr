@@ -328,6 +328,15 @@ export default function ScanToBuyPage() {
             Scan to Buy
           </h1>
           <button
+            onClick={() => router.push('/wardrobe/scan/settings')}
+            className="p-2 rounded-xl hover:bg-surface-container transition"
+            title="Browser extension settings"
+          >
+            <span className="material-symbols-outlined text-xl">
+              extension
+            </span>
+          </button>
+          <button
             onClick={() => router.push('/wardrobe/scan/history')}
             className="p-2 rounded-xl hover:bg-surface-container transition"
             title="Scan history"
@@ -598,6 +607,11 @@ export default function ScanToBuyPage() {
               <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">
                 {result.reasoning}
               </p>
+              {result.rate_limited && (
+                <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 mt-3 inline-block">
+                  AI was rate-limited — using statistical fallback
+                </p>
+              )}
             </div>
 
             <ScanBreakdown breakdown={result.breakdown} />

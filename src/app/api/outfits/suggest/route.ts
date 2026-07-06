@@ -158,7 +158,7 @@ Return ONLY valid JSON array:
   ...
 ]`;
 
-    const response = await callGeminiWithFallback(apiKey, {
+    const { response } = await callGeminiWithFallback(apiKey, {
       contents: [{ parts: [{ text: prompt }] }],
     }, 0);
 

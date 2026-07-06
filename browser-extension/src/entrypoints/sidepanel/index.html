@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Outfitr Scan — Full Analysis</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app" class="panel-container">
+    <div id="state-loading" class="state">
+      <div class="spinner"></div>
+      <p id="loading-msg">Starting scan...</p>
+      <div id="progress-steps" class="progress-steps hidden">
+        <div class="step-row" data-step="0">
+          <span class="step-circle">1</span>
+          <span class="step-label">Detecting garment type...</span>
+        </div>
+        <div class="step-row" data-step="1">
+          <span class="step-circle">2</span>
+          <span class="step-label">Checking your wardrobe...</span>
+        </div>
+        <div class="step-row" data-step="2">
+          <span class="step-circle">3</span>
+          <span class="step-label">Calculating outfit combos...</span>
+        </div>
+        <div class="step-row" data-step="3">
+          <span class="step-circle">4</span>
+          <span class="step-label">Generating verdict...</span>
+        </div>
+      </div>
+      <p id="stuck-warning" class="stuck-warning hidden">Still analyzing... This can take up to a minute.</p>
+    </div>
+
+    <div id="state-error" class="state hidden">
+      <p id="error-msg"></p>
+      <button id="retry-btn" class="btn btn-primary">Try Again</button>
+    </div>
+
+    <div id="state-ready" class="state hidden">
+      <div class="logo-row"><span class="logo check">✓</span></div>
+      <h2>Ready to Scan</h2>
+      <p class="desc">Right-click any product image and select <strong>"Scan with Outfitr"</strong></p>
+      <p class="desc-hint">The result will appear here automatically.</p>
+    </div>
+
+    <div id="state-result" class="hidden">
+      <div class="header">
+        <h1>Outfitr Scan</h1>
+      </div>
+
+      <div class="hero">
+        <div class="score-ring-wrap">
+          <svg class="score-ring" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="52" class="ring-bg" />
+            <circle id="sc-circle" cx="60" cy="60" r="52" class="ring-fill" />
+          </svg>
+          <div class="score-overlay">
+            <span id="sc-text" class="score-num"></span>
+            <span id="sc-verdict" class="verdict-label"></span>
+          </div>
+        </div>
+        <p id="sc-one-liner" class="one-liner"></p>
+        <p id="sc-reasoning" class="reasoning"></p>
+        <p id="rate-limit-notice" class="rate-limit-notice hidden">AI was rate-limited — using statistical fallback</p>
+      </div>
+
+      <section>
+        <h2>Breakdown</h2>
+        <div id="breakdown-bars" class="bars"></div>
+      </section>
+
+      <section id="similar-section" class="hidden">
+        <h2>Similar in Your Closet</h2>
+        <div id="similar-list" class="thumb-strip"></div>
+      </section>
+
+      <section id="ghost-section" class="hidden">
+        <div id="ghost-list"></div>
+      </section>
+
+      <section id="pairings-section" class="hidden">
+        <div id="multiplier-info"></div>
+        <h2>Would Go Well With</h2>
+        <div id="pairings-list" class="pairings-grid"></div>
+      </section>
+
+      <section id="cpw-section" class="hidden">
+        <h2>Cost Per Wear</h2>
+        <div id="cpw-content"></div>
+      </section>
+
+      <section id="budget-section" class="hidden">
+        <h2>Budget Check</h2>
+        <div id="budget-content"></div>
+      </section>
+
+      <button id="scan-another-btn" class="btn btn-primary">Scan Another</button>
+    </div>
+  </div>
+  <script src="main.ts" type="module"></script>
+</body>
+</html>

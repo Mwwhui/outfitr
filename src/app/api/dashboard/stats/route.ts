@@ -489,7 +489,7 @@ export async function GET() {
 
         const prompt = `You are a wardrobe analyst. The user's wearing habits over the last 6 months: ${monthsSummary}. Current month: ${thisMonthWears} wears, previous month: ${lastMonthWears} wears (${wearChangePct >= 0 ? '+' : ''}${wearChangePct}% change). Give 1-2 sentences of personalized insight about their wearing patterns and a practical recommendation. Be concise.`;
 
-        const response = await callGeminiWithFallback(geminiKey, {
+        const { response } = await callGeminiWithFallback(geminiKey, {
           contents: [{ parts: [{ text: prompt }] }],
         });
         if (response?.ok) {

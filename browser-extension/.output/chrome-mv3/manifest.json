@@ -1,0 +1,55 @@
+{
+  "manifest_version": 3,
+  "name": "Outfitr Scan",
+  "description": "Scan any product image against your wardrobe",
+  "version": "1.0.0",
+  "icons": {
+    "128": "/icons/icon.png"
+  },
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://outfitr.app/*"
+  ],
+  "action": {
+    "default_title": "Outfitr Scan",
+    "default_icon": "/icons/icon.png",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://outfitr.app/extension/connect*",
+        "http://localhost:3000/extension/connect*"
+      ],
+      "js": [
+        "content-auth.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "options.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}

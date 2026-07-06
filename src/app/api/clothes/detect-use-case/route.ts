@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     const base64Data = buffer.toString('base64');
     const mimeType = file.type;
 
-    const response = await callGeminiWithFallback(apiKey, {
+    const { response } = await callGeminiWithFallback(apiKey, {
       contents: [
         {
           parts: [

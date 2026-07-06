@@ -90,7 +90,7 @@ Items diverted: ${itemsDiverted}
 CO₂ saved: ${impact.co2_saved_kg}kg | Water saved: ${impact.water_saved_l.toLocaleString()}L | Trees equivalent: ${impact.equivalent_trees}
 Actions: ${byAction.donate} donations, ${byAction.sell} resales, ${byAction.recycle} recyclings`;
 
-        const response = await callGeminiWithFallback(geminiKey, {
+        const { response } = await callGeminiWithFallback(geminiKey, {
           contents: [{ parts: [{ text: prompt }] }],
         }, 0);
         if (response?.ok) {

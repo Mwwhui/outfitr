@@ -126,7 +126,7 @@ Respond with ONLY valid JSON (no markdown, no extra text):
       });
     }
 
-    const response = await callGeminiWithFallback(apiKey, {
+    const { response } = await callGeminiWithFallback(apiKey, {
       contents: [{ parts }],
     });
 

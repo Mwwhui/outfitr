@@ -542,7 +542,7 @@ Return ONLY valid JSON (no markdown, no extra text):
 }`;
 
     // Gemini with model fallback (flash-lite → flash → statistical)
-    const response = await callGeminiWithFallback(apiKey, {
+    const { response } = await callGeminiWithFallback(apiKey, {
       contents: [{ parts: [{ text: prompt }] }],
     });
     let result: OutfitDNA | null = null;

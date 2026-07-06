@@ -499,8 +499,8 @@ Rules:
 
       // Fire both Gemini calls in parallel
       const [seasonalResponse, shoppingResponse] = await Promise.all([
-        callGeminiWithFallback(geminiKey, { contents: [{ parts: [{ text: seasonalPrompt }] }] }, 0),
-        callGeminiWithFallback(geminiKey, { contents: [{ parts: [{ text: shoppingPrompt }] }] }, 0),
+        callGeminiWithFallback(geminiKey, { contents: [{ parts: [{ text: seasonalPrompt }] }] }, 0).then(r => r.response),
+        callGeminiWithFallback(geminiKey, { contents: [{ parts: [{ text: shoppingPrompt }] }] }, 0).then(r => r.response),
       ]);
 
       // Handle seasonal response
