@@ -23,6 +23,8 @@ import {
   drawBoundingBoxes,
   canvasToBlob,
   compressImage,
+  removeImageBackground,
+  compressForGemini,
   scaleDetections,
   smoothBoxes,
   checkBrightnessFromThumb,
@@ -98,6 +100,7 @@ export function useCameraScanner(): CameraScannerReturn {
   const targetBoxesRef = useRef<OverlayBox[] | null>(null);
   const smoothBoxesRef = useRef<OverlayBox[] | null>(null);
   const prevItemCountRef = useRef(0);
+  const bgProcessedRef = useRef<Blob | null>(null);
 
   const [stablePct, setStablePct] = useState(0);
 
@@ -516,6 +519,7 @@ export function useCameraScanner(): CameraScannerReturn {
     prevOverlayKeyRef.current = '';
     targetBoxesRef.current = null;
     smoothBoxesRef.current = null;
+    bgProcessedRef.current = null;
   };
 
   const startCamera = useCallback(async () => {
@@ -632,41 +636,51 @@ export function useCameraScanner(): CameraScannerReturn {
     setCapturing(false);
     setRefining(true);
 
-    // Background: fire YOLO + Gemini, then update items with better results
+    // Background: start bg removal in parallel for detection + save
+    bgProcessedRef.current = null;
     const captureFile = new File([fullFrameBlob], 'capture.jpg', { type: 'image/jpeg' });
 
-    const fetchGeminiWithRetry = async (): Promise<{ color: string } | null> => {
-      const fd = new FormData();
-      fd.append('file', captureFile);
-      try {
-        const res = await fetchWithTimeout('/api/clothes/detect-color', {
-          method: 'POST', body: fd,
-        }, GEMINI_TIMEOUT_MS);
-        if (res.ok) return res.json();
-        // Retry once on non-200 (503, etc.)
-        await new Promise(r => setTimeout(r, 1000));
-        const retry = await fetchWithTimeout('/api/clothes/detect-color', {
-          method: 'POST', body: fd,
-        }, GEMINI_TIMEOUT_MS);
-        if (retry.ok) return retry.json();
-        return null;
-      } catch {
-        return null;
-      }
-    };
+    const detectFilePromise = removeImageBackground(fullFrameBlob)
+      .then(bgBlob => {
+        bgProcessedRef.current = bgBlob;
+        return compressForGemini(bgBlob);
+      })
+      .then(bgCompressed => new File([bgCompressed], 'capture-bg.jpg', { type: 'image/jpeg' }))
+      .catch(() => captureFile);
 
-    const fdYolo = new FormData();
-    fdYolo.append('file', captureFile);
-    const fdUseCase = new FormData();
-    fdUseCase.append('file', captureFile);
+    // When bg-removed file is ready, run detection with it
+    detectFilePromise.then(detectFile => {
+      const fdYolo = new FormData();
+      fdYolo.append('file', detectFile);
+      const fdUseCase = new FormData();
+      fdUseCase.append('file', detectFile);
 
-    Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
-        method: 'POST', body: fdYolo,
-      }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetchGeminiWithRetry(),
-      fetchWithTimeout('/api/clothes/detect-use-case', {
-        method: 'POST', body: fdUseCase,
+      const fetchGeminiWithRetry = async (): Promise<{ color: string } | null> => {
+        const fd = new FormData();
+        fd.append('file', detectFile);
+        try {
+          const res = await fetchWithTimeout('/api/clothes/detect-color', {
+            method: 'POST', body: fd,
+          }, GEMINI_TIMEOUT_MS);
+          if (res.ok) return res.json();
+          await new Promise(r => setTimeout(r, 1000));
+          const retry = await fetchWithTimeout('/api/clothes/detect-color', {
+            method: 'POST', body: fd,
+          }, GEMINI_TIMEOUT_MS);
+          if (retry.ok) return retry.json();
+          return null;
+        } catch {
+          return null;
+        }
+      };
+
+      Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
+          method: 'POST', body: fdYolo,
+        }).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetchGeminiWithRetry(),
+        fetchWithTimeout('/api/clothes/detect-use-case', {
+          method: 'POST', body: fdUseCase,
       }, GEMINI_TIMEOUT_MS).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([autoData, geminiData, useCaseData]) => {
       const autoColor = geminiData?.color || autoData?.color || '';
@@ -717,7 +731,9 @@ export function useCameraScanner(): CameraScannerReturn {
           };
         });
       });
-    }).catch(() => { /* background — ignore */ }).finally(() => setRefining(false));
+    });
+    })
+    .catch(() => { /* background — ignore */ }).finally(() => setRefining(false));
   }
 
   function handleRetake() {
@@ -732,7 +748,8 @@ export function useCameraScanner(): CameraScannerReturn {
     if (toSave.length === 0) return;
     setSaving(true);
 
-    const fullUrl = URL.createObjectURL(capturedFrame);
+    const frame = bgProcessedRef.current ?? capturedFrame;
+    const fullUrl = URL.createObjectURL(frame);
     const fullImg = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
