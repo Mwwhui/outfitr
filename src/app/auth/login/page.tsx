@@ -111,12 +111,21 @@ export default function LoginPage() {
 
         {/* Register redirect using router.push */}
         <div className="text-center mt-6">
-          <p className="text-gray-600 mb-2">Don’t have an account?</p>
+          <p className="text-gray-600 mb-2">Don&rsquo;t have an account?</p>
           <button
             onClick={() => router.push('/auth/register')}
             className="text-blue-600 hover:underline"
           >
             Register here
+          </button>
+        </div>
+
+        <div className="text-center mt-4">
+          <button
+            onClick={() => router.push('/auth/forgot-password')}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Forgot your password?
           </button>
         </div>
       </div>

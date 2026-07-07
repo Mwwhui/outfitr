@@ -35,8 +35,7 @@ export default function ClientLayout({
 
   // Auth pages: no sidebar, full-screen centered
   const hideSidebar =
-    pathname === '/auth/login' ||
-    pathname === '/auth/register' ||
+    pathname.startsWith('/auth/') ||
     pathname.startsWith('/extension/');
 
   return (

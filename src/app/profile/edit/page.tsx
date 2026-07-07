@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
-import { useUpdateProfile } from "@/hooks/mutations/profile";
+import { useUpdateProfile, useChangePassword } from "@/hooks/mutations/profile";
 import toast from "react-hot-toast";
 
 type FormErrors = Partial<Record<keyof typeof INITIAL_FORM, string>>;
@@ -34,23 +34,32 @@ export default function EditProfilePage() {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const initRef = useRef(false);
   const updateProfile = useUpdateProfile(session?.user?.id);
+  const changePassword = useChangePassword();
+
+  const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
+  const [pwSaving, setPwSaving] = useState(false);
+  const [hasPassword, setHasPassword] = useState(true);
 
   const { data: profileData, isLoading: profileLoading, isError: profileError } = useQuery({
     queryKey: ['profile', session?.user?.id],
-    queryFn: async (): Promise<typeof INITIAL_FORM> => {
+    queryFn: async () => {
       const res = await fetch("/api/user/profile");
       if (!res.ok) throw new Error("Failed to load profile");
       const data = await res.json();
       const u = data.user;
       return {
-        username: u.username || "",
-        email: u.email || "",
-        first_name: u.first_name || "",
-        last_name: u.last_name || "",
-        dob: u.dob || "",
-        nationality: u.nationality || "",
-        gender: u.gender || "",
-        contact_no: u.contact_no || "",
+        form: {
+          username: u.username || "",
+          email: u.email || "",
+          first_name: u.first_name || "",
+          last_name: u.last_name || "",
+          dob: u.dob || "",
+          nationality: u.nationality || "",
+          gender: u.gender || "",
+          contact_no: u.contact_no || "",
+        },
+        hasPassword: data.has_password,
       };
     },
     enabled: status === "authenticated" && !!session?.user?.id,
@@ -62,8 +71,9 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (profileData && !initRef.current) {
       initRef.current = true;
-      setForm(profileData);
-      setOriginalForm(profileData);
+      setForm(profileData.form);
+      setOriginalForm(profileData.form);
+      setHasPassword(profileData.hasPassword);
     }
   }, [profileData]);
 
@@ -143,6 +153,42 @@ export default function EditProfilePage() {
     setTouched((prev) => ({ ...prev, [name]: true }));
     const fieldErrors = validate();
     setErrors((prev) => ({ ...prev, [name]: fieldErrors[name] }));
+  };
+
+  const validatePw = useCallback((): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    if (hasPassword && !pwForm.current_password) errs.current_password = "Current password is required";
+    if (!pwForm.new_password) errs.new_password = "New password is required";
+    else if (pwForm.new_password.length < 8) errs.new_password = "Must be at least 8 characters";
+    if (pwForm.new_password !== pwForm.confirm_password) errs.confirm_password = "Passwords do not match";
+    return errs;
+  }, [pwForm, hasPassword]);
+
+  const handlePwChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setPwForm((prev) => ({ ...prev, [name]: value }));
+    setPwErrors((prev) => ({ ...prev, [name]: "" }));
+  };
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs = validatePw();
+    setPwErrors(errs);
+    if (Object.values(errs).some(Boolean)) return;
+
+    setPwSaving(true);
+    try {
+      await changePassword.mutateAsync({
+        ...(hasPassword ? { current_password: pwForm.current_password } : {}),
+        new_password: pwForm.new_password,
+      });
+      setPwForm({ current_password: "", new_password: "", confirm_password: "" });
+      toast.success(hasPassword ? "Password changed successfully!" : "Password set successfully!");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setPwSaving(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -338,6 +384,87 @@ export default function EditProfilePage() {
               <p className="text-red-500 text-xs mt-1">{errors.contact_no}</p>
             )}
           </div>
+
+          <hr className="border-slate-200" />
+
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800 mb-1">
+              {hasPassword ? "Change Password" : "Set Password"}
+            </h2>
+            <p className="text-xs text-slate-400 mb-4">
+              {hasPassword
+                ? "Leave blank if you don&apos;t want to change it"
+                : "You signed up with Google. Set a password to also log in with email."}
+            </p>
+          </div>
+
+          {hasPassword && (
+            <div>
+              <label className="block text-xs text-slate-600 mb-1">Current Password</label>
+              <input
+                type="password"
+                name="current_password"
+                className={`${inputBase} ${pwErrors.current_password ? "border-red-400 focus:ring-red-400/70 bg-red-50" : ""}`}
+                placeholder="Enter current password"
+                value={pwForm.current_password}
+                onChange={handlePwChange}
+              />
+              {pwErrors.current_password && (
+                <p className="text-red-500 text-xs mt-1">{pwErrors.current_password}</p>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-600 mb-1">New Password</label>
+              <input
+                type="password"
+                name="new_password"
+                className={`${inputBase} ${pwErrors.new_password ? "border-red-400 focus:ring-red-400/70 bg-red-50" : ""}`}
+                placeholder="Min. 8 characters"
+                value={pwForm.new_password}
+                onChange={handlePwChange}
+              />
+              {pwErrors.new_password && (
+                <p className="text-red-500 text-xs mt-1">{pwErrors.new_password}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs text-slate-600 mb-1">Confirm New Password</label>
+              <input
+                type="password"
+                name="confirm_password"
+                className={`${inputBase} ${pwErrors.confirm_password ? "border-red-400 focus:ring-red-400/70 bg-red-50" : ""}`}
+                placeholder="Re-enter new password"
+                value={pwForm.confirm_password}
+                onChange={handlePwChange}
+              />
+              {pwErrors.confirm_password && (
+                <p className="text-red-500 text-xs mt-1">{pwErrors.confirm_password}</p>
+              )}
+            </div>
+          </div>
+
+          {(pwForm.current_password || !hasPassword) && pwForm.new_password && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleSavePassword}
+                disabled={pwSaving}
+                className="px-5 py-2 rounded-lg bg-[#0f172a] text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+              >
+                {pwSaving ? (
+                  <>
+                    <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    {hasPassword ? "Changing..." : "Setting..."}
+                  </>
+                ) : (
+                  hasPassword ? "Change Password" : "Set Password"
+                )}
+              </button>
+            </div>
+          )}
 
           <div className="pt-4 flex flex-col sm:flex-row gap-3 justify-end">
             <button
