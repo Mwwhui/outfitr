@@ -2,11 +2,17 @@ import type { ScanResult } from '../../lib/types';
 import { getToken, setToken } from '../../lib/auth';
 
 declare const __APP_BASE__: string;
+declare const chrome: any;
 
 const $ = (id: string) => document.getElementById(id)!;
 
 let ringAnimFrame = 0;
-function animateRing(el: SVGCircleElement, from: number, to: number, duration: number) {
+function animateRing(
+  el: SVGCircleElement,
+  from: number,
+  to: number,
+  duration: number,
+) {
   cancelAnimationFrame(ringAnimFrame);
   const start = performance.now();
   const step = (now: number) => {
@@ -26,7 +32,9 @@ const STEPS = [
 ];
 
 function show(id: string) {
-  document.querySelectorAll('.state').forEach((el) => el.classList.add('hidden'));
+  document
+    .querySelectorAll('.state')
+    .forEach((el) => el.classList.add('hidden'));
   $(id).classList.remove('hidden');
 }
 
@@ -48,10 +56,18 @@ function renderResult(r: ScanResult) {
 
   ($('score-text') as HTMLSpanElement).textContent = String(r.score);
   const vt = $('verdict-text') as HTMLSpanElement;
-  vt.textContent = r.verdict === 'worth_it' ? 'WORTH IT'
-    : r.verdict === 'consider' ? 'CONSIDER' : 'SKIP';
-  vt.style.color = r.verdict === 'worth_it' ? '#16a34a'
-    : r.verdict === 'consider' ? '#ea580c' : '#dc2626';
+  vt.textContent =
+    r.verdict === 'worth_it'
+      ? 'WORTH IT'
+      : r.verdict === 'consider'
+        ? 'CONSIDER'
+        : 'SKIP';
+  vt.style.color =
+    r.verdict === 'worth_it'
+      ? '#16a34a'
+      : r.verdict === 'consider'
+        ? '#ea580c'
+        : '#dc2626';
 
   ($('one-liner') as HTMLElement).textContent = r.one_liner;
 
@@ -97,11 +113,16 @@ $('connect-btn').addEventListener('click', async () => {
   $('stuck-warning-popup').classList.add('hidden');
 
   // Save the active tab so we can bounce back after connection
-  const [originalTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [originalTab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
   const originalTabId = originalTab?.id;
 
   // Open the connect tab and track its ID
-  const connectTab = await chrome.tabs.create({ url: `${__APP_BASE__}/extension/connect` });
+  const connectTab = await chrome.tabs.create({
+    url: `${__APP_BASE__}/extension/connect`,
+  });
   const connectTabId = connectTab.id;
 
   // Poll for token to be saved
@@ -111,7 +132,11 @@ $('connect-btn').addEventListener('click', async () => {
     getToken().then((token) => {
       if (token) {
         // Bounce back: close connect tab, focus the page the user was on
-        chrome.runtime.sendMessage({ type: 'CLOSE_CONNECT_TAB', connectTabId, originalTabId });
+        chrome.runtime.sendMessage({
+          type: 'CLOSE_CONNECT_TAB',
+          connectTabId,
+          originalTabId,
+        });
         checkState();
       } else if (++attempts < maxAttempts) {
         setTimeout(poll, 500);
@@ -134,7 +159,7 @@ $('view-full-btn').addEventListener('click', async () => {
 });
 
 // Settings links
-[$('settings-link'), $('settings-link2')].forEach(el => {
+[$('settings-link'), $('settings-link2')].forEach((el) => {
   el.addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
   });
@@ -149,7 +174,13 @@ async function checkState() {
   }
 
   const poll = async () => {
-    const data = await chrome.storage.session.get(['scanningStatus', 'lastResult', 'lastError', 'progressStep', 'startedAt']);
+    const data = await chrome.storage.session.get([
+      'scanningStatus',
+      'lastResult',
+      'lastError',
+      'progressStep',
+      'startedAt',
+    ]);
     if (data.scanningStatus === 'scanning') {
       show('state-connecting');
       const step = Number(data.progressStep ?? 0);
@@ -157,7 +188,8 @@ async function checkState() {
       const elapsed = Math.floor((Date.now() - startedAt) / 1000);
 
       // Show scanning info
-      ($('connecting-msg') as HTMLElement).textContent = STEPS[Math.min(step, STEPS.length - 1)];
+      ($('connecting-msg') as HTMLElement).textContent =
+        STEPS[Math.min(step, STEPS.length - 1)];
       const elapsedEl = $('scanning-elapsed') as HTMLElement;
       elapsedEl.classList.remove('hidden');
       elapsedEl.textContent = `${elapsed}s`;
@@ -165,7 +197,8 @@ async function checkState() {
       // Update step dots
       const dots = document.querySelectorAll('.step-dots .dot');
       dots.forEach((dot, i) => {
-        (dot as HTMLElement).className = 'dot' + (i < step ? ' done' : i === step ? ' active' : '');
+        (dot as HTMLElement).className =
+          'dot' + (i < step ? ' done' : i === step ? ' active' : '');
       });
       $('step-dots').classList.remove('hidden');
 

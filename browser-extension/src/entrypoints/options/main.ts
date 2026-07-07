@@ -1,4 +1,5 @@
 import { getToken, setToken, clearToken } from '../../lib/auth';
+declare const chrome: any;
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -42,10 +43,12 @@ $('auto-connect-toggle').addEventListener('change', async (e) => {
 });
 
 // Load saved toggle state
-chrome.storage.local.get('autoConnect').then((data) => {
-  ($('auto-connect-toggle') as HTMLInputElement).checked =
-    data.autoConnect !== false;
-});
+chrome.storage.local
+  .get('autoConnect')
+  .then((data: { autoConnect: boolean }) => {
+    ($('auto-connect-toggle') as HTMLInputElement).checked =
+      data.autoConnect !== false;
+  });
 
 // Disconnect
 $('disconnect-btn').addEventListener('click', async () => {

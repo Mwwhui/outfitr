@@ -1,7 +1,11 @@
 import { defineContentScript } from 'wxt/sandbox';
+declare const chrome: any;
 
 export default defineContentScript({
-  matches: ['*://outfitr.app/extension/connect*', '*://localhost:3000/extension/connect*'],
+  matches: [
+    '*://outfitr.app/extension/connect*',
+    '*://localhost:3000/extension/connect*',
+  ],
   main() {
     let attempts = 0;
     const maxAttempts = 30;
@@ -14,7 +18,10 @@ export default defineContentScript({
         const token = el.dataset.token;
         delete el.dataset.token;
         try {
-          const response = await chrome.runtime.sendMessage({ type: 'AUTH_TOKEN', token });
+          const response = await chrome.runtime.sendMessage({
+            type: 'AUTH_TOKEN',
+            token,
+          });
           if (response?.success) return;
         } catch (e) {
           console.error('[content-auth] sendMessage failed:', e);

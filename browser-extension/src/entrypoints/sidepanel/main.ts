@@ -1,10 +1,16 @@
 import type { ScanResult } from '../../lib/types';
 import { getToken } from '../../lib/auth';
 
+declare const chrome: any;
 const $ = (id: string) => document.getElementById(id)!;
 
 let ringAnimFrame = 0;
-function animateRing(el: SVGCircleElement, from: number, to: number, duration: number) {
+function animateRing(
+  el: SVGCircleElement,
+  from: number,
+  to: number,
+  duration: number,
+) {
   cancelAnimationFrame(ringAnimFrame);
   const start = performance.now();
   const step = (now: number) => {
@@ -67,7 +73,8 @@ function renderResult(r: ScanResult) {
   $('state-result').classList.remove('hidden');
 
   // --- Score ring (dynamic color, JS animation) ---
-  const scoreColor = r.score >= 70 ? '#22c55e' : r.score >= 40 ? '#f97316' : '#ef4444';
+  const scoreColor =
+    r.score >= 70 ? '#22c55e' : r.score >= 40 ? '#f97316' : '#ef4444';
   const circumference = 326.7;
   const offset = circumference - (r.score / 100) * circumference;
   const circle = $('sc-circle') as unknown as SVGCircleElement;
@@ -76,7 +83,12 @@ function renderResult(r: ScanResult) {
   animateRing(circle, circumference, offset, 800);
   ($('sc-text') as HTMLSpanElement).textContent = String(r.score);
   const vt = $('sc-verdict') as HTMLSpanElement;
-  vt.textContent = r.verdict === 'worth_it' ? 'WORTH IT' : r.verdict === 'consider' ? 'CONSIDER' : 'SKIP';
+  vt.textContent =
+    r.verdict === 'worth_it'
+      ? 'WORTH IT'
+      : r.verdict === 'consider'
+        ? 'CONSIDER'
+        : 'SKIP';
   vt.style.color = scoreColor;
 
   ($('sc-one-liner') as HTMLElement).textContent = r.one_liner;
@@ -100,27 +112,45 @@ function renderResult(r: ScanResult) {
   const bars = [
     { key: 'gap_fill', label: 'Gap Fill', value: r.breakdown.gap_fill },
     { key: 'color_fit', label: 'Color Fit', value: r.breakdown.color_fit },
-    { key: 'similarity_risk', label: 'Similarity Risk', value: r.breakdown.similarity_risk },
-    { key: 'outfit_potential', label: 'Outfit Pot.', value: r.breakdown.outfit_potential },
-    { key: 'versatility', label: 'Versatility', value: r.breakdown.versatility },
+    {
+      key: 'similarity_risk',
+      label: 'Similarity Risk',
+      value: r.breakdown.similarity_risk,
+    },
+    {
+      key: 'outfit_potential',
+      label: 'Outfit Pot.',
+      value: r.breakdown.outfit_potential,
+    },
+    {
+      key: 'versatility',
+      label: 'Versatility',
+      value: r.breakdown.versatility,
+    },
   ];
-  ($('breakdown-bars') as HTMLElement).innerHTML = bars.map((b) => `
+  ($('breakdown-bars') as HTMLElement).innerHTML = bars
+    .map(
+      (b) => `
     <div class="bar-row">
       <span class="bar-label">${b.label}</span>
       <div class="bar-track">
         <div class="bar-fill" style="width:${b.value}%;background:${barColors[b.key] || '#000'}"></div>
       </div>
       <span class="bar-value">${b.value}</span>
-    </div>`).join('');
+    </div>`,
+    )
+    .join('');
 
   // --- Similar items (thumbs + name) ---
   if (r.similar_items?.length > 0) {
     $('similar-section').classList.remove('hidden');
     ($('similar-list') as HTMLElement).innerHTML = r.similar_items
-      .map((s) => `<div class="thumb-item">
+      .map(
+        (s) => `<div class="thumb-item">
         <div class="thumb">${s.image_url ? `<img src="${s.image_url}" alt="${s.name}" />` : s.name[0]}</div>
         <span class="thumb-label">${s.name}</span>
-      </div>`)
+      </div>`,
+      )
       .join('');
   }
 
@@ -133,18 +163,23 @@ function renderResult(r: ScanResult) {
         <p class="ghost-warning-text">You already own similar items you rarely wear</p>
       </div>
       <div class="ghost-scroll">
-        ${r.ghost_items.map(g => `
+        ${r.ghost_items
+          .map(
+            (g) => `
           <div class="ghost-item-card">
             <div class="ghost-thumb-wrap">
-              ${g.image_url
-                ? `<img src="${g.image_url}" alt="${g.name}" class="ghost-thumb-img" />`
-                : `<div class="ghost-thumb-placeholder">👕</div>`
+              ${
+                g.image_url
+                  ? `<img src="${g.image_url}" alt="${g.name}" class="ghost-thumb-img" />`
+                  : `<div class="ghost-thumb-placeholder">👕</div>`
               }
             </div>
             <span class="gi-name">${g.name}</span>
             <span class="gi-wear">worn ${g.wear_count}x</span>
           </div>
-        `).join('')}
+        `,
+          )
+          .join('')}
       </div>`;
   }
 
@@ -164,20 +199,23 @@ function renderResult(r: ScanResult) {
     }
 
     ($('pairings-list') as HTMLElement).innerHTML = r.suggested_pairings
-      .map((p) => `<div class="pairing-card">
+      .map(
+        (p) => `<div class="pairing-card">
         <div class="pairing-thumb">
-          ${p.image_url
-            ? `<img src="${p.image_url}" alt="${p.name}" />`
-            : p.color
-              ? `<span class="pairing-color-dot" style="background:${p.color}"></span>`
-              : `<span class="pairing-color-dot" style="background:#e3e2e2"></span>`
+          ${
+            p.image_url
+              ? `<img src="${p.image_url}" alt="${p.name}" />`
+              : p.color
+                ? `<span class="pairing-color-dot" style="background:${p.color}"></span>`
+                : `<span class="pairing-color-dot" style="background:#e3e2e2"></span>`
           }
         </div>
         <div class="pairing-info">
           <p class="pairing-name">${p.name}</p>
           <p class="pairing-type">${p.type}</p>
         </div>
-      </div>`)
+      </div>`,
+      )
       .join('');
   }
 
@@ -191,13 +229,21 @@ function renderResult(r: ScanResult) {
 
     let vColor: string, vIcon: string, vLabel: string;
     if (cpw.verdict === 'below_average') {
-      vColor = '#22c55e'; vIcon = '✓'; vLabel = 'Better than average';
+      vColor = '#22c55e';
+      vIcon = '✓';
+      vLabel = 'Better than average';
     } else if (cpw.verdict === 'similar') {
-      vColor = '#f97316'; vIcon = '!'; vLabel = 'Similar to average';
+      vColor = '#f97316';
+      vIcon = '!';
+      vLabel = 'Similar to average';
     } else if (cpw.verdict === 'above_average') {
-      vColor = '#ef4444'; vIcon = '⚠'; vLabel = 'Higher than average';
+      vColor = '#ef4444';
+      vIcon = '⚠';
+      vLabel = 'Higher than average';
     } else {
-      vColor = '#9ca3af'; vIcon = '?'; vLabel = 'Unknown';
+      vColor = '#9ca3af';
+      vIcon = '?';
+      vLabel = 'Unknown';
     }
 
     ($('cpw-content') as HTMLElement).innerHTML = `
@@ -229,7 +275,7 @@ function renderResult(r: ScanResult) {
 
     let warningHtml = '';
     if (b.flag === 'over_budget' && b.wardrobe_average > 0) {
-      const ratio = Math.round(b.item_price / b.wardrobe_average * 10) / 10;
+      const ratio = Math.round((b.item_price / b.wardrobe_average) * 10) / 10;
       warningHtml = `<div class="budget-warning">This is ${ratio}× your average item price.</div>`;
     }
 
@@ -258,7 +304,12 @@ function showReady() {
 }
 
 $('scan-another-btn').addEventListener('click', async () => {
-  await chrome.storage.session.remove(['lastResult', 'lastError', 'progressStep', 'startedAt']);
+  await chrome.storage.session.remove([
+    'lastResult',
+    'lastError',
+    'progressStep',
+    'startedAt',
+  ]);
   await chrome.storage.session.set({ scanningStatus: 'ready' });
   showReady();
 });
@@ -266,7 +317,13 @@ $('scan-another-btn').addEventListener('click', async () => {
 async function init() {
   // Poll for state changes
   const poll = async () => {
-    const data = await chrome.storage.session.get(['scanningStatus', 'lastResult', 'lastError', 'progressStep', 'startedAt']);
+    const data = await chrome.storage.session.get([
+      'scanningStatus',
+      'lastResult',
+      'lastError',
+      'progressStep',
+      'startedAt',
+    ]);
     if (data.scanningStatus === 'scanning') {
       $('state-loading').classList.remove('hidden');
       $('state-error').classList.add('hidden');
