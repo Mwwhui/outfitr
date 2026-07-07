@@ -16,6 +16,7 @@ import SlotDropRow from '../components/SlotDropRow';
 import Button from '../components/Button';
 import OutfitSuggestionCard from '../components/OutfitSuggestionCard';
 import ConfirmModal from '../components/ConfirmModal';
+import TryOnPanel from '../components/TryOnPanel';
 import toast from 'react-hot-toast';
 import type {
   ClothingItem,
@@ -89,6 +90,13 @@ export default function PlannerPage() {
   const [planId, setPlanId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
+  const [tryOnVisible, setTryOnVisible] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('tryon-visible');
+    if (stored === 'false') setTryOnVisible(false);
+  }, []);
 
   // Suggestion panel state
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -154,6 +162,15 @@ export default function PlannerPage() {
       router.push('/auth/login');
     }
   }, [status, router]);
+
+  // Fetch user profile photo
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    fetch('/api/user/profile')
+      .then((r) => r.json())
+      .then((data) => setUserPhotoUrl(data.user?.profile_image_url ?? null))
+      .catch(() => {});
+  }, [status]);
 
   // Pre-fill slots from URL params (after clothes are loaded)
   useEffect(() => {
@@ -462,8 +479,12 @@ export default function PlannerPage() {
           </div>
         </div>
 
-        {/* MAIN LAYOUT: wardrobe left, slots right */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-6">
+        {/* MAIN LAYOUT: wardrobe left, slots center, try-on right */}
+        <div className={`grid grid-cols-1 gap-6 ${
+          tryOnVisible
+            ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)]'
+            : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]'
+        }`}>
           {/* LEFT: WARDROBE SIDEBAR */}
           <aside className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 max-h-[80vh] overflow-hidden">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 font-headline">
@@ -629,6 +650,36 @@ export default function PlannerPage() {
               </Button>
             </div>
           </section>
+
+          {/* RIGHT: TRY-ON PREVIEW */}
+          <aside className="lg:sticky lg:top-6 lg:self-start">
+            {/* Pill toggle */}
+            <button
+              onClick={() => {
+                const next = !tryOnVisible;
+                setTryOnVisible(next);
+                localStorage.setItem('tryon-visible', String(next));
+              }}
+              className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-600 transition ml-auto pr-1 pt-1"
+            >
+              <span className={tryOnVisible ? 'text-slate-400' : 'text-slate-300'}>Try-On</span>
+              <div className={`relative h-4 w-7 rounded-full transition-colors ${
+                tryOnVisible ? 'bg-black' : 'bg-slate-300'
+              }`}>
+                <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                  tryOnVisible ? 'translate-x-3.5' : 'translate-x-0.5'
+                }`} />
+              </div>
+            </button>
+
+            {tryOnVisible && (
+              <TryOnPanel
+                slots={slots}
+                userPhotoUrl={userPhotoUrl}
+                onPhotoUploaded={setUserPhotoUrl}
+              />
+            )}
+          </aside>
 
           {/* ── Inline Suggestion Panel ── */}
           {showSuggestions && (
