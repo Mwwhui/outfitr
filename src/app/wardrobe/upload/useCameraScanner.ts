@@ -295,7 +295,8 @@ export function useCameraScanner(): CameraScannerReturn {
         const fd = new FormData();
         fd.append('file', blob, 'scan.jpg');
         const res = await fetch(apiUrl, {
-          method: 'POST', body: fd,
+          method: 'POST',
+          body: fd,
           signal: AbortSignal.any([
             abortController.signal,
             AbortSignal.timeout(25000),
@@ -313,7 +314,9 @@ export function useCameraScanner(): CameraScannerReturn {
         console.error('[YOLO scan] fetch failed', err, 'URL:', apiUrl);
         fetchFailCountRef.current++;
         if (fetchFailCountRef.current >= 1) {
-          setCameraError('Detection service unavailable — try again later or upload from gallery');
+          setCameraError(
+            'Detection service unavailable — try again later or upload from gallery',
+          );
           stopCamera();
           return;
         }
@@ -366,13 +369,11 @@ export function useCameraScanner(): CameraScannerReturn {
     };
 
     const checkStability = (currentData: ImageData) => {
-      const reference =
-        stableRefFrameRef.current || prevFrameRef.current;
+      const reference = stableRefFrameRef.current || prevFrameRef.current;
       if (!reference) return;
       let diff = 0;
       for (let i = 0; i < currentData.data.length; i += 4) {
-        diff +=
-          Math.abs(currentData.data[i] - reference.data[i]) / 255;
+        diff += Math.abs(currentData.data[i] - reference.data[i]) / 255;
       }
       const avgDiff = diff / (currentData.data.length / 4);
       if (avgDiff < STABLE_DIFF_THRESHOLD) {
@@ -595,7 +596,11 @@ export function useCameraScanner(): CameraScannerReturn {
 
     // Build items from HSV instantly (no network needed)
     const hsvItems: EditItem[] = scaledItems.map((item, idx) => {
-      const hsvCandidates = dominantColorCandidatesFromCanvas(canvas, item.box, 3);
+      const hsvCandidates = dominantColorCandidatesFromCanvas(
+        canvas,
+        item.box,
+        3,
+      );
       const color = hsvCandidates[0] || '';
       const type = item.type || item.yolo_type || '';
       const seasonGuess = detectSeason(item.yolo_type, type);
@@ -621,7 +626,8 @@ export function useCameraScanner(): CameraScannerReturn {
 
     // Deduplicate names
     const nameFreq = new Map<string, number>();
-    for (const item of hsvItems) nameFreq.set(item.name, (nameFreq.get(item.name) || 0) + 1);
+    for (const item of hsvItems)
+      nameFreq.set(item.name, (nameFreq.get(item.name) || 0) + 1);
     const nameCounter = new Map<string, number>();
     for (const item of hsvItems) {
       const raw = item.name;
@@ -638,102 +644,147 @@ export function useCameraScanner(): CameraScannerReturn {
 
     // Background: start bg removal in parallel for detection + save
     bgProcessedRef.current = null;
-    const captureFile = new File([fullFrameBlob], 'capture.jpg', { type: 'image/jpeg' });
+    const captureFile = new File([fullFrameBlob], 'capture.jpg', {
+      type: 'image/jpeg',
+    });
 
     const detectFilePromise = removeImageBackground(fullFrameBlob)
-      .then(bgBlob => {
+      .then((bgBlob) => {
         bgProcessedRef.current = bgBlob;
         return compressForGemini(bgBlob);
       })
-      .then(bgCompressed => new File([bgCompressed], 'capture-bg.jpg', { type: 'image/jpeg' }))
+      .then(
+        (bgCompressed) =>
+          new File([bgCompressed], 'capture-bg.jpg', { type: 'image/jpeg' }),
+      )
       .catch(() => captureFile);
 
     // When bg-removed file is ready, run detection with it
-    detectFilePromise.then(detectFile => {
-      const fdYolo = new FormData();
-      fdYolo.append('file', detectFile);
-      const fdUseCase = new FormData();
-      fdUseCase.append('file', detectFile);
+    detectFilePromise
+      .then((detectFile) => {
+        const fdYolo = new FormData();
+        fdYolo.append('file', detectFile);
+        const fdUseCase = new FormData();
+        fdUseCase.append('file', detectFile);
 
-      const fetchGeminiWithRetry = async (): Promise<{ color: string } | null> => {
-        const fd = new FormData();
-        fd.append('file', detectFile);
-        try {
-          const res = await fetchWithTimeout('/api/clothes/detect-color', {
-            method: 'POST', body: fd,
-          }, GEMINI_TIMEOUT_MS);
-          if (res.ok) return res.json();
-          await new Promise(r => setTimeout(r, 1000));
-          const retry = await fetchWithTimeout('/api/clothes/detect-color', {
-            method: 'POST', body: fd,
-          }, GEMINI_TIMEOUT_MS);
-          if (retry.ok) return retry.json();
-          return null;
-        } catch {
-          return null;
-        }
-      };
+        const fetchGeminiWithRetry = async (): Promise<{
+          color: string;
+        } | null> => {
+          const fd = new FormData();
+          fd.append('file', detectFile);
+          try {
+            const res = await fetchWithTimeout(
+              '/api/clothes/detect-color',
+              {
+                method: 'POST',
+                body: fd,
+              },
+              GEMINI_TIMEOUT_MS,
+            );
+            if (res.ok) return res.json();
+            await new Promise((r) => setTimeout(r, 1000));
+            const retry = await fetchWithTimeout(
+              '/api/clothes/detect-color',
+              {
+                method: 'POST',
+                body: fd,
+              },
+              GEMINI_TIMEOUT_MS,
+            );
+            if (retry.ok) return retry.json();
+            return null;
+          } catch {
+            return null;
+          }
+        };
 
-      Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
-          method: 'POST', body: fdYolo,
-        }).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetchGeminiWithRetry(),
-        fetchWithTimeout('/api/clothes/detect-use-case', {
-          method: 'POST', body: fdUseCase,
-      }, GEMINI_TIMEOUT_MS).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([autoData, geminiData, useCaseData]) => {
-      const autoColor = geminiData?.color || autoData?.color || '';
-      const autoType = autoData?.type || '';
-      const geminiAvailable = !!geminiData?.color;
-      const detectedUseCase: string[] = useCaseData?.use_case || [];
+        Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
+            method: 'POST',
+            body: fdYolo,
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+          fetchGeminiWithRetry(),
+          fetchWithTimeout(
+            '/api/clothes/detect-use-case',
+            {
+              method: 'POST',
+              body: fdUseCase,
+            },
+            GEMINI_TIMEOUT_MS,
+          )
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+        ]).then(([autoData, geminiData, useCaseData]) => {
+          const autoColor = geminiData?.color || autoData?.color || '';
+          const autoType = autoData?.type || '';
+          const geminiAvailable = !!geminiData?.color;
+          const detectedUseCase: string[] = useCaseData?.use_case || [];
 
-      setEditItems(prev => {
-        if (!prev) return prev;
+          setEditItems((prev) => {
+            if (!prev) return prev;
 
-        // Apply use case detection to all items (batch items share same context)
-        const withUseCase = detectedUseCase.length > 0
-          ? prev.map(item => ({ ...item, useCase: detectedUseCase }))
-          : prev;
+            // Apply use case detection to all items (batch items share same context)
+            const withUseCase =
+              detectedUseCase.length > 0
+                ? prev.map((item) => ({ ...item, useCase: detectedUseCase }))
+                : prev;
 
-        // If no better color/type, just update use cases
-        if (!autoColor && !autoType) return withUseCase;
+            // If no better color/type, just update use cases
+            if (!autoColor && !autoType) return withUseCase;
 
-        return withUseCase.map((item, idx) => {
-          const hsvCandidates = dominantColorCandidatesFromCanvas(canvas, item.box, 3);
-          const perItemColor = hsvCandidates[0] || null;
-          const betterColor = autoColor || item.color;
-          const betterType = autoType || item.type;
-          const newAiSource = autoColor
-            ? (geminiAvailable ? "gemini" as const : "yolo" as const)
-            : undefined;
-          // Preserve existing aiColorSource if already set, otherwise use new one
-          const aiColorSource = item.aiColorSource || newAiSource;
-          const colorSource = aiColorSource || "hsv" as const;
-          const hasDisagreement = autoColor && perItemColor && autoColor !== perItemColor;
-          const seasonGuess = detectSeason(scaledItems[idx]?.yolo_type, betterType);
-          const desc = scaledItems[idx]?.yolo_type || betterType || '';
-          const itemName = [betterColor, desc]
-            .filter((s): s is string => !!s)
-            .map(title)
-            .join(' ');
-          return {
-            ...item,
-            name: itemName,
-            type: betterType,
-            color: betterColor || item.color,
-            season: seasonGuess || item.season,
-            colorCandidates: hasDisagreement
-              ? [betterColor, ...hsvCandidates.filter(c => c !== betterColor)].slice(0, 2)
-              : undefined,
-            colorSource,
-            aiColorSource,
-          };
+            return withUseCase.map((item, idx) => {
+              const hsvCandidates = dominantColorCandidatesFromCanvas(
+                canvas,
+                item.box,
+                3,
+              );
+              const perItemColor = hsvCandidates[0] || null;
+              const betterColor = autoColor || item.color;
+              const betterType = autoType || item.type;
+              const newAiSource = autoColor
+                ? geminiAvailable
+                  ? ('gemini' as const)
+                  : ('yolo' as const)
+                : undefined;
+              // Preserve existing aiColorSource if already set, otherwise use new one
+              const aiColorSource = item.aiColorSource || newAiSource;
+              const colorSource = aiColorSource || ('hsv' as const);
+              const hasDisagreement =
+                autoColor && perItemColor && autoColor !== perItemColor;
+              const seasonGuess = detectSeason(
+                scaledItems[idx]?.yolo_type,
+                betterType,
+              );
+              const desc = scaledItems[idx]?.yolo_type || betterType || '';
+              const itemName = [betterColor, desc]
+                .filter((s): s is string => !!s)
+                .map(title)
+                .join(' ');
+              return {
+                ...item,
+                name: itemName,
+                type: betterType,
+                color: betterColor || item.color,
+                season: seasonGuess || item.season,
+                colorCandidates: hasDisagreement
+                  ? [
+                      betterColor,
+                      ...hsvCandidates.filter((c) => c !== betterColor),
+                    ].slice(0, 2)
+                  : undefined,
+                colorSource,
+                aiColorSource,
+              };
+            });
+          });
         });
-      });
-    });
-    })
-    .catch(() => { /* background — ignore */ }).finally(() => setRefining(false));
+      })
+      .catch(() => {
+        /* background — ignore */
+      })
+      .finally(() => setRefining(false));
   }
 
   function handleRetake() {
