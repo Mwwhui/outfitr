@@ -47,11 +47,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
+    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-semibold text-center mb-6 text-black font-headline">
-          Login
-        </h1>
+        <div className="flex flex-col items-center mb-6">
+          <Image
+            src="/logo.png"
+            alt="Outfitr"
+            width={72}
+            height={72}
+            className="rounded-2xl"
+          />
+          <h1 className="text-2xl font-semibold mt-3 text-black font-headline">
+            Outfitr
+          </h1>
+          <p className="text-xs text-gray-500 mt-1">
+            Smarter Wardrobe, Smarter Choices
+          </p>
+        </div>
 
         {errorMsg && (
           <p className="text-center text-red-500 mb-4">{errorMsg}</p>

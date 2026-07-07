@@ -402,7 +402,7 @@ export function useAlerts() {
           if (!prevIds.has(alert.id) && (alert.severity === 'error' || alert.severity === 'warning')) {
             new Notification('Outfitr', {
               body: alert.message,
-              icon: '/favicon.ico',
+              icon: '/logo.png',
               tag: alert.id,
             });
           }

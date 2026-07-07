@@ -1,5 +1,13 @@
 # Outfitr
 
+<p align="center">
+  <img src="public/logo.png" alt="Outfitr" width="120" height="120" />
+</p>
+
+<p align="center">
+  <strong>Smarter Wardrobe, Smarter Choices.</strong>
+</p>
+
 Smart wardrobe app — manage clothing, plan outfits, take sustainable action, and try on virtually.
 
 ## Tech Stack
@@ -50,6 +58,7 @@ GOOGLE_CLIENT_SECRET=
 ### Supabase Setup
 
 Create the following buckets in Supabase Storage:
+
 - `user-photos` — user profile/try-on photos
 - `tryon-results` — cached try-on output images
 - `user-wishlist` — wishlist item images (future)
@@ -98,12 +107,14 @@ Load the built extension from `browser-extension/.output/chrome-mv3/` via `chrom
 ## Features
 
 ### Wardrobe Management
+
 - Add clothing items with auto-detection (YOLO + MobileNet)
 - Item detail/edit with color, material, season, use case
 - Filter by category, color, season, favorites
 - K-means wardrobe clustering
 
 ### AI Virtual Try-On
+
 - Multi-garment try-on using Replicate (`prunaai/p-image-try-on`)
 - Upload a user photo, select garments from wardrobe, preview the result
 - Download try-on results as PNG
@@ -111,6 +122,7 @@ Load the built extension from `browser-extension/.output/chrome-mv3/` via `chrom
 - Cached results (1hr in-memory + Supabase persistence)
 
 ### AI Features (Gemini)
+
 - **Scan-to-Buy** — evaluate purchase decisions against your existing wardrobe
 - **Outfit Suggestions** — AI-reasoned daily outfit recommendations
 - **Style DNA** — style analysis from wardrobe patterns
@@ -122,6 +134,7 @@ Load the built extension from `browser-extension/.output/chrome-mv3/` via `chrom
 - **Browser Extension** — scan products from any website
 
 ### Outfit Planning
+
 - Drag-and-drop outfit builder (planner) with 4-slot system (top, bottom, onepiece, outerwear)
 - Weather-aware suggestions
 - AI virtual try-on from the planner
@@ -129,6 +142,7 @@ Load the built extension from `browser-extension/.output/chrome-mv3/` via `chrom
 - Outfit combination scoring engine
 
 ### Home Dashboard
+
 - **Today's Ensemble** — AI outfit suggestion with weather/tags
 - **Weather Alert** — rain, temp drop, extreme heat alerts
 - **Today's Events** — Google Calendar events with occasion detection
@@ -144,6 +158,7 @@ Load the built extension from `browser-extension/.output/chrome-mv3/` via `chrom
 - **Browser notifications** for critical alerts
 
 ### Sustainability Hub (Pre-Loved)
+
 - Donate / Sell / Recycle / DIY actions
 - Partner directory with Leaflet map
 - Upcycling tutorials (accordion)
@@ -151,6 +166,7 @@ Load the built extension from `browser-extension/.output/chrome-mv3/` via `chrom
 - Partner-facing scan + fulfill flow
 
 ### Dashboard & Analytics
+
 - Wardrobe value (cost-per-wear)
 - Sustainability impact (CO₂, water, trees)
 - Category breakdown, top brands
@@ -159,6 +175,7 @@ Load the built extension from `browser-extension/.output/chrome-mv3/` via `chrom
 - Pledge activity timeline
 
 ### Profile & Account
+
 - Edit profile (username, name, DOB, gender, nationality, contact)
 - **Change password** — for email-registered users (requires current password)
 - **Set password** — for Google-registered users (set one for email login)
@@ -167,11 +184,11 @@ Load the built extension from `browser-extension/.output/chrome-mv3/` via `chrom
 
 ### Browser Extension (`browser-extension/`)
 
-| Page | Purpose |
-|------|---------|
-| Popup | Auth, connection status, compact scan results |
+| Page      | Purpose                                                                       |
+| --------- | ----------------------------------------------------------------------------- |
+| Popup     | Auth, connection status, compact scan results                                 |
 | Sidepanel | Full scan breakdown with score ring, bars, ghost items, pairings, CPW, budget |
-| Options | Auto-connect toggle, disconnect, quick links |
+| Options   | Auto-connect toggle, disconnect, quick links                                  |
 
 **Auto-connect flow:** Popup → open connect page → content script reads HMAC token from DOM → background saves → polling detects connection.
 

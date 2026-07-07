@@ -16,6 +16,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createElement } from "react";
 import { resend } from "@/lib/resend";
 import { render } from "react-email";
 import crypto from "crypto";
@@ -78,7 +79,7 @@ export async function POST(req: Request) {
     const userName = user.first_name || "there";
 
     const emailHtml = await render(
-      <PasswordReset userName={userName} resetLink={resetLink} />
+      createElement(PasswordReset, { userName, resetLink })
     );
 
     const { error: emailError } = await resend.emails.send({
