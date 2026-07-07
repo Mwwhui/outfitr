@@ -74,7 +74,7 @@ export async function GET() {
       console.error('Home alerts first item error:', firstItemError);
     }
 
-    const { data: totalItems, error: totalError } = await supabase
+    const { count: totalCount, error: totalError } = await supabase
       .from('clothes')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user_id)
@@ -86,7 +86,6 @@ export async function GET() {
     }
 
     const itemsAdded30d = (recentItems || []).length;
-    const totalCount = totalItems?.length ?? 0;
     const earliestDate = firstItem?.[0]?.created_at;
     const daysSinceFirstItem = earliestDate
       ? Math.max(1, (Date.now() - new Date(earliestDate).getTime()) / 86400000)
@@ -99,7 +98,7 @@ export async function GET() {
       pledges_total: (pledges || []).length,
       unused_items_count: (unusedItems || []).length,
       items_added_30d: itemsAdded30d,
-      total_items: totalCount,
+      total_items: totalCount ?? 0,
       months_active: Math.max(1, monthsActive),
     };
 
