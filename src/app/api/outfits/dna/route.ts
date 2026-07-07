@@ -661,25 +661,51 @@ Return ONLY valid JSON (no markdown, no extra text):
       }));
     }
 
-    // Add item IDs to never_tried for client-side dedup
+    // Add item IDs to never_tried, deduplicate, and filter against worn combos
     if (allClothes && result.never_tried?.length > 0) {
-      result.never_tried = result.never_tried.map((nt) => {
-        const itemA = allClothes.find(
-          (c) =>
-            c.name === nt.item_a ||
-            c.name.toLowerCase().includes(nt.item_a.toLowerCase()),
-        );
-        const itemB = allClothes.find(
-          (c) =>
-            c.name === nt.item_b ||
-            c.name.toLowerCase().includes(nt.item_b.toLowerCase()),
-        );
-        return {
-          ...nt,
-          item_a_id: itemA?.id || null,
-          item_b_id: itemB?.id || null,
-        };
-      });
+      // Build worn pairs from outfit history for filtering
+      const wornPairs = new Set<string>();
+      for (const outfit of outfitHistory) {
+        for (let i = 0; i < outfit.items.length; i++) {
+          for (let j = i + 1; j < outfit.items.length; j++) {
+            wornPairs.add(
+              [outfit.items[i].name, outfit.items[j].name].sort().join('|||'),
+            );
+          }
+        }
+      }
+
+      // Resolve names to IDs — prefer exact match, then fuzzy
+      const resolveItem = (name: string) => {
+        const exact = allClothes.find((c) => c.name === name);
+        if (exact) return exact;
+        const lower = name.toLowerCase();
+        const contains = allClothes.find((c) => c.name.toLowerCase().includes(lower));
+        if (contains) return contains;
+        return allClothes.find((c) => lower.includes(c.name.toLowerCase()));
+      };
+
+      const seenPairs = new Set<string>();
+      result.never_tried = result.never_tried
+        .map((nt) => {
+          const itemA = resolveItem(nt.item_a);
+          const itemB = resolveItem(nt.item_b);
+          return {
+            ...nt,
+            item_a_id: itemA?.id || null,
+            item_b_id: itemB?.id || null,
+          };
+        })
+        .filter((nt) => {
+          if (!nt.item_a_id || !nt.item_b_id) return false;
+          const nameKey = [nt.item_a_id, nt.item_b_id].sort().join('|||');
+          if (seenPairs.has(nameKey)) return false;
+          seenPairs.add(nameKey);
+          // Filter out already-worn combos
+          const wornKey = [nt.item_a, nt.item_b].sort().join('|||');
+          if (wornPairs.has(wornKey)) return false;
+          return true;
+        });
     }
 
     // Cache the result (7-day TTL)

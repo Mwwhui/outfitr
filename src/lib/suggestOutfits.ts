@@ -61,13 +61,13 @@ export function hasCompatibleUseCases(itemA: ClothingItem, itemB: ClothingItem):
   if (tagsA.length === 0 || tagsB.length === 0) return true;
   for (const tagA of tagsA) {
     const blocked = INCOMPATIBLE_USE_CASES[tagA];
-    if (blocked) {
-      for (const tagB of tagsB) {
-        if (blocked.includes(tagB)) return false;
+    for (const tagB of tagsB) {
+      if (!blocked || !blocked.includes(tagB)) {
+        return true;
       }
     }
   }
-  return true;
+  return false;
 }
 
 export function hasCompatibleSeasons(itemA: ClothingItem, itemB: ClothingItem): boolean {
@@ -398,12 +398,15 @@ function selectDiverse(scored: SuggestedOutfit[], maxCount: number): SuggestedOu
         const sim = jaccardSimilarity(ids, r.items.map(it => it.id));
         if (sim > maxSim) maxSim = sim;
       }
-      const adjusted = remaining[i].score * (1 - 0.3 * maxSim);
+      // Hard skip: exclude combos that share more than half their items
+      if (maxSim > 0.5) continue;
+      const adjusted = remaining[i].score * (1 - 0.5 * maxSim);
       if (adjusted > bestAdjusted) {
         bestAdjusted = adjusted;
         bestIdx = i;
       }
     }
+    if (bestAdjusted < 0) break; // no qualifying combo found
     result.push(remaining[bestIdx]);
     remaining.splice(bestIdx, 1);
   }
@@ -610,7 +613,7 @@ export function suggestOutfits(
       const key = s.items.map(i => i.id).sort().join(',');
       if (!seen.has(key)) { seen.add(key); deduped.push(s); }
     }
-    return selectDiverse(deduped, 3);
+    return selectDiverse(deduped, 5);
   }
 
   // No seeds — original flow

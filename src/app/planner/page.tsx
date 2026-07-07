@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
@@ -267,6 +267,19 @@ export default function PlannerPage() {
       [slot]: null,
     }));
   };
+
+  const handleRestoreOutfit = useCallback(
+    (slotIds: { top: string | null; bottom: string | null; onepiece: string | null; outerwear: string | null }) => {
+      const find = (id: string | null) => clothes.find((c) => c.id === id) || null;
+      setSlots({
+        top: find(slotIds.top),
+        bottom: find(slotIds.bottom),
+        onepiece: find(slotIds.onepiece),
+        outerwear: find(slotIds.outerwear),
+      });
+    },
+    [clothes],
+  );
 
   // Compute suggestions via API when panel opens or occasion/weather/mode changes
   useEffect(() => {
@@ -677,6 +690,7 @@ export default function PlannerPage() {
                 slots={slots}
                 userPhotoUrl={userPhotoUrl}
                 onPhotoUploaded={setUserPhotoUrl}
+                onRestoreOutfit={handleRestoreOutfit}
               />
             )}
           </aside>

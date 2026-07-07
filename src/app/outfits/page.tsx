@@ -285,6 +285,7 @@ export default function OutfitsPage() {
     'all' | 'favorites' | 'archived'
   >('all');
   const [dnaLoaded, setDnaLoaded] = useState(false);
+  const [favLoaded, setFavLoaded] = useState(false);
 
   const { data: freqData, isLoading: combosLoading } = useFrequentCombos(
     session?.user?.id,
@@ -413,12 +414,14 @@ export default function OutfitsPage() {
       const stored = localStorage.getItem('outfit_favorites');
       if (stored) setFavoriteKeys(new Set(JSON.parse(stored)));
     } catch {}
+    setFavLoaded(true);
   }, []);
 
-  // Persist favorite combos
+  // Persist favorite combos — only after initial load
   useEffect(() => {
+    if (!favLoaded) return;
     localStorage.setItem('outfit_favorites', JSON.stringify([...favoriteKeys]));
-  }, [favoriteKeys]);
+  }, [favoriteKeys, favLoaded]);
 
   // Load archived combos from localStorage
   useEffect(() => {
@@ -426,12 +429,14 @@ export default function OutfitsPage() {
       const stored = localStorage.getItem('outfit_archived');
       if (stored) setArchivedKeys(new Set(JSON.parse(stored)));
     } catch {}
+    setFavLoaded(true);
   }, []);
 
-  // Persist archived combos
+  // Persist archived combos — only after initial load
   useEffect(() => {
+    if (!favLoaded) return;
     localStorage.setItem('outfit_archived', JSON.stringify([...archivedKeys]));
-  }, [archivedKeys]);
+  }, [archivedKeys, favLoaded]);
 
   const usageRate =
     totalItems > 0 ? Math.round((uniqueCombos / totalItems) * 100) : 0;
@@ -482,28 +487,52 @@ export default function OutfitsPage() {
   const secondaryItems = useMemo(() => {
     if (!dna?.never_tried.length) return [];
     const bentoIds = new Set(bentoItem?.items.map((i) => i.id) || []);
-    return dna.never_tried
-      .filter((nt) => {
-        if (nt.item_a_id && bentoIds.has(nt.item_a_id)) return false;
-        if (nt.item_b_id && bentoIds.has(nt.item_b_id)) return false;
-        return true;
-      })
-      .slice(0, 4)
-      .map((nt) => {
-        const itemA =
-          clothes.find((c) => c.id === nt.item_a_id) ||
-          findClothByName(clothes, nt.item_a);
-        const itemB =
-          clothes.find((c) => c.id === nt.item_b_id) ||
-          findClothByName(clothes, nt.item_b);
-        const items = [itemA, itemB].filter(Boolean) as ClothingItem[];
-        return {
-          title: `${nt.item_a} × ${nt.item_b}`,
-          reason: nt.reason,
-          items,
-        };
+    const frequentComboKeys = new Set(
+      enrichedFrequentCombos.map((c) =>
+        c.items.map((i) => i.id).sort().join('|||'),
+      ),
+    );
+
+    const seenKeys = new Set<string>();
+    const result: Array<{
+      title: string;
+      reason: string;
+      items: ClothingItem[];
+    }> = [];
+
+    for (const nt of dna.never_tried) {
+      if (result.length >= 4) break;
+
+      const itemA =
+        clothes.find((c) => c.id === nt.item_a_id) ||
+        findClothByName(clothes, nt.item_a);
+      const itemB =
+        clothes.find((c) => c.id === nt.item_b_id) ||
+        findClothByName(clothes, nt.item_b);
+
+      if (!itemA || !itemB) continue;
+
+      // Filter: resolved items must not overlap with bento item
+      if (bentoIds.has(itemA.id) || bentoIds.has(itemB.id)) continue;
+
+      // Filter: must not match an already-worn frequent combo
+      const freqKey = [itemA.id, itemB.id].sort().join('|||');
+      if (frequentComboKeys.has(freqKey)) continue;
+
+      // Dedup: skip if same pair of items already shown
+      const pairKey = [itemA.id, itemB.id].sort().join('|||');
+      if (seenKeys.has(pairKey)) continue;
+      seenKeys.add(pairKey);
+
+      result.push({
+        title: `${nt.item_a} × ${nt.item_b}`,
+        reason: nt.reason,
+        items: [itemA, itemB],
       });
-  }, [dna, clothes, bentoItem]);
+    }
+
+    return result;
+  }, [dna, clothes, bentoItem, enrichedFrequentCombos]);
 
   // Impact Meter computations
   const suggestionItems = suggestions.flatMap((s) => s.items);
