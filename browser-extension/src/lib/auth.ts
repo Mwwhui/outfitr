@@ -1,5 +1,5 @@
 export async function getToken(): Promise<string | null> {
-  const { token } = await chrome.storage.local.get('token');
+  const { token } = await chrome.storage.local.get('token') as { token?: string };
   return token || null;
 }
 

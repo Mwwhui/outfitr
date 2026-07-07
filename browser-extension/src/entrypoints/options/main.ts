@@ -42,14 +42,19 @@ $('auto-connect-toggle').addEventListener('change', async (e) => {
 });
 
 // Load saved toggle state
-chrome.storage.local.get('autoConnect', (data) => {
-  ($('auto-connect-toggle') as HTMLInputElement).checked = data.autoConnect !== false;
+chrome.storage.local.get('autoConnect').then((data) => {
+  ($('auto-connect-toggle') as HTMLInputElement).checked =
+    data.autoConnect !== false;
 });
 
 // Disconnect
 $('disconnect-btn').addEventListener('click', async () => {
   await clearToken();
-  await chrome.storage.session.remove(['lastResult', 'lastError', 'scanningStatus']);
+  await chrome.storage.session.remove([
+    'lastResult',
+    'lastError',
+    'scanningStatus',
+  ]);
   updateStatus();
 });
 

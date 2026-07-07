@@ -48,7 +48,7 @@ export function extractPrice(): number | undefined {
 }
 
 export function setupPriceExtractor() {
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg: any, _sender: chrome.runtime.MessageSender, sendResponse: (data: any) => void) => {
     if (msg.type === 'EXTRACT_PRODUCT_DATA') {
       sendResponse({
         imageUrl: msg.imageUrl,

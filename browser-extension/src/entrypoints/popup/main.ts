@@ -36,7 +36,7 @@ function showError(msg: string) {
 }
 
 function renderResult(r: ScanResult) {
-  const ring = $('score-circle') as SVGCircleElement;
+  const ring = $('score-circle') as unknown as SVGCircleElement;
   const circumference = 326.7;
   const offset = circumference - (r.score / 100) * circumference;
 
@@ -148,47 +148,46 @@ async function checkState() {
     return;
   }
 
-  const poll = () => {
-    chrome.storage.session.get(['scanningStatus', 'lastResult', 'lastError', 'progressStep', 'startedAt'], (data) => {
-      if (data.scanningStatus === 'scanning') {
-        show('state-connecting');
-        const step = data.progressStep ?? 0;
-        const startedAt = data.startedAt ?? Date.now();
-        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+  const poll = async () => {
+    const data = await chrome.storage.session.get(['scanningStatus', 'lastResult', 'lastError', 'progressStep', 'startedAt']);
+    if (data.scanningStatus === 'scanning') {
+      show('state-connecting');
+      const step = Number(data.progressStep ?? 0);
+      const startedAt = Number(data.startedAt ?? Date.now());
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
 
-        // Show scanning info
-        ($('connecting-msg') as HTMLElement).textContent = STEPS[Math.min(step, STEPS.length - 1)];
-        const elapsedEl = $('scanning-elapsed') as HTMLElement;
-        elapsedEl.classList.remove('hidden');
-        elapsedEl.textContent = `${elapsed}s`;
+      // Show scanning info
+      ($('connecting-msg') as HTMLElement).textContent = STEPS[Math.min(step, STEPS.length - 1)];
+      const elapsedEl = $('scanning-elapsed') as HTMLElement;
+      elapsedEl.classList.remove('hidden');
+      elapsedEl.textContent = `${elapsed}s`;
 
-        // Update step dots
-        const dots = document.querySelectorAll('.step-dots .dot');
-        dots.forEach((dot, i) => {
-          (dot as HTMLElement).className = 'dot' + (i < step ? ' done' : i === step ? ' active' : '');
-        });
-        $('step-dots').classList.remove('hidden');
+      // Update step dots
+      const dots = document.querySelectorAll('.step-dots .dot');
+      dots.forEach((dot, i) => {
+        (dot as HTMLElement).className = 'dot' + (i < step ? ' done' : i === step ? ' active' : '');
+      });
+      $('step-dots').classList.remove('hidden');
 
-        // Stuck warning
-        if (elapsed > 30) {
-          $('stuck-warning-popup').classList.remove('hidden');
-        }
-
-        // Timeout after 90s
-        if (elapsed > 90) {
-          showError('Scan timed out. Please try again.');
-          return;
-        }
-
-        setTimeout(poll, 1000);
-      } else if (data.lastResult) {
-        renderResult(data.lastResult);
-      } else if (data.lastError) {
-        showError(data.lastError);
-      } else {
-        show('state-ready');
+      // Stuck warning
+      if (elapsed > 30) {
+        $('stuck-warning-popup').classList.remove('hidden');
       }
-    });
+
+      // Timeout after 90s
+      if (elapsed > 90) {
+        showError('Scan timed out. Please try again.');
+        return;
+      }
+
+      setTimeout(poll, 1000);
+    } else if (data.lastResult) {
+      renderResult(data.lastResult as ScanResult);
+    } else if (data.lastError) {
+      showError(data.lastError as string);
+    } else {
+      show('state-ready');
+    }
   };
   poll();
 }

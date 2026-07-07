@@ -2,6 +2,12 @@ import { defineBackground } from 'wxt/sandbox';
 import { getCachedResult, setCachedResult, dedupScan } from '../lib/api';
 import { getToken, setToken } from '../lib/auth';
 
+type ExtensionMessage =
+  | { type: 'SCAN_PRODUCT'; imageUrl: string; tabId?: number }
+  | { type: 'AUTH_TOKEN'; token: string }
+  | { type: 'CLOSE_CONNECT_TAB'; connectTabId?: number; originalTabId?: number }
+  | { type: 'OPEN_SIDEPANEL'; tabId?: number };
+
 const STEPS = [
   'Detecting garment type...',
   'Checking your wardrobe...',
@@ -37,7 +43,7 @@ export default defineBackground(() => {
     }
   });
 
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg: ExtensionMessage, sender, sendResponse) => {
     if (msg.type === 'SCAN_PRODUCT') {
       handleScan(msg.imageUrl, sender.tab?.id || msg.tabId)
         .then((result) => sendResponse(result))
@@ -62,10 +68,14 @@ export default defineBackground(() => {
     }
   });
 
-  async function handleScan(imageUrl: string, tabId: number) {
+  async function handleScan(imageUrl: string, tabId: number | undefined) {
     const token = await getToken();
     if (!token) {
-      try { (chrome.action as any).openPopup(); } catch { /* older Chrome: click icon */ }
+      try {
+        if (typeof chrome.action.openPopup === 'function') {
+          chrome.action.openPopup();
+        }
+      } catch { /* older Chrome: click icon */ }
       return { error: 'AUTH_REQUIRED' };
     }
 

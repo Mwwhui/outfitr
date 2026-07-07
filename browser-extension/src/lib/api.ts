@@ -1,6 +1,8 @@
 import { getToken, clearToken } from './auth';
 import type { ScanResult } from './types';
 
+declare const __API_BASE__: string | undefined;
+
 const BASE_URL = (() => {
   if (typeof __API_BASE__ !== 'undefined') return __API_BASE__;
   return 'https://outfitr.app/api';
@@ -50,16 +52,26 @@ export function dedupScan(key: string, input: ScanRequest): Promise<ScanResult> 
   return promise;
 }
 
+interface CacheEntry {
+  data: ScanResult;
+  ts: number;
+}
+
+interface CacheStore {
+  cache?: Record<string, CacheEntry>;
+}
+
 // Session cache (survives popup close)
 export async function getCachedResult(key: string): Promise<ScanResult | null> {
-  const { cache } = await chrome.storage.session.get('cache');
-  const entry = cache?.[key];
+  const data = await chrome.storage.session.get('cache') as CacheStore;
+  const entry = data.cache?.[key];
   if (entry && Date.now() - entry.ts < 86400000) return entry.data;
   return null;
 }
 
 export async function setCachedResult(key: string, data: ScanResult) {
-  const { cache = {} } = await chrome.storage.session.get('cache');
+  const cached = await chrome.storage.session.get('cache') as CacheStore;
+  const cache = cached.cache ?? {};
   cache[key] = { data, ts: Date.now() };
   await chrome.storage.session.set({ cache });
 }

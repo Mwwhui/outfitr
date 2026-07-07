@@ -70,7 +70,7 @@ function renderResult(r: ScanResult) {
   const scoreColor = r.score >= 70 ? '#22c55e' : r.score >= 40 ? '#f97316' : '#ef4444';
   const circumference = 326.7;
   const offset = circumference - (r.score / 100) * circumference;
-  const circle = $('sc-circle') as SVGCircleElement;
+  const circle = $('sc-circle') as unknown as SVGCircleElement;
   circle.style.stroke = scoreColor;
   circle.style.strokeDashoffset = String(circumference);
   animateRing(circle, circumference, offset, 800);
@@ -265,45 +265,44 @@ $('scan-another-btn').addEventListener('click', async () => {
 
 async function init() {
   // Poll for state changes
-  const poll = () => {
-    chrome.storage.session.get(['scanningStatus', 'lastResult', 'lastError', 'progressStep', 'startedAt'], (data) => {
-      if (data.scanningStatus === 'scanning') {
-        $('state-loading').classList.remove('hidden');
-        $('state-error').classList.add('hidden');
-        $('state-result').classList.add('hidden');
+  const poll = async () => {
+    const data = await chrome.storage.session.get(['scanningStatus', 'lastResult', 'lastError', 'progressStep', 'startedAt']);
+    if (data.scanningStatus === 'scanning') {
+      $('state-loading').classList.remove('hidden');
+      $('state-error').classList.add('hidden');
+      $('state-result').classList.add('hidden');
 
-        const step = data.progressStep ?? 0;
-        const startedAt = data.startedAt ?? Date.now();
-        const elapsed = Date.now() - startedAt;
+      const step = Number(data.progressStep ?? 0);
+      const startedAt = Number(data.startedAt ?? Date.now());
+      const elapsed = Date.now() - startedAt;
 
-        // Show progress steps
-        $('progress-steps').classList.remove('hidden');
-        renderProgress(step, startedAt);
+      // Show progress steps
+      $('progress-steps').classList.remove('hidden');
+      renderProgress(step, startedAt);
 
-        // Update message
-        const stepIdx = Math.min(step, STEPS.length - 1);
-        ($('loading-msg') as HTMLElement).textContent = STEPS[stepIdx];
+      // Update message
+      const stepIdx = Math.min(step, STEPS.length - 1);
+      ($('loading-msg') as HTMLElement).textContent = STEPS[stepIdx];
 
-        // Timeout after 90s
-        if (elapsed > 90000) {
-          showError('Scan timed out. Please try again.');
-          return;
-        }
-
-        setTimeout(poll, 500);
-      } else if (data.lastResult) {
-        renderResult(data.lastResult);
-      } else if (data.lastError) {
-        showError(data.lastError);
-      } else {
-        const token = getToken();
-        if (!token) {
-          showError('Not connected. Open the popup to enter your API token.');
-        } else {
-          showReady();
-        }
+      // Timeout after 90s
+      if (elapsed > 90000) {
+        showError('Scan timed out. Please try again.');
+        return;
       }
-    });
+
+      setTimeout(poll, 500);
+    } else if (data.lastResult) {
+      renderResult(data.lastResult as ScanResult);
+    } else if (data.lastError) {
+      showError(data.lastError as string);
+    } else {
+      const token = await getToken();
+      if (!token) {
+        showError('Not connected. Open the popup to enter your API token.');
+      } else {
+        showReady();
+      }
+    }
   };
   poll();
 }
