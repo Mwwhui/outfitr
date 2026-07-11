@@ -119,6 +119,7 @@ export function useAlerts() {
   const lastStreakMilestoneRef = useRef(0);
   const prevAlertIdsRef = useRef<Set<string>>(new Set());
   const lastFetchRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Seen IDs stored in localStorage so persistent alerts (same content-hash)
   // don't reappear as unread after the user has viewed them.
@@ -156,8 +157,13 @@ export function useAlerts() {
   }, [saveSeenIds]);
 
   const fetchAlerts = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const signal = controller.signal;
+
     try {
-      const homeRes = await fetch('/api/home/alerts');
+      const homeRes = await fetch('/api/home/alerts', { signal });
       const defaultHome: HomeAlertsData = {
         pledges_pending: 0, pledges_accepted: 0, pledges_total: 0,
         unused_items_count: 0, items_added_30d: 0, total_items: 0, months_active: 1,
@@ -166,7 +172,7 @@ export function useAlerts() {
 
       let calendarNeedsReconnect = false;
       try {
-        const calRes = await fetch('/api/integrations/google/status');
+        const calRes = await fetch('/api/integrations/google/status', { signal });
         if (calRes.ok) {
           const calData = await calRes.json();
           calendarNeedsReconnect = calData.connected && calData.needsReconnect;
@@ -179,7 +185,7 @@ export function useAlerts() {
       try {
         let lat = 1.3521;
         let lon = 103.8198;
-        const cached = await getCachedCoords();
+        const cached = getCachedCoords();
         if (cached) {
           lat = cached.lat;
           lon = cached.lon;
@@ -194,7 +200,8 @@ export function useAlerts() {
           }
         }
         const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,weathercode&timezone=auto&forecast_days=1`
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,weathercode&timezone=auto&forecast_days=1`,
+          { signal }
         );
         if (weatherRes.ok) {
           const weatherData = await weatherRes.json();
@@ -217,7 +224,7 @@ export function useAlerts() {
       let totalWardrobeItems = 0;
       let costPerWearTrend: string | undefined;
       try {
-        const insightsRes = await fetch('/api/wardrobe/monthly-insights');
+        const insightsRes = await fetch('/api/wardrobe/monthly-insights', { signal });
         if (insightsRes.ok) {
           const insights = await insightsRes.json();
           if (!insights.insufficient_data) {
@@ -395,7 +402,7 @@ export function useAlerts() {
           if (!prevIds.has(alert.id) && (alert.severity === 'error' || alert.severity === 'warning')) {
             new Notification('Outfitr', {
               body: alert.message,
-              icon: '/favicon.ico',
+              icon: '/logo.png',
               tag: alert.id,
             });
           }
@@ -406,7 +413,8 @@ export function useAlerts() {
       setAlerts(items);
       setHasLoaded(true);
       lastFetchRef.current = Date.now();
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setHasLoaded(true);
       lastFetchRef.current = Date.now();
     }
@@ -434,6 +442,7 @@ export function useAlerts() {
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
+      abortRef.current?.abort();
     };
   }, [fetchAlerts]);
 

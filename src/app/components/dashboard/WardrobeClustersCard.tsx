@@ -135,7 +135,7 @@ function InsightRow({
               Plan an outfit →
             </a>
           )}
-          {label === 'Keep in Rotation' && insight.avgWear > 0 && (
+          {label === 'Keep in Rotation' && (insight?.avgWear ?? 0) > 0 && (
             <span className="text-[11px] text-gray-400">Most worn cluster</span>
           )}
         </div>

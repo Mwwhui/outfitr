@@ -1,34 +1,14 @@
 import { NextResponse } from 'next/server';
+import { callGeminiWithFallback } from '@/lib/gemini';
 
-const USE_CASE_OPTIONS = ['casual', 'business', 'sport', 'sleep', 'swim', 'date'];
-
-async function fetchGeminiWithRetry(
-  url: string,
-  body: object,
-  maxRetries = 2,
-): Promise<Response | null> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) return res;
-      if (res.status === 429 || res.status === 503) {
-        const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-      return res;
-    } catch {
-      if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
-      }
-    }
-  }
-  return null;
-}
+const USE_CASE_OPTIONS = [
+  'casual',
+  'business',
+  'sport',
+  'sleep',
+  'swim',
+  'date',
+];
 
 export async function POST(req: Request) {
   try {
@@ -41,16 +21,17 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'Gemini API key is not configured' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Gemini API key is not configured' },
+        { status: 500 },
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const base64Data = buffer.toString('base64');
     const mimeType = file.type;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-
-    const response = await fetchGeminiWithRetry(geminiUrl, {
+    const { response } = await callGeminiWithFallback(apiKey, {
       contents: [
         {
           parts: [
@@ -83,7 +64,10 @@ Return ONLY a JSON array of matching use case strings from this list: ${JSON.str
 
     const data = await response.json();
     let text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '[]';
-    text = text.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
+    text = text
+      .replace(/```json?\s*/g, '')
+      .replace(/```\s*/g, '')
+      .trim();
 
     let use_case: string[];
     try {

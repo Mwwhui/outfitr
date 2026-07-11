@@ -1,25 +1,26 @@
-"use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+'use client';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 export default function SignupPage() {
   const router = useRouter();
 
   const [form, setForm] = useState({
-    username: "",
-    email: "",
-    password: "",
-    first_name: "",
-    last_name: "",
-    dob: "",
-    nationality: "",
+    username: '',
+    email: '',
+    password: '',
+    first_name: '',
+    last_name: '',
+    dob: '',
+    nationality: '',
   });
 
-  const [errorMsg, setErrorMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -28,12 +29,12 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErrorMsg("");
+    setErrorMsg('');
 
     try {
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: form.username,
           email: form.email,
@@ -47,9 +48,9 @@ export default function SignupPage() {
 
       const data = await res.json();
 
-      if (!res.ok) throw new Error(data.error || "Failed to register");
+      if (!res.ok) throw new Error(data.error || 'Failed to register');
 
-      router.push("/auth/login");
+      router.push('/auth/login');
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -58,11 +59,23 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
+    <main className="flex min-h-screen items-center justify-center bg-gray-100 p-6">
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-900 font-headline">
-          Create an Account
-        </h2>
+        <div className="flex flex-col items-center mb-6">
+          <Image
+            src="/logo.png"
+            alt="Outfitr"
+            width={72}
+            height={72}
+            className="rounded-2xl"
+          />
+          <h2 className="text-2xl font-semibold mt-3 text-black font-headline">
+            Outfitr
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Smarter Wardrobe, Smarter Choices
+          </p>
+        </div>
 
         {errorMsg && (
           <p className="text-red-500 text-center mb-4">{errorMsg}</p>
@@ -140,12 +153,12 @@ export default function SignupPage() {
             disabled={loading}
             className="bg-black text-white py-2 rounded-lg hover:bg-slate-800 transition"
           >
-            {loading ? "Signing up..." : "Sign Up"}
+            {loading ? 'Signing up...' : 'Sign Up'}
           </button>
         </form>
 
         <p className="text-center mt-4 text-gray-600">
-          Already have an account?{" "}
+          Already have an account?{' '}
           <a href="/auth/login" className="text-blue-600 hover:underline">
             Login
           </a>

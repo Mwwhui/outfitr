@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { callGeminiWithFallback } from '@/lib/gemini';
 
 export const maxDuration = 30;
 
@@ -9,37 +10,11 @@ interface VisualSimilarityResponse {
 }
 
 // In-memory cache with 7-day TTL (keyed by new_image hash + existing IDs)
-const VIS_CACHE = new Map<string, { data: VisualSimilarityResponse; ts: number }>();
+const VIS_CACHE = new Map<
+  string,
+  { data: VisualSimilarityResponse; ts: number }
+>();
 const VIS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-
-async function fetchGeminiWithRetry(
-  url: string,
-  body: object,
-  maxRetries = 2,
-): Promise<Response | null> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) return res;
-      // On 429/503, wait and retry
-      if (res.status === 429 || res.status === 503) {
-        const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
-        await new Promise((r) => setTimeout(r, delay));
-        continue;
-      }
-      return res; // Other errors, don't retry
-    } catch {
-      if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
-      }
-    }
-  }
-  return null;
-}
 
 // POST /api/clothes/visual-similarity
 // Body: { new_image: base64, existing_images: [{ id, image_url, name }], type: string }
@@ -67,7 +42,13 @@ export async function POST(req: Request) {
     const toCompare = existing_images.slice(0, 3);
 
     // Check cache (key = new_image first 32 chars + sorted existing IDs)
-    const cacheKey = new_image.slice(0, 32) + '::' + toCompare.map((e: { id: string }) => e.id).sort().join(',');
+    const cacheKey =
+      new_image.slice(0, 32) +
+      '::' +
+      toCompare
+        .map((e: { id: string }) => e.id)
+        .sort()
+        .join(',');
     const cached = VIS_CACHE.get(cacheKey);
     if (cached && Date.now() - cached.ts < VIS_CACHE_TTL) {
       return NextResponse.json(cached.data);
@@ -145,9 +126,9 @@ Respond with ONLY valid JSON (no markdown, no extra text):
       });
     }
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-
-    const response = await fetchGeminiWithRetry(geminiUrl, { contents: [{ parts }] });
+    const { response } = await callGeminiWithFallback(apiKey, {
+      contents: [{ parts }],
+    });
 
     if (!response || !response.ok) {
       // On failure, return low-confidence fallback instead of error

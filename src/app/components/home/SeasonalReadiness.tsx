@@ -6,6 +6,7 @@ interface MissingTooltip {
   type: string;
   suggestion: string;
   reason: string;
+  searchQuery?: string;
 }
 
 interface Props {
@@ -82,17 +83,28 @@ export default function SeasonalReadiness({
                   className="flex items-center gap-1 text-base w-full text-left hover:bg-surface-container-low rounded px-1 py-0.5 transition-colors"
                 >
                   <span className="material-symbols-outlined text-sm text-on-surface-variant">add_circle</span>
-                  <span className="flex-1">{type}</span>
+                  <span className="flex-1 break-words">{type}</span>
                   {tooltip && (
-                    <span className="material-symbols-outlined text-xs text-on-surface-variant">
+                    <span className="material-symbols-outlined text-xs text-on-surface-variant shrink-0">
                       {isExpanded ? 'expand_less' : 'expand_more'}
                     </span>
                   )}
                 </button>
                 {isExpanded && tooltip && (
-                  <div className="ml-6 mt-1 mb-2 p-3 bg-surface-container-low rounded-lg border border-surface-variant">
-                    <p className="text-xs font-medium text-on-surface mb-1">{tooltip.reason}</p>
-                    <p className="text-xs text-on-surface-variant">{tooltip.suggestion}</p>
+                  <div className="ml-6 mt-1 mb-2 p-3 bg-surface-container-low rounded-lg border border-surface-variant break-words">
+                    <p className="text-xs font-medium text-on-surface mb-1 break-words">{tooltip.reason}</p>
+                    <p className="text-xs text-on-surface-variant mb-2 break-words">{tooltip.suggestion}</p>
+                    {tooltip.searchQuery && (
+                      <a
+                        href={`https://www.google.com/search?q=${encodeURIComponent(tooltip.searchQuery)}&tbm=shop`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline mt-1"
+                      >
+                        <span className="material-symbols-outlined text-xs">shopping_cart</span>
+                        Find {type.toLowerCase()} online
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

@@ -236,7 +236,7 @@ export default function CalendarPage() {
       <div className="px-6 pb-16 max-w-7xl mx-auto space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)] gap-6">
           {/* CALENDAR CARD */}
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-visible">
             {/* Month controls */}
             <div className="flex items-center justify-between mb-4">
               <button
@@ -279,13 +279,14 @@ export default function CalendarPage() {
               </div>
             ) : (
               <div className="grid grid-cols-7 gap-2">
-                {gridDays.map((d) => {
+                {gridDays.map((d, idx) => {
                   const iso = toISODate(d);
                   const inMonth = d.getMonth() === viewMonth.getMonth();
                   const isSelected = iso === selectedDate;
                   const entry = planMap.get(iso);
                   const hasDay = !!entry?.day;
                   const hasNight = !!entry?.night;
+                  const isFirstRow = idx < 14;
 
                   return (
                     <button
@@ -340,7 +341,7 @@ export default function CalendarPage() {
 
                       {entry && (hasDay || hasNight) && (
                         <div
-                          className={`absolute bottom-full mb-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 hidden group-hover:block pointer-events-none ${
+                          className={`absolute w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 hidden group-hover:block pointer-events-none ${isFirstRow ? 'top-full mt-2' : 'bottom-full mb-2'} ${
                             d.getDay() <= 2
                               ? 'left-0'
                               : d.getDay() === 0 || d.getDay() >= 6

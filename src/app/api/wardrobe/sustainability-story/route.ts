@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { supabaseServer } from '@/lib/supabase/server';
+import { callGeminiWithFallback } from '@/lib/gemini';
 
 const STORY_CACHE = new Map<string, { data: unknown; ts: number }>();
 const STORY_CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -89,13 +90,10 @@ Items diverted: ${itemsDiverted}
 CO₂ saved: ${impact.co2_saved_kg}kg | Water saved: ${impact.water_saved_l.toLocaleString()}L | Trees equivalent: ${impact.equivalent_trees}
 Actions: ${byAction.donate} donations, ${byAction.sell} resales, ${byAction.recycle} recyclings`;
 
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
-        const response = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-        });
-        if (response.ok) {
+        const { response } = await callGeminiWithFallback(geminiKey, {
+          contents: [{ parts: [{ text: prompt }] }],
+        }, 0);
+        if (response?.ok) {
           const data = await response.json();
           story = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
         }

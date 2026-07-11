@@ -19,7 +19,11 @@ import {
   GEMINI_TIMEOUT_MS,
   inputBase,
   compressImage,
+  removeImageBackground,
+  compressForYolo,
+  compressForGemini,
   detectSeason,
+  dominantColorFromFile,
   fetchWithTimeout,
 } from './upload-utils';
 import { useCameraScanner } from './useCameraScanner';
@@ -74,6 +78,7 @@ export default function UploadClothesPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [detecting, setDetecting] = useState(false);
+  const [detectingPhase, setDetectingPhase] = useState<'bg-removal' | 'analyzing' | null>(null);
   const [detectResult, setDetectResult] = useState<{
     type: string;
     confidence: number;
@@ -81,6 +86,7 @@ export default function UploadClothesPage() {
     source: ColorSource | null;
   } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<'removing-bg' | 'uploading' | null>(null);
   const [formError, setFormError] = useState('');
   const [visualResult, setVisualResult] = useState<{
     is_different: boolean;
@@ -115,6 +121,29 @@ export default function UploadClothesPage() {
   const cam = useCameraScanner();
   const fileKeyRef = useRef('');
   const compressedCacheRef = useRef<{ key: string; file: File } | null>(null);
+  const bgRemovedRef = useRef<{ key: string; file: Blob } | null>(null);
+
+  // Pre-load background removal WASM model on mount for faster detection
+  useEffect(() => {
+    const warmUp = async () => {
+      try {
+        const { removeBackground } = await import('@imgly/background-removal');
+        const canvas = document.createElement('canvas');
+        canvas.width = 16;
+        canvas.height = 16;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#888';
+        ctx.fillRect(0, 0, 16, 16);
+        const blob = await new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg'),
+        );
+        await removeBackground(blob);
+      } catch {
+        // Pre-load is best-effort — detection will still fall back to original
+      }
+    };
+    warmUp();
+  }, []);
 
   // Auto-detect for file upload
   useEffect(() => {
@@ -126,97 +155,128 @@ export default function UploadClothesPage() {
     const abortController = new AbortController();
 
     const detect = async () => {
+      const titleCase = (s: string) =>
+        s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
       setDetecting(true);
       setDetectResult(null);
       setUseCaseDetected(false);
       try {
         const compressed = await compressImage(imageFile);
         compressedCacheRef.current = { key, file: compressed };
-        // Each fetch needs its own FormData — a body can only be read once
-        const fdYolo = new FormData();
-        fdYolo.append('file', compressed);
-        const fdGemini = new FormData();
-        fdGemini.append('file', compressed);
-        const fdUseCase = new FormData();
-        fdUseCase.append('file', compressed);
 
-        const [yoloData, geminiData, useCaseData] = await Promise.all([
+        // Prepare smaller images for detection APIs
+        const geminiImage = await compressForGemini(compressed);
+        const yoloImage = await compressForYolo(compressed);
+
+        // Remove background on gemini-sized image (smaller = faster WASM)
+        let detectImage: Blob = geminiImage;
+        setDetectingPhase('bg-removal');
+        try {
+          detectImage = await removeImageBackground(geminiImage);
+          detectImage = await compressForGemini(detectImage);
+        } catch (e) {
+          console.warn('Background removal before detection failed, using original', e);
+        }
+        bgRemovedRef.current = { key, file: detectImage };
+        setDetectingPhase('analyzing');
+
+        // Build FormData for each API call
+        const fdGemini = new FormData();
+        fdGemini.append('file', detectImage);
+        const fdUseCase = new FormData();
+        fdUseCase.append('file', detectImage);
+        const fdYoloAuto = new FormData();
+        fdYoloAuto.append('file', yoloImage);
+        const fdYoloDetect = new FormData();
+        fdYoloDetect.append('file', yoloImage);
+
+        // Run everything in parallel
+        const [
+          hsvColor,
+          yoloData,
+          yoloDetectData,
+          geminiData,
+          useCaseData,
+        ] = await Promise.all([
+          // HSV <100ms — instant color
+          dominantColorFromFile(detectImage)
+            .then((r) => (r ? titleCase(r) : ''))
+            .catch(() => ''),
+
+          // YOLO auto-detect
           fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/auto-detect`, {
             method: 'POST',
-            body: fdYolo,
+            body: fdYoloAuto,
             signal: abortController.signal,
           })
-            .then((r) => {
-              if (!r.ok) throw new Error('YOLO API error');
-              return r.json();
-            })
-            .catch((err) => {
-              console.error('YOLO detection failed:', err);
-              return null;
-            }),
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+
+          // YOLO /detect for specific type
+          fetch(`${process.env.NEXT_PUBLIC_YOLO_API_URL}/detect`, {
+            method: 'POST',
+            body: fdYoloDetect,
+            signal: abortController.signal,
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+
+          // Gemini color detection
           fetchWithTimeout(
             '/api/clothes/detect-color',
-            {
-              method: 'POST',
-              body: fdGemini,
-              signal: abortController.signal,
-            },
+            { method: 'POST', body: fdGemini, signal: abortController.signal },
             GEMINI_TIMEOUT_MS,
           )
-            .then((r) => {
-              if (!r.ok) throw new Error('Gemini API error');
-              return r.json();
-            })
-            .catch((err) => {
-              console.error('Gemini color detection failed:', err);
-              return null;
-            }),
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+
+          // Gemini use case detection
           fetchWithTimeout(
             '/api/clothes/detect-use-case',
-            {
-              method: 'POST',
-              body: fdUseCase,
-              signal: abortController.signal,
-            },
+            { method: 'POST', body: fdUseCase, signal: abortController.signal },
             GEMINI_TIMEOUT_MS,
           )
-            .then((r) => {
-              if (!r.ok) throw new Error('Use case API error');
-              return r.json();
-            })
-            .catch((err) => {
-              console.error('Use case detection failed:', err);
-              return null;
-            }),
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
         ]);
 
         if (!active) return;
 
-        const detectedColor = geminiData?.color || yoloData?.color || '';
-        const detectedType = yoloData?.type || '';
-        const confidence = yoloData?.confidence || 0;
-        const colorSource: ColorSource = geminiData?.color
-          ? 'gemini'
-          : yoloData?.color
-            ? 'yolo'
-            : 'hsv';
-
-        let yoloType = '';
-        try {
-          const fd2 = new FormData();
-          fd2.append('file', compressed);
-          const detRes = await fetch(
-            `${process.env.NEXT_PUBLIC_YOLO_API_URL}/detect`,
-            { method: 'POST', body: fd2, signal: abortController.signal },
-          );
-          const detData = await detRes.json();
-          if (active) {
-            yoloType = detData.items?.[0]?.yolo_type || '';
-          }
-        } catch {
-          /* ignore yolo-detect failure */
+        // HSV sets color immediately (already fast, but now in parallel)
+        if (hsvColor) {
+          setField({ color: hsvColor });
         }
 
+        // Merge color: skip Gemini color when HSV + YOLO agree
+        let detectedColor = hsvColor;
+        let colorSource: ColorSource = 'hsv';
+        if (geminiData?.color) {
+          const geminiColor = titleCase(geminiData.color);
+          const yoloColor = yoloData?.color ? titleCase(yoloData.color).toLowerCase() : '';
+          const hsvLower = hsvColor.toLowerCase();
+          const geminiLower = geminiColor.toLowerCase();
+
+          // If HSV+YOLO agree, prefer their judgement (reliable consensus)
+          // Only override with Gemini when it differs from both
+          if (yoloColor && hsvColor && yoloColor === hsvLower && yoloColor !== geminiLower) {
+            // HSV+YOLO agree — keep hsvColor, ignore Gemini
+          } else if (geminiLower !== hsvLower) {
+            detectedColor = geminiColor;
+            colorSource = 'gemini';
+          }
+        }
+        if (!detectedColor && yoloData?.color) {
+          detectedColor = titleCase(yoloData.color);
+          colorSource = 'yolo';
+        }
+        if (detectedColor) {
+          setField({ color: titleCase(detectedColor) });
+        }
+
+        const detectedType = yoloData?.type || '';
+        const confidence = yoloData?.confidence || 0;
+        const yoloType = yoloDetectData?.items?.[0]?.yolo_type || '';
         const cap = (s: string) =>
           s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
         const title = (s: string) => s.split(' ').map(cap).join(' ');
@@ -230,13 +290,14 @@ export default function UploadClothesPage() {
           if (seasonGuess) setField({ season: seasonGuess });
         }
 
-        if (detectedColor) {
-          setField({ color: detectedColor });
-        }
-
         if (useCaseData?.use_case && useCaseData.use_case.length > 0) {
           setField({ useCases: useCaseData.use_case });
           setUseCaseDetected(true);
+        }
+
+        // Set color from the merge
+        if (detectedColor) {
+          setField({ color: titleCase(detectedColor) });
         }
 
         const label = [detectedColor, specificName]
@@ -263,7 +324,10 @@ export default function UploadClothesPage() {
           console.error('Auto-detect failed:', e);
         }
       } finally {
-        if (active) setDetecting(false);
+        if (active) {
+          setDetecting(false);
+          setDetectingPhase(null);
+        }
       }
     };
     detect();
@@ -376,8 +440,15 @@ export default function UploadClothesPage() {
     try {
       const compressed =
         compressedCacheRef.current?.file || (await compressImage(imageFile));
+
+      // Use pre-computed bg-removed image from detection phase
+      const finalFile = bgRemovedRef.current?.key === `${imageFile.name}|${imageFile.size}|${imageFile.lastModified}`
+        ? bgRemovedRef.current.file
+        : compressed;
+
+      setUploadPhase('uploading');
       const formData = new FormData();
-      formData.append('file', compressed);
+      formData.append('file', finalFile);
 
       const uploadRes = await fetch('/api/upload', {
         method: 'POST',
@@ -411,6 +482,7 @@ export default function UploadClothesPage() {
       setFormError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setIsUploading(false);
+      setUploadPhase(null);
     }
   };
 
@@ -500,9 +572,9 @@ export default function UploadClothesPage() {
                         <span className="absolute inline-flex w-full h-full rounded-full bg-slate-400 opacity-75 animate-ping" />
                         <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-slate-500" />
                       </span>
-                      <span className="tracking-wider font-medium">
-                        Detecting
-                      </span>
+                        <span className="tracking-wider font-medium">
+                          {detectingPhase === 'bg-removal' ? 'Removing background…' : 'Analyzing…'}
+                        </span>
                     </div>
                   )}
                   {detectResult && (
@@ -896,7 +968,7 @@ export default function UploadClothesPage() {
               Use case <span className="text-red-400">*</span>
               {detecting && (
                 <span className="text-slate-400 font-normal ml-2">
-                  AI detecting…
+                  {detectingPhase === 'bg-removal' ? 'Removing background…' : 'AI detecting…'}
                 </span>
               )}
               {useCaseDetected && (
@@ -961,7 +1033,7 @@ export default function UploadClothesPage() {
               disabled={isUploading}
               className="px-6 py-3 rounded-lg bg-black text-white hover:bg-slate-800 disabled:opacity-60"
             >
-              {isUploading ? 'Uploading...' : 'Save clothing'}
+              {isUploading ? (uploadPhase === 'removing-bg' ? 'Removing background...' : 'Uploading...') : 'Save clothing'}
             </button>
           </div>
         </div>

@@ -2,9 +2,50 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { supabaseServer } from '@/lib/supabase/server';
+import { callGeminiWithFallback } from '@/lib/gemini';
 
 const INSIGHTS_CACHE = new Map<string, { data: unknown; ts: number }>();
-const INSIGHTS_CACHE_TTL = 24 * 60 * 60 * 1000;
+const INSIGHTS_CACHE_TTL = process.env.NODE_ENV === 'development' ? 0 : 24 * 60 * 60 * 1000;
+const PIXABAY_KEY = process.env.PIXABAY_API_KEY || '';
+
+async function fetchCurrentWeather(): Promise<{ temp: number; description: string } | null> {
+  try {
+    const res = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=40.71&longitude=-74.01&current=temperature_2m,weathercode',
+      { next: { revalidate: 3600 } },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const code = data.current?.weathercode ?? 0;
+    const descriptions: Record<number, string> = {
+      0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast',
+      45: 'foggy', 48: 'rime fog', 51: 'light drizzle', 53: 'drizzle', 55: 'heavy drizzle',
+      61: 'light rain', 63: 'rain', 65: 'heavy rain', 71: 'light snow', 73: 'snow',
+      75: 'heavy snow', 80: 'light showers', 81: 'showers', 82: 'heavy showers',
+      95: 'thunderstorm', 96: 'hail storm',
+    };
+    return {
+      temp: Math.round(data.current?.temperature_2m ?? 15),
+      description: descriptions[code] ?? 'clear',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function searchPixabayImage(query: string): Promise<string | null> {
+  if (!PIXABAY_KEY) return null;
+  try {
+    const res = await fetch(
+      `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(query)}&image_type=photo&per_page=3&category=fashion&min_width=300`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.hits?.[0]?.webformatURL || null;
+  } catch {
+    return null;
+  }
+}
 
 const IDEAL_RATIOS: Record<string, number> = {
   Tops: 3,
@@ -63,6 +104,8 @@ interface WearItem {
   season: string | null;
   price: number | null;
   unused_score: number | null;
+  material: string | null;
+  use_case: string[] | null;
 }
 
 interface ColorPaletteItem {
@@ -115,13 +158,14 @@ interface MonthlyInsights {
   }>;
   shopping_list: Array<{
     item_type: string;
+    specific_name: string;
     color: string;
-    reason: string;
+    material: string;
+    use_case: string;
+    image_url: string | null;
     search_query: string;
     priority: 'high' | 'medium' | 'low';
-    ai_recommendation?: string;
-    style_tip?: string;
-    avoid?: string;
+    reason_category: 'seasonal_gap' | 'category_balance' | 'color_diversity';
   }>;
   seasonal_tip: {
     season: string;
@@ -130,7 +174,7 @@ interface MonthlyInsights {
     missing_types: string[];
     coverage_pct: number;
     coverage_detail: string;
-    missing_tooltips: Array<{ type: string; suggestion: string; reason: string }>;
+    missing_tooltips: Array<{ type: string; suggestion: string; reason: string; searchQuery: string }>;
     transition_tip: string;
   };
   wardrobe_health: {
@@ -191,7 +235,7 @@ export async function GET() {
     // Fetch clothes
     const { data: clothesData, error: clothesError } = await supabase
       .from('clothes')
-      .select('id, name, type, color, image_url, wear_count, season, price, unused_score')
+      .select('id, name, type, color, image_url, wear_count, season, price, unused_score, material, use_case')
       .eq('user_id', user_id)
       .is('deleted_at', null)
       .or('status.is.null,status.eq.available');
@@ -211,6 +255,8 @@ export async function GET() {
       season: c.season,
       price: c.price,
       unused_score: c.unused_score,
+      material: c.material || null,
+      use_case: c.use_case || null,
     }));
 
     if (clothes.length < 5) {
@@ -340,7 +386,7 @@ export async function GET() {
     const seasonalTypes = new Set(seasonItems.map((c) => c.type));
     const missingTypes = Object.keys(IDEAL_RATIOS).filter((t) => !seasonalTypes.has(t));
 
-    // Build missing type tooltips with suggestions
+    // Build missing type tooltips with suggestions + search links
     const SEASON_SUGGESTIONS: Record<string, Record<string, string>> = {
       Spring: { Tops: 'Light layers, cardigans, and long-sleeve tees', Bottoms: 'Jeans, chinos, or midi skirts', Outerwear: 'Light jackets, trench coats, or denim jackets', 'One-Piece': 'Dresses or jumpsuits in breathable fabrics' },
       Summer: { Tops: 'Tank tops, short-sleeve tees, and linen shirts', Bottoms: 'Shorts, lightweight skirts, or linen pants', Outerwear: 'Unstructured blazers, lightweight cardigans, or sun cover-ups', 'One-Piece': 'Sundresses, rompers, or swimwear cover-ups' },
@@ -348,10 +394,18 @@ export async function GET() {
       Winter: { Tops: 'Thermal tops, turtlenecks, and fleece-lined layers', Bottoms: 'Heavy denim, wool pants, or lined leggings', Outerwear: 'Down coats, parkas, or wool overcoats', 'One-Piece': 'Knit dresses or fleece-lined overalls' },
     };
 
+    const SEASON_SEARCH_QUERIES: Record<string, Record<string, string>> = {
+      Spring: { Tops: 'spring tops women light layering', Bottoms: 'spring pants women chinos', Outerwear: 'spring jacket women light', 'One-Piece': 'spring dress women midi' },
+      Summer: { Tops: 'summer tops women linen tank', Bottoms: 'shorts women summer', Outerwear: 'summer cardigan women light', 'One-Piece': 'sundress women summer' },
+      Fall: { Tops: 'fall sweaters women cozy', Bottoms: 'fall pants women corduroy', Outerwear: 'fall coat women wool', 'One-Piece': 'fall dress women knit' },
+      Winter: { Tops: 'winter turtleneck women thermal', Bottoms: 'winter pants women wool lined', Outerwear: 'winter coat women parka', 'One-Piece': 'winter dress women fleece' },
+    };
+
     const missingTooltips = missingTypes.map((type) => ({
       type,
       suggestion: SEASON_SUGGESTIONS[currentSeason]?.[type] || `Look for ${type.toLowerCase()} suitable for ${currentSeason} weather`,
       reason: `You have no ${type.toLowerCase()} items rated for ${currentSeason}`,
+      searchQuery: SEASON_SEARCH_QUERIES[currentSeason]?.[type] || `${currentSeason.toLowerCase()} ${type.toLowerCase()} women`,
     }));
 
     const coverageDetail = coveragePct < 40
@@ -370,24 +424,132 @@ export async function GET() {
       return `Focus on ${currentSeason} for now. ${nextSeason} is ${weeksUntil} weeks away.`;
     })();
 
-    // Try Gemini for personalized tip, fall back to template
+    // --- Parallel Gemini calls: seasonal tip + shopping list ---
     let geminiTip = '';
     const geminiKey = process.env.GEMINI_API_KEY;
+    const shoppingList: MonthlyInsights['shopping_list'] = [];
+    const topColor = [...colorCount.entries()].sort((a, b) => b[1] - a[1])[0];
+
     if (geminiKey) {
-      try {
-        const prompt = `You are a minimalist wardrobe stylist. The user has ${clothes.length} items. ${seasonItems.length} suit ${currentSeason} (${coveragePct}% coverage). Missing types: ${missingTypes.join(', ') || 'none'}. Top items: ${seasonItems.slice(0, 5).map((c) => c.name).join(', ')}. Give 1-2 sentences of practical, specific seasonal advice. Be concise.`;
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
-        const response = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          geminiTip = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      // Build seasonal prompt (synchronous)
+      const seasonalPrompt = `You are a minimalist wardrobe stylist. The user has ${clothes.length} items. ${seasonItems.length} suit ${currentSeason} (${coveragePct}% coverage). Missing types: ${missingTypes.join(', ') || 'none'}. Top items: ${seasonItems.slice(0, 5).map((c) => c.name).join(', ')}. Give 1-2 sentences of practical, specific seasonal advice. Be concise.`;
+
+      // Fetch weather early for shopping prompt
+      const weather = await fetchCurrentWeather().catch(() => null);
+
+      // Build shopping prompt data (synchronous)
+      const categorySummary = [...categoryCount.entries()]
+        .map(([type, count]) => `${type}: ${count}`)
+        .join(', ');
+      const topColors = [...colorCount.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([color, count]) => `${color} (${Math.round((count / clothes.length) * 100)}%)`)
+        .join(', ');
+      const useCaseSummary = (() => {
+        const uc = new Map<string, number>();
+        for (const c of clothes) {
+          if (c.use_case && Array.isArray(c.use_case)) {
+            for (const u of c.use_case) uc.set(u, (uc.get(u) || 0) + 1);
+          }
         }
-      } catch {
-        // Use fallback
+        return [...uc.entries()].sort((a, b) => b[1] - a[1]).map(([u, n]) => `${u}: ${n}`).join(', ');
+      })();
+      const wardrobeItems = clothes
+        .slice(0, 30)
+        .map((c) => `${c.name} (${c.color || 'unknown'}, ${c.type}, ${c.material || 'unknown material'}, ${c.season || 'all seasons'})`)
+        .join('; ');
+
+      const shoppingPrompt = `You are a personal wardrobe stylist. Recommend exactly 3 specific clothing items the user should buy.
+
+Current season: ${currentSeason}
+Weather: ${weather ? `${weather.temp}°C, ${weather.description}` : `${currentSeason} weather`}
+Missing seasonal types: ${missingTypes.length > 0 ? missingTypes.join(', ') : 'none'}
+
+User's wardrobe (${clothes.length} items):
+Categories: ${categorySummary}
+Colors: ${topColors}
+Use cases: ${useCaseSummary || 'not tracked'}
+Items: ${wardrobeItems}
+
+For each recommendation, consider:
+- What colors complement their existing wardrobe (avoid over-represented colors)
+- What materials suit the current weather (${weather ? `${weather.temp}°C` : currentSeason})
+- What use cases they wear most
+- What category gaps exist
+
+Return a JSON array of exactly 3 items:
+[
+  {
+    "specific_name": "Camel Wool Blend Coat",
+    "item_type": "Outerwear",
+    "color": "Camel",
+    "material": "Wool blend",
+    "use_case": "business, casual",
+    "search_query": "camel wool blend coat women"
+  }
+]
+
+Rules:
+- specific_name: Be specific (include color + material + style, e.g. "Navy Linen Button-Down Shirt")
+- item_type: One of: Tops, Bottoms, Outerwear, One-Piece
+- search_query: Optimized for shopping search (3-5 words)
+- Return ONLY valid JSON array, no other text
+- Exactly 3 items`;
+
+      // Fire both Gemini calls in parallel
+      const [seasonalResponse, shoppingResponse] = await Promise.all([
+        callGeminiWithFallback(geminiKey, { contents: [{ parts: [{ text: seasonalPrompt }] }] }, 0).then(r => r.response),
+        callGeminiWithFallback(geminiKey, { contents: [{ parts: [{ text: shoppingPrompt }] }] }, 0).then(r => r.response),
+      ]);
+
+      // Handle seasonal response
+      if (seasonalResponse?.ok) {
+        const data = await seasonalResponse.json();
+        geminiTip = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      }
+
+      // Handle shopping response
+      if (shoppingResponse?.ok) {
+        try {
+          const data = await shoppingResponse.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+          const jsonStr = text.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
+          const recommendations = JSON.parse(jsonStr) as Array<{
+            specific_name: string;
+            item_type: string;
+            color: string;
+            material: string;
+            use_case: string;
+            search_query: string;
+          }>;
+
+          const seasonalSet = new Set(missingTypes);
+          for (const rec of recommendations.slice(0, 3)) {
+            let reasonCategory: 'seasonal_gap' | 'category_balance' | 'color_diversity' = 'category_balance';
+            if (seasonalSet.has(rec.item_type)) {
+              reasonCategory = 'seasonal_gap';
+            } else if (rec.color && topColor && rec.color.toLowerCase() !== topColor[0].toLowerCase() && topColor[1] / clothes.length > 0.35) {
+              reasonCategory = 'color_diversity';
+            }
+
+            const imageUrl = await searchPixabayImage(rec.search_query);
+
+            shoppingList.push({
+              item_type: rec.item_type,
+              specific_name: rec.specific_name,
+              color: rec.color,
+              material: rec.material,
+              use_case: rec.use_case,
+              image_url: imageUrl,
+              search_query: rec.search_query,
+              priority: reasonCategory === 'seasonal_gap' ? 'high' : reasonCategory === 'color_diversity' ? 'low' : 'medium',
+              reason_category: reasonCategory,
+            });
+          }
+        } catch {
+          // Fallback to generic list if Gemini fails
+        }
       }
     }
 
@@ -459,108 +621,60 @@ export async function GET() {
       },
     };
 
-    // Shopping list (already computed from category gaps)
-    const shoppingList: MonthlyInsights['shopping_list'] = [];
-    for (const [type, ideal] of Object.entries(IDEAL_RATIOS)) {
-      const current = categoryCount.get(type) || 0;
-      const idealCount = Math.max(1, Math.round((ideal / 6.5) * totalUnits));
-      if (current < idealCount * 0.7) {
+    // Fallback: generic shopping list if Gemini didn't produce results
+    if (shoppingList.length === 0) {
+      const alreadyInList = new Set<string>();
+      for (const type of missingTypes) {
+        alreadyInList.add(type);
         shoppingList.push({
           item_type: type,
-          color: 'Neutral',
-          reason: `You have ${current} ${type.toLowerCase()} but need around ${idealCount} for balance`,
-          search_query: `${type.toLowerCase().replace('-', ' ')} women neutral`,
-          priority: current === 0 ? 'high' : 'medium',
+          specific_name: `${currentSeason} ${type}`,
+          color: 'Essential',
+          material: 'Various',
+          use_case: 'casual',
+          image_url: null,
+          search_query: SEASON_SEARCH_QUERIES[currentSeason]?.[type] || `${currentSeason.toLowerCase()} ${type.toLowerCase()} women`,
+          priority: 'high',
+          reason_category: 'seasonal_gap',
         });
       }
-    }
-    const topColor = [...colorCount.entries()].sort((a, b) => b[1] - a[1])[0];
-    if (topColor && topColor[1] / clothes.length > 0.4) {
-      shoppingList.push({
-        item_type: 'Tops',
-        color: 'Complementary',
-        reason: `${Math.round((topColor[1] / clothes.length) * 100)}% of your wardrobe is ${topColor[0]}`,
-        search_query: `women tops colorful non ${topColor[0]}`,
-        priority: 'medium',
-      });
-    }
-
-    // Enrich shopping list with Gemini-powered recommendations
-    if (geminiKey && shoppingList.length > 0) {
-      try {
-        const categorySummary = [...categoryCount.entries()]
-          .map(([type, count]) => `${type}: ${count}`)
-          .join(', ');
-        const topColors = [...colorCount.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([color, count]) => `${color} (${Math.round((count / clothes.length) * 100)}%)`)
-          .join(', ');
-        const topItems = clothes
-          .sort((a, b) => (b.wear_count || 0) - (a.wear_count || 0))
-          .slice(0, 5)
-          .map((c) => `${c.name} (${c.type})`)
-          .join(', ');
-
-        const gapsText = shoppingList
-          .map((item) => `- ${item.color} ${item.item_type}: ${item.reason}`)
-          .join('\n');
-
-        const prompt = `You are a personal wardrobe stylist. The user needs help building a balanced wardrobe.
-
-Their wardrobe gaps:
-${gapsText}
-
-Current categories: ${categorySummary}
-Dominant colors: ${topColors}
-Top worn items: ${topItems}
-Season: ${currentSeason}
-
-For each gap, return a JSON array with personalized recommendations:
-[
-  {
-    "item_type": "Tops",
-    "color": "Neutral",
-    "ai_recommendation": "1 sentence: what specific style/color to look for and why",
-    "style_tip": "1 sentence: how to style it with what they already own",
-    "avoid": "1 sentence: what they already have enough of"
-  }
-]
-
-Return ONLY valid JSON. Keep each field to 1 sentence max. Match the item_type and color from each gap.`;
-
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
-        const response = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-          const jsonStr = text.replace(/```json?\s*/g, '').replace(/```\s*/g, '').trim();
-          const enriched = JSON.parse(jsonStr) as Array<{
-            item_type: string;
-            color: string;
-            ai_recommendation: string;
-            style_tip: string;
-            avoid: string;
-          }>;
-
-          for (const item of shoppingList) {
-            const match = enriched.find(
-              (e) => e.item_type === item.item_type && e.color === item.color,
-            );
-            if (match) {
-              item.ai_recommendation = match.ai_recommendation;
-              item.style_tip = match.style_tip;
-              item.avoid = match.avoid;
-            }
-          }
+      for (const [type, ideal] of Object.entries(IDEAL_RATIOS)) {
+        if (alreadyInList.has(type)) continue;
+        const current = categoryCount.get(type) || 0;
+        const idealCount = Math.max(1, Math.round((ideal / 6.5) * totalUnits));
+        if (current < idealCount * 0.7) {
+          alreadyInList.add(type);
+          shoppingList.push({
+            item_type: type,
+            specific_name: `${type} for ${currentSeason}`,
+            color: 'Neutral',
+            material: 'Various',
+            use_case: 'casual',
+            image_url: null,
+            search_query: `${type.toLowerCase().replace('-', ' ')} women ${currentSeason.toLowerCase()}`,
+            priority: current === 0 ? 'high' : 'medium',
+            reason_category: 'category_balance',
+          });
         }
-      } catch {
-        // Keep shopping list without AI enrichment
+      }
+      const topC = [...colorCount.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topC && topC[1] / clothes.length > 0.4) {
+        shoppingList.push({
+          item_type: 'Tops',
+          specific_name: 'Colorful Tops',
+          color: 'Complementary',
+          material: 'Various',
+          use_case: 'casual',
+          image_url: null,
+          search_query: `women tops colorful non ${topC[0]}`,
+          priority: 'low',
+          reason_category: 'color_diversity',
+        });
+      }
+
+      // Fetch images from Pixabay for all fallback items
+      for (const item of shoppingList) {
+        item.image_url = await searchPixabayImage(item.search_query);
       }
     }
 

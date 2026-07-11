@@ -47,11 +47,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
+    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-semibold text-center mb-6 text-black font-headline">
-          Login
-        </h1>
+        <div className="flex flex-col items-center mb-6">
+          <Image
+            src="/logo.png"
+            alt="Outfitr"
+            width={72}
+            height={72}
+            className="rounded-2xl"
+          />
+          <h1 className="text-2xl font-semibold mt-3 text-black font-headline">
+            Outfitr
+          </h1>
+          <p className="text-xs text-gray-500 mt-1">
+            Smarter Wardrobe, Smarter Choices
+          </p>
+        </div>
 
         {errorMsg && (
           <p className="text-center text-red-500 mb-4">{errorMsg}</p>
@@ -111,12 +123,21 @@ export default function LoginPage() {
 
         {/* Register redirect using router.push */}
         <div className="text-center mt-6">
-          <p className="text-gray-600 mb-2">Don’t have an account?</p>
+          <p className="text-gray-600 mb-2">Don&rsquo;t have an account?</p>
           <button
             onClick={() => router.push('/auth/register')}
             className="text-blue-600 hover:underline"
           >
             Register here
+          </button>
+        </div>
+
+        <div className="text-center mt-4">
+          <button
+            onClick={() => router.push('/auth/forgot-password')}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Forgot your password?
           </button>
         </div>
       </div>

@@ -434,7 +434,16 @@ export default function WardrobePage() {
           </div>
         )}
 
-        {/* Floating Add Button*/}
+        {/* Floating Scan Button */}
+        <button
+          onClick={() => router.push('/wardrobe/scan')}
+          className="fixed bottom-6 left-6 bg-[#0f172a] text-white rounded-full w-14 h-14 shadow-lg hover:bg-gray-800 flex items-center justify-center z-10"
+          aria-label="Scan to buy"
+        >
+          <span className="material-symbols-outlined text-2xl">camera</span>
+        </button>
+
+        {/* Floating Add Button */}
         <button
           onClick={() => router.push('/wardrobe/upload')}
           className="fixed bottom-6 right-6 bg-black text-white rounded-full w-16 h-16 shadow-lg hover:bg-gray-800 flex items-center justify-center text-3xl"

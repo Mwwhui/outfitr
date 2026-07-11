@@ -3,12 +3,13 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { supabaseServer } from '@/lib/supabase/server';
 import { suggestOutfits } from '@/lib/suggestOutfits';
+import { callGeminiWithFallback } from '@/lib/gemini';
 
 export const maxDuration = 30;
 
-// In-memory cache with 1-day TTL
+// In-memory cache with 1-hour TTL
 const SUGGEST_CACHE = new Map<string, { data: unknown; ts: number }>();
-const SUGGEST_CACHE_TTL = 24 * 60 * 60 * 1000; // 1 day
+const SUGGEST_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 // POST /api/outfits/suggest
 export async function POST(req: Request) {
@@ -32,8 +33,9 @@ export async function POST(req: Request) {
     const occasion = body.occasion || 'casual';
     const seedItemIds = body.seedItemIds || [];
 
-    // Cache key includes occasion so weather/calendar changes trigger fresh suggestions
-    const cacheKey = `${user_id}::${occasion}`;
+    // Cache key includes occasion and temperature range for fresh suggestions
+    const tempBand = weather ? Math.round(weather.temperature / 5) * 5 : 0;
+    const cacheKey = `${user_id}::${occasion}::${tempBand}`;
     const cached = SUGGEST_CACHE.get(cacheKey);
     if (cached && Date.now() - cached.ts < SUGGEST_CACHE_TTL) {
       return NextResponse.json(cached.data);
@@ -157,19 +159,16 @@ Return ONLY valid JSON array:
   ...
 ]`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    });
+    const { response } = await callGeminiWithFallback(apiKey, {
+      contents: [{ parts: [{ text: prompt }] }],
+    }, 0);
 
     let aiReasoning: Array<{
       index: number;
       reasoning: string;
       style: string;
     }> = [];
-    if (response.ok) {
+    if (response?.ok) {
       const data = await response.json();
       const text =
         data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';

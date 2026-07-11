@@ -25,6 +25,12 @@ export function useCreateOutfitPlan(userId?: string) {
     onSuccess: () => {
       if (!userId) return;
       queryClient.invalidateQueries({ queryKey: ['outfit-plans', userId] });
+      queryClient.invalidateQueries({ queryKey: ['frequent-combos', userId] });
+      queryClient.invalidateQueries({ queryKey: ['monthly-insights', userId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats', userId] });
+      queryClient.invalidateQueries({ queryKey: ['sustainability-story', userId] });
+      queryClient.invalidateQueries({ queryKey: ['outfit-suggest', userId] });
+      queryClient.invalidateQueries({ queryKey: ['outfit-dna', userId] });
     },
   });
 }
@@ -39,6 +45,12 @@ export function useDeleteOutfitPlan(userId?: string) {
     onSuccess: () => {
       if (!userId) return;
       queryClient.invalidateQueries({ queryKey: ['outfit-plans', userId] });
+      queryClient.invalidateQueries({ queryKey: ['frequent-combos', userId] });
+      queryClient.invalidateQueries({ queryKey: ['monthly-insights', userId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats', userId] });
+      queryClient.invalidateQueries({ queryKey: ['sustainability-story', userId] });
+      queryClient.invalidateQueries({ queryKey: ['outfit-suggest', userId] });
+      queryClient.invalidateQueries({ queryKey: ['outfit-dna', userId] });
     },
   });
 }

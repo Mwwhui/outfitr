@@ -12,6 +12,11 @@ export interface UpdateProfileData {
   contact_no: string;
 }
 
+export interface ChangePasswordData {
+  current_password?: string;
+  new_password: string;
+}
+
 export function useUpdateProfile(userId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -28,6 +33,21 @@ export function useUpdateProfile(userId?: string) {
     onSuccess: () => {
       if (!userId) return;
       queryClient.invalidateQueries({ queryKey: ['profile', userId] });
+    },
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: async (data: ChangePasswordData) => {
+      const res = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password_change: data }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to change password');
+      return body;
     },
   });
 }

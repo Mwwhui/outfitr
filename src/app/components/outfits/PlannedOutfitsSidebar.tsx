@@ -65,10 +65,10 @@ export default function PlannedOutfitsSidebar({
 }: PlannedOutfitsSidebarProps) {
   const router = useRouter();
 
-  // Generate next 7 days from today
+  // Generate next 8 days from today (i=0..7 covers plans scheduled for today+7 via getNextWeekday)
   const days: { date: string; plan?: Plan }[] = [];
   const today = new Date();
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 8; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     const dateStr = d.toISOString().slice(0, 10);

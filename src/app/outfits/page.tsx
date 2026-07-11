@@ -22,6 +22,7 @@ import {
 import StyleLabImpactMeter from '../components/outfits/StyleLabImpactMeter';
 import PlannedOutfitsSidebar from '../components/outfits/PlannedOutfitsSidebar';
 import ConfirmModal from '../components/ConfirmModal';
+import toast from 'react-hot-toast';
 
 interface ComboItem {
   id: string;
@@ -209,7 +210,7 @@ function MiniCalendarPicker({
       );
       onScheduled();
     } catch {
-      /* silently fail */
+      toast.error('Failed to schedule some days. Please try again.');
     } finally {
       setScheduling(false);
       setShowModal(false);
@@ -282,8 +283,9 @@ export default function OutfitsPage() {
   const [archivedKeys, setArchivedKeys] = useState<Set<string>>(new Set());
   const [filterMode, setFilterMode] = useState<
     'all' | 'favorites' | 'archived'
-  >('favorites');
+  >('all');
   const [dnaLoaded, setDnaLoaded] = useState(false);
+  const [favLoaded, setFavLoaded] = useState(false);
 
   const { data: freqData, isLoading: combosLoading } = useFrequentCombos(
     session?.user?.id,
@@ -301,7 +303,7 @@ export default function OutfitsPage() {
   const { data: plans = [], refetch: refetchPlans } = useOutfitPlans(
     session?.user?.id,
     new Date().toISOString().slice(0, 10),
-    new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+    new Date(Date.now() + 8 * 86400000).toISOString().slice(0, 10),
   );
   const { data: clothesData } = useClothes(session?.user?.id);
 
@@ -368,13 +370,27 @@ export default function OutfitsPage() {
     }),
   );
 
+  const enrichedFrequentCombos = useMemo(() => {
+    return frequentCombos.map((combo) => ({
+      ...combo,
+      items: combo.items.map((item) => {
+        const cloth = clothes.find((c) => c.id === item.id);
+        return {
+          ...item,
+          image_url: cloth?.image_url || item.image_url,
+          color: cloth?.color || item.color,
+        };
+      }),
+    }));
+  }, [frequentCombos, clothes]);
+
   const totalItems = useMemo(() => {
     const ids = new Set<string>();
-    for (const combo of frequentCombos) {
+    for (const combo of enrichedFrequentCombos) {
       for (const item of combo.items) ids.add(item.id);
     }
     return ids.size;
-  }, [frequentCombos]);
+  }, [enrichedFrequentCombos]);
 
   useEffect(() => {
     setMounted(true);
@@ -398,12 +414,14 @@ export default function OutfitsPage() {
       const stored = localStorage.getItem('outfit_favorites');
       if (stored) setFavoriteKeys(new Set(JSON.parse(stored)));
     } catch {}
+    setFavLoaded(true);
   }, []);
 
-  // Persist favorite combos
+  // Persist favorite combos — only after initial load
   useEffect(() => {
+    if (!favLoaded) return;
     localStorage.setItem('outfit_favorites', JSON.stringify([...favoriteKeys]));
-  }, [favoriteKeys]);
+  }, [favoriteKeys, favLoaded]);
 
   // Load archived combos from localStorage
   useEffect(() => {
@@ -411,12 +429,14 @@ export default function OutfitsPage() {
       const stored = localStorage.getItem('outfit_archived');
       if (stored) setArchivedKeys(new Set(JSON.parse(stored)));
     } catch {}
+    setFavLoaded(true);
   }, []);
 
-  // Persist archived combos
+  // Persist archived combos — only after initial load
   useEffect(() => {
+    if (!favLoaded) return;
     localStorage.setItem('outfit_archived', JSON.stringify([...archivedKeys]));
-  }, [archivedKeys]);
+  }, [archivedKeys, favLoaded]);
 
   const usageRate =
     totalItems > 0 ? Math.round((uniqueCombos / totalItems) * 100) : 0;
@@ -467,28 +487,52 @@ export default function OutfitsPage() {
   const secondaryItems = useMemo(() => {
     if (!dna?.never_tried.length) return [];
     const bentoIds = new Set(bentoItem?.items.map((i) => i.id) || []);
-    return dna.never_tried
-      .filter((nt) => {
-        if (nt.item_a_id && bentoIds.has(nt.item_a_id)) return false;
-        if (nt.item_b_id && bentoIds.has(nt.item_b_id)) return false;
-        return true;
-      })
-      .slice(0, 4)
-      .map((nt) => {
-        const itemA =
-          clothes.find((c) => c.id === nt.item_a_id) ||
-          findClothByName(clothes, nt.item_a);
-        const itemB =
-          clothes.find((c) => c.id === nt.item_b_id) ||
-          findClothByName(clothes, nt.item_b);
-        const items = [itemA, itemB].filter(Boolean) as ClothingItem[];
-        return {
-          title: `${nt.item_a} × ${nt.item_b}`,
-          reason: nt.reason,
-          items,
-        };
+    const frequentComboKeys = new Set(
+      enrichedFrequentCombos.map((c) =>
+        c.items.map((i) => i.id).sort().join('|||'),
+      ),
+    );
+
+    const seenKeys = new Set<string>();
+    const result: Array<{
+      title: string;
+      reason: string;
+      items: ClothingItem[];
+    }> = [];
+
+    for (const nt of dna.never_tried) {
+      if (result.length >= 4) break;
+
+      const itemA =
+        clothes.find((c) => c.id === nt.item_a_id) ||
+        findClothByName(clothes, nt.item_a);
+      const itemB =
+        clothes.find((c) => c.id === nt.item_b_id) ||
+        findClothByName(clothes, nt.item_b);
+
+      if (!itemA || !itemB) continue;
+
+      // Filter: resolved items must not overlap with bento item
+      if (bentoIds.has(itemA.id) || bentoIds.has(itemB.id)) continue;
+
+      // Filter: must not match an already-worn frequent combo
+      const freqKey = [itemA.id, itemB.id].sort().join('|||');
+      if (frequentComboKeys.has(freqKey)) continue;
+
+      // Dedup: skip if same pair of items already shown
+      const pairKey = [itemA.id, itemB.id].sort().join('|||');
+      if (seenKeys.has(pairKey)) continue;
+      seenKeys.add(pairKey);
+
+      result.push({
+        title: `${nt.item_a} × ${nt.item_b}`,
+        reason: nt.reason,
+        items: [itemA, itemB],
       });
-  }, [dna, clothes, bentoItem]);
+    }
+
+    return result;
+  }, [dna, clothes, bentoItem, enrichedFrequentCombos]);
 
   // Impact Meter computations
   const suggestionItems = suggestions.flatMap((s) => s.items);
@@ -559,10 +603,10 @@ export default function OutfitsPage() {
 
   const visibleCombos =
     filterMode === 'favorites'
-      ? frequentCombos.filter((c) => favoriteKeys.has(c.key))
+      ? enrichedFrequentCombos.filter((c) => favoriteKeys.has(c.key))
       : filterMode === 'archived'
-        ? frequentCombos.filter((c) => archivedKeys.has(c.key))
-        : frequentCombos.filter((c) => !archivedKeys.has(c.key));
+        ? enrichedFrequentCombos.filter((c) => archivedKeys.has(c.key))
+        : enrichedFrequentCombos.filter((c) => !archivedKeys.has(c.key));
 
   const handleQuickSwap = async (planId: string, date: string) => {
     await deletePlan.mutateAsync(planId);
@@ -642,13 +686,13 @@ export default function OutfitsPage() {
                       {dna.style_summary}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-4 items-center">
-                      {frequentCombos.length > 0 && (
+            {enrichedFrequentCombos.length > 0 && (
                         <>
                           <div className="flex gap-1">
                             {(() => {
                               const colors = [
                                 ...new Set(
-                                  frequentCombos
+                                  enrichedFrequentCombos
                                     .flatMap((c) => c.items)
                                     .filter((i) => i.color)
                                     .map((i) => i.color!),
@@ -794,21 +838,6 @@ export default function OutfitsPage() {
                   </h2>
                   <div className="flex ml-auto gap-1 bg-surface-container-high rounded-lg p-0.5">
                     <button
-                      onClick={() => setFilterMode('favorites')}
-                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
-                        filterMode === 'favorites'
-                          ? 'bg-white text-on-surface shadow-sm'
-                          : 'text-on-surface-variant'
-                      }`}
-                    >
-                      Favorites (
-                      {
-                        frequentCombos.filter((c) => favoriteKeys.has(c.key))
-                          .length
-                      }
-                      )
-                    </button>
-                    <button
                       onClick={() => setFilterMode('all')}
                       className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
                         filterMode === 'all'
@@ -818,7 +847,22 @@ export default function OutfitsPage() {
                     >
                       All (
                       {
-                        frequentCombos.filter((c) => !archivedKeys.has(c.key))
+                        enrichedFrequentCombos.filter((c) => !archivedKeys.has(c.key))
+                          .length
+                      }
+                      )
+                    </button>
+                    <button
+                      onClick={() => setFilterMode('favorites')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-semibold transition ${
+                        filterMode === 'favorites'
+                          ? 'bg-white text-on-surface shadow-sm'
+                          : 'text-on-surface-variant'
+                      }`}
+                    >
+                      Favorites (
+                      {
+                        enrichedFrequentCombos.filter((c) => favoriteKeys.has(c.key))
                           .length
                       }
                       )
@@ -833,7 +877,7 @@ export default function OutfitsPage() {
                     >
                       Archive (
                       {
-                        frequentCombos.filter((c) => archivedKeys.has(c.key))
+                        enrichedFrequentCombos.filter((c) => archivedKeys.has(c.key))
                           .length
                       }
                       )

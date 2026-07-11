@@ -1,0 +1,16 @@
+{
+  "name": "outfitr-scan",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt --mode development",
+    "build": "wxt build",
+    "dev:build": "wxt build --mode development",
+    "zip": "wxt zip",
+    "compile": "wxt build"
+  },
+  "devDependencies": {
+    "wxt": "^0.19",
+    "typescript": "^5.5"
+  }
+}
