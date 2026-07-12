@@ -16,6 +16,7 @@ import {
   useUpdateClothing,
   useDeleteClothing,
 } from '@/hooks/mutations/clothing';
+import { useLocationZones } from '@/hooks/queries/locations';
 import ConfirmModal from '../../components/ConfirmModal';
 
 type Clothes = ItemDetail;
@@ -44,10 +45,7 @@ export default function EditWardrobePage() {
   const { data: item } = useItem(id, userId);
   const { data: categories = [] } = useCategories();
   const { data: brandSuggestions = [] } = useSuggestions('brands', userId);
-  const { data: locationSuggestions = [] } = useSuggestions(
-    'locations',
-    userId,
-  );
+  const { data: zones = [] } = useLocationZones(userId);
   const { data: materialSuggestions = [] } = useSuggestions(
     'materials',
     userId,
@@ -68,7 +66,6 @@ export default function EditWardrobePage() {
   const [isEditingMainInfo, setIsEditingMainInfo] = useState(false);
   const [customBrand, setCustomBrand] = useState(false);
   const [customMaterial, setCustomMaterial] = useState(false);
-  const [customLocation, setCustomLocation] = useState(false);
   const [visualResult, setVisualResult] = useState<{
     is_different: boolean;
     reasoning: string;
@@ -169,6 +166,7 @@ export default function EditWardrobePage() {
     setSaving(true);
 
     try {
+      const selectedZone = zones.find((z) => z.id === formData.zone_id);
       await updateClothing.mutateAsync({
         id,
         name: formData.name,
@@ -185,7 +183,8 @@ export default function EditWardrobePage() {
         categories: formData.categories,
         description: formData.description,
         purchase_date: formData.purchase_date,
-        location: formData.location,
+        zone_id: selectedZone?.id || null,
+        location: formData.location || selectedZone?.name || null,
         notes: formData.notes,
       });
       router.push('/wardrobe');
@@ -586,51 +585,36 @@ export default function EditWardrobePage() {
                 />
               </div>
 
-              {/* Location */}
+              {/* Zone */}
               <div>
                 <label className="block text-xs text-slate-600 mb-1">
-                  Location
+                  Zone
                 </label>
-                {customLocation ? (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={formData.location ?? ''}
-                      onChange={(e) => updateField('location', e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
-                      placeholder="e.g. Wardrobe A, Drawer 2"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        updateField('location', null);
-                        setCustomLocation(false);
-                      }}
-                      className="text-xs text-slate-500 hover:text-slate-700"
-                    >
-                      ← Pick from saved locations
-                    </button>
-                  </div>
-                ) : (
+                {zones.length > 0 ? (
                   <select
-                    value={formData.location ?? ''}
+                    value={formData.zone_id ?? ''}
                     onChange={(e) => {
-                      if (e.target.value === '__custom__') {
-                        setCustomLocation(true);
-                        updateField('location', '');
-                      } else updateField('location', e.target.value);
+                      const zoneId = e.target.value || null;
+                      updateField('zone_id', zoneId);
                     }}
                     className="w-full rounded-xl border border-slate-200 text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-slate-500/70 px-3 py-2"
                   >
-                    <option value="">Select location...</option>
-                    {locationSuggestions.map((l) => (
-                      <option key={l} value={l}>
-                        {l}
+                    <option value="">(None — goes to Inbox)</option>
+                    {zones.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.name} — {z.type}
                       </option>
                     ))}
-                    <option value="__custom__">+ Add new location</option>
                   </select>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">
+                    No zones yet. Create zones in your Closet view.
+                  </p>
+                )}
+                {formData.location && (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Original location note: {formData.location}
+                  </p>
                 )}
               </div>
             </div>
