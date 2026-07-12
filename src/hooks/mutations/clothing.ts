@@ -8,18 +8,20 @@ export interface CreateClothingData {
   name: string;
   type: string;
   color: string;
-  season: string | null;
-  size: string | null;
-  brand: string | null;
-  price: number | null;
-  material: string | null;
-  favorite: boolean;
-  image_url: string;
-  use_case: string[];
-  description: string | null;
-  purchase_date: string | null;
+  season?: string | null;
+  size?: string | null;
+  brand?: string | null;
+  price?: number | null;
+  material?: string | null;
+  favorite?: boolean;
+  image_url?: string | null;
+  use_case?: string[] | null;
+  description?: string | null;
+  purchase_date?: string | null;
   location: string | null;
-  notes: string | null;
+  notes?: string | null;
+  zone_id?: string | null;
+  sort_order?: number | null;
 }
 
 export function useCreateClothing(userId?: string) {
@@ -59,22 +61,23 @@ export function useCreateClothing(userId?: string) {
 
 export interface UpdateClothingData {
   id: string;
-  name: string;
-  type: string;
-  color: string;
-  season: string | null;
-  size: string | null;
-  brand: string | null;
-  price: number | null;
-  material: string | null;
-  favorite: boolean;
-  image_url: string | null;
-  use_case: string[];
-  categories: string[] | null;
-  description: string | null;
-  purchase_date: string | null;
-  location: string | null;
-  notes: string | null;
+  name?: string;
+  type?: string;
+  color?: string;
+  season?: string | null;
+  size?: string | null;
+  brand?: string | null;
+  price?: number | null;
+  material?: string | null;
+  favorite?: boolean;
+  image_url?: string | null;
+  use_case?: string[] | null;
+  description?: string | null;
+  purchase_date?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  zone_id?: string | null;
+  sort_order?: number | null;
 }
 
 export function useUpdateClothing(userId?: string) {

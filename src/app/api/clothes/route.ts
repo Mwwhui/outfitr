@@ -57,6 +57,8 @@ export async function POST(req: Request) {
       description: body.description,
       purchase_date: body.purchase_date,
       location: body.location,
+      zone_id: body.zone_id || null,
+      sort_order: body.sort_order ?? 0,
       notes: body.notes,
     })
     .select()

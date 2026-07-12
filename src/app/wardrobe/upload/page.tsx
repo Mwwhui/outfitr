@@ -10,6 +10,7 @@ import {
   useSuggestions,
   useSimilarItems,
 } from '@/hooks/queries/wardrobe';
+import { useLocationZones } from '@/hooks/queries/locations';
 import { useCreateClothing } from '@/hooks/mutations/clothing';
 import {
   SEASONS,
@@ -41,6 +42,7 @@ interface FormFields {
   material: string | '';
   purchaseDate: string;
   location: string | '';
+  zoneId: string | '';
   description: string;
   notes: string;
   useCases: string[];
@@ -57,6 +59,7 @@ const initialForm: FormFields = {
   material: '',
   purchaseDate: new Date().toISOString().split('T')[0],
   location: '',
+  zoneId: '',
   description: '',
   notes: '',
   useCases: [],
@@ -73,7 +76,6 @@ export default function UploadClothesPage() {
 
   const [customBrand, setCustomBrand] = useState(false);
   const [customMaterial, setCustomMaterial] = useState(false);
-  const [customLocation, setCustomLocation] = useState(false);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -101,10 +103,7 @@ export default function UploadClothesPage() {
     'brands',
     session?.user?.id,
   );
-  const { data: locationSuggestions = [] } = useSuggestions(
-    'locations',
-    session?.user?.id,
-  );
+  const { data: zones = [] } = useLocationZones(session?.user?.id);
   const { data: materialSuggestions = [] } = useSuggestions(
     'materials',
     session?.user?.id,
@@ -458,6 +457,7 @@ export default function UploadClothesPage() {
       if (!uploadRes.ok) throw new Error(uploadData.error || 'Upload failed');
       const imageUrl = uploadData.url;
 
+      const selectedZone = zones.find((z) => z.id === fields.zoneId);
       const created = await createClothing.mutateAsync({
         user_id: session.user.id,
         name: fields.name,
@@ -473,7 +473,8 @@ export default function UploadClothesPage() {
         use_case: fields.useCases,
         description: fields.description || null,
         purchase_date: fields.purchaseDate || null,
-        location: fields.location || null,
+        zone_id: selectedZone?.id || null,
+        location: fields.location || selectedZone?.name || null,
         notes: fields.notes || null,
       });
       router.push(`/wardrobe/${created.id}`);
@@ -916,48 +917,25 @@ export default function UploadClothesPage() {
             </div>
             <div className="md:col-span-2">
               <label className="block text-xs text-slate-600 mb-1">
-                Location
+                Zone
               </label>
-              {customLocation ? (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={fields.location}
-                    onChange={upd('location')}
-                    className={inputBase}
-                    placeholder="e.g. Wardrobe A, Drawer 2"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setField({ location: '' });
-                      setCustomLocation(false);
-                    }}
-                    className="text-xs text-slate-500 hover:text-slate-700"
-                  >
-                    ← Pick from saved locations
-                  </button>
-                </div>
-              ) : (
+              {zones.length > 0 ? (
                 <select
-                  value={fields.location}
-                  onChange={(e) => {
-                    if (e.target.value === '__custom__') {
-                      setCustomLocation(true);
-                      setField({ location: '' });
-                    } else setField({ location: e.target.value });
-                  }}
+                  value={fields.zoneId}
+                  onChange={(e) => setField({ zoneId: e.target.value })}
                   className={inputBase}
                 >
-                  <option value="">Select location...</option>
-                  {locationSuggestions.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
+                  <option value="">(None — goes to Inbox)</option>
+                  {zones.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name} — {z.type}
                     </option>
                   ))}
-                  <option value="__custom__">+ Add new location</option>
                 </select>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  No zones yet. You can create zones in your Closet view after uploading.
+                </p>
               )}
             </div>
           </div>

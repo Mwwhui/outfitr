@@ -22,6 +22,9 @@ export type ClothingItem = {
   brand: string | null;
   material: string | null;
   status?: string | null;
+  location?: string | null;
+  zone_id?: string | null;
+  sort_order?: number | null;
 };
 
 export interface DuplicateGroup {
@@ -120,6 +123,8 @@ export interface ItemDetail {
   description: string | null;
   purchase_date: string | null;
   location: string | null;
+  zone_id: string | null;
+  sort_order: number | null;
   notes: string | null;
   use_case: string[] | null;
   created_at?: string;

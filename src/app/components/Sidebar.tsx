@@ -5,6 +5,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { clothesOptions, clustersOptions } from '@/hooks/queries/wardrobe';
+import { locationZonesOptions, closetLayoutOptions } from '@/hooks/queries/locations';
 import { dashboardStatsOptions } from '@/hooks/queries/dashboard';
 import { useAlerts, monthlyInsightsOptions, pledgesOptions, sustainabilityStoryOptions } from '@/hooks/queries/home';
 import { frequentCombosOptions, outfitDnaOptions } from '@/hooks/queries/outfits';
@@ -162,6 +163,8 @@ export default function Sidebar({
         case '/wardrobe':
           queryClient.prefetchQuery(clothesOptions(userId));
           queryClient.prefetchQuery(clustersOptions(userId));
+          queryClient.prefetchQuery(locationZonesOptions(userId));
+          queryClient.prefetchQuery(closetLayoutOptions(userId));
           break;
         case '/dashboard':
           queryClient.prefetchQuery(dashboardStatsOptions(userId));
