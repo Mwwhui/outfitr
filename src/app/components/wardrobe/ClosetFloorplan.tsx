@@ -127,20 +127,29 @@ function syncLayoutWithZones(
     .map((item) => ({ ...item }));
 
   const maxY = synced.reduce((max, item) => Math.max(max, item.y + item.h), 0);
-  let col = 0;
+  let rowY = maxY;
+  let rowX = 0;
 
   zones.forEach((zone) => {
     if (existing.has(zone.id)) return;
+    const w = zone.type === 'drawer' ? 4 : 6;
+    const h = zone.type === 'hanging' ? 5 : zone.type === 'drawer' ? 3 : 4;
+
+    if (rowX + w > 12) {
+      rowY += h;
+      rowX = 0;
+    }
+
     synced.push({
       i: zone.id,
-      x: col * 4,
-      y: maxY,
-      w: zone.type === 'drawer' ? 4 : 6,
-      h: zone.type === 'hanging' ? 5 : zone.type === 'drawer' ? 3 : 4,
+      x: rowX,
+      y: rowY,
+      w,
+      h,
       minW: zone.type === 'drawer' ? 2 : 3,
       minH: zone.type === 'drawer' ? 2 : 3,
     });
-    col = (col + 1) % 3;
+    rowX += w;
   });
 
   return synced.sort((a, b) => a.y - b.y);
@@ -205,19 +214,17 @@ export default function ClosetFloorplan({
     setGroupedItems(groupItemsByZone(items, zones));
   }, [items, zones]);
 
-  const zonePinnedMap = useMemo(() => new Map(zones.map((z) => [z.id, z.pinned])), [zones]);
-
   useEffect(() => {
     if (savedLayout.length > 0 && zones.length > 0) {
       const synced = syncLayoutWithZones(savedLayout, zones);
-      setCurrentLayout(synced.map((item) => ({ ...item, static: zonePinnedMap.get(item.i) ?? false })));
+      setCurrentLayout(synced);
       setLayoutInitialized(true);
     } else if (zones.length > 0 && !layoutInitialized) {
       const auto = generateAutoLayout(zones);
-      setCurrentLayout(auto.map((item) => ({ ...item, static: zonePinnedMap.get(item.i) ?? false })));
+      setCurrentLayout(auto);
       setLayoutInitialized(true);
     }
-  }, [savedLayout, zones, layoutInitialized, zonePinnedMap]);
+  }, [savedLayout, zones, layoutInitialized]);
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {

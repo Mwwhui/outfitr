@@ -36,14 +36,13 @@ export default function Cabinet({
       y: item.y,
       w: item.w,
       h: item.h,
-      static: layout.find((l) => l.i === item.i)?.static ?? false,
     }));
     const serialized = JSON.stringify(mapped);
     if (serialized !== lastLayoutRef.current) {
       lastLayoutRef.current = serialized;
       onLayoutChange(mapped);
     }
-  }, [onLayoutChange, layout]);
+  }, [onLayoutChange]);
 
   if (width === 0) {
     return <div ref={rglContainerRef} className="cabinet-frame" style={{ minHeight: 300 }} />;
@@ -55,7 +54,7 @@ export default function Cabinet({
         <ReactGridLayout
           width={width}
           layout={layout as unknown as LayoutItem[]}
-          onLayoutChange={handleLayoutChange}
+          onLayoutChange={editMode ? handleLayoutChange : undefined}
           gridConfig={{
             cols: 12,
             rowHeight: 30,
