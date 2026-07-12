@@ -379,6 +379,8 @@ label[for] {
   padding: 8px 12px 0;
   min-height: 100px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 .shelf-items {
   display: flex;
@@ -388,14 +390,12 @@ label[for] {
   padding-bottom: 8px;
 }
 .shelf-board {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
   height: 6px;
+  margin-top: auto;
   background: linear-gradient(90deg, #555, #777, #555);
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
 }
 
 /* Drawer */
