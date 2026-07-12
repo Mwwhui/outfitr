@@ -227,6 +227,14 @@ export default function ClosetFloorplan({
     setGroupedItems(groupItemsByZone(items, zones));
   }, [items, zones]);
 
+  // Reset layout state when all zones are deleted
+  useEffect(() => {
+    if (zones.length === 0) {
+      setLayoutInitialized(false);
+      lastLayoutKeyRef.current = '';
+    }
+  }, [zones]);
+
   useEffect(() => {
     if (savedLayout.length > 0 && zones.length > 0) {
       const synced = syncLayoutWithZones(savedLayout, zones);

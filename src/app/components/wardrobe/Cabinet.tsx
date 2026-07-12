@@ -22,10 +22,17 @@ export default function Cabinet({
   const [width, setWidth] = useState(0);
   const { width: trackedWidth, containerRef: rglContainerRef } = useContainerWidth();
   const lastLayoutRef = useRef('');
+  const lastWidthRef = useRef(0);
 
+  // Width fluctuation guard: ignore changes smaller than 10px
+  // This filters out scrollbar appear/disappear jitter
   useEffect(() => {
     if (trackedWidth > 0) {
-      setWidth(trackedWidth);
+      const diff = Math.abs(trackedWidth - lastWidthRef.current);
+      if (diff > 10 || lastWidthRef.current === 0) {
+        lastWidthRef.current = trackedWidth;
+        setWidth(trackedWidth);
+      }
     }
   }, [trackedWidth]);
 
@@ -54,6 +61,41 @@ export default function Cabinet({
     return maxRows * rowHeight + Math.max(0, maxRows - 1) * marginY + 2 * paddingY;
   }, [layout]);
 
+  // Memoize inline config objects so RGL doesn't re-process on every render
+  const gridConfig = useMemo(
+    () => ({
+      cols: 12,
+      rowHeight: 30,
+      margin: [8, 8] as readonly [number, number],
+      containerPadding: [12, 12] as readonly [number, number],
+      maxRows: Infinity,
+    }),
+    []
+  );
+
+  const dragConfig = useMemo(
+    () => ({
+      enabled: editMode,
+      bounded: true,
+      handle: '.drag-handle',
+      threshold: 5,
+    }),
+    [editMode]
+  );
+
+  const resizeConfig = useMemo(
+    () => ({
+      enabled: editMode,
+      handles: ['se'] as const,
+    }),
+    [editMode]
+  );
+
+  const containerStyle = useMemo(
+    () => ({ height: gridHeight }),
+    [gridHeight]
+  );
+
   if (width === 0) {
     return <div ref={rglContainerRef} className="cabinet-frame" style={{ minHeight: 300 }} />;
   }
@@ -65,25 +107,11 @@ export default function Cabinet({
           width={width}
           layout={layout as unknown as LayoutItem[]}
           onLayoutChange={editMode ? handleLayoutChange : undefined}
-          gridConfig={{
-            cols: 12,
-            rowHeight: 30,
-            margin: [8, 8] as readonly [number, number],
-            containerPadding: [12, 12] as readonly [number, number],
-            maxRows: Infinity,
-          }}
-          dragConfig={{
-            enabled: editMode,
-            bounded: true,
-            handle: '.drag-handle',
-            threshold: 5,
-          }}
-          resizeConfig={{
-            enabled: editMode,
-            handles: ['se'],
-          }}
+          gridConfig={gridConfig}
+          dragConfig={dragConfig}
+          resizeConfig={resizeConfig}
           compactor={noCompactor}
-          style={{ height: gridHeight }}
+          style={containerStyle}
         >
           {children}
         </ReactGridLayout>

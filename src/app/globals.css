@@ -113,6 +113,11 @@ body {
   font-family: var(--font-hanken), sans-serif;
 }
 
+/* Reserve scrollbar gutter permanently to prevent width jitter */
+html {
+  overflow-y: scroll;
+}
+
 html,
 body,
 * {
