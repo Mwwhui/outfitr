@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../../auth/[...nextauth]/route';
+import { supabaseServer } from '@/lib/supabase/server';
 import { callGeminiWithFallback } from '@/lib/gemini';
 
 export const maxDuration = 30;
@@ -16,15 +19,37 @@ const VIS_CACHE = new Map<
 >();
 const VIS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
+// Allowlist: only fetch images from our own Supabase Storage bucket
+const ALLOWED_IMAGE_HOSTS = [
+  process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('https://', '') || 'localhost',
+];
+
+function isAllowedImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ALLOWED_IMAGE_HOSTS.some((host) => parsed.hostname === host);
+  } catch {
+    return false;
+  }
+}
+
 // POST /api/clothes/visual-similarity
 // Body: { new_image: base64, existing_images: [{ id, image_url, name }], type: string }
 export async function POST(req: Request) {
   try {
+    // 1. Authenticate
+    const session = await getServerSession(authOptions);
+    const user_id = session?.user?.id;
+
+    if (!user_id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
         { error: 'Gemini API key not configured' },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -34,12 +59,37 @@ export async function POST(req: Request) {
     if (!new_image || !existing_images?.length) {
       return NextResponse.json(
         { error: 'new_image and existing_images are required' },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    // Limit to 3 comparisons to control token cost
-    const toCompare = existing_images.slice(0, 3);
+    // 2. Verify ownership of existing items (fetch from DB with user_id check)
+    const supabase = supabaseServer();
+    const existingIds = existing_images.map((e: { id: string }) => e.id);
+    const { data: ownedItems, error: ownershipError } = await supabase
+      .from('clothes')
+      .select('id, image_url, name')
+      .in('id', existingIds)
+      .eq('user_id', user_id)
+      .is('deleted_at', null);
+
+    if (ownershipError || !ownedItems) {
+      console.error('Ownership check failed:', ownershipError);
+      return NextResponse.json({ error: 'Failed to verify item ownership' }, { status: 500 });
+    }
+
+    // Only compare items that actually belong to the user
+    const toCompare = existing_images
+      .filter((e: { id: string }) => ownedItems.some((oi) => oi.id === e.id))
+      .slice(0, 3);
+
+    if (toCompare.length === 0) {
+      return NextResponse.json({
+        is_different: true,
+        reasoning: 'No owned items found for comparison',
+        confidence: 0.2,
+      });
+    }
 
     // Check cache (key = new_image first 32 chars + sorted existing IDs)
     const cacheKey =
@@ -83,11 +133,17 @@ Respond with ONLY valid JSON (no markdown, no extra text):
 
     parts.push({ text: '--- EXISTING ITEMS ---' });
 
-    // Fetch existing images in parallel
+    // Fetch existing images in parallel (only from allowed hosts)
     const imageResults = await Promise.all(
       toCompare.map(
-        async (item: { image_url: string | URL | Request; name: any }) => {
+        async (item: { image_url: string; name: string }) => {
           try {
+            // SSRF defense: only fetch from our own Supabase Storage
+            if (!isAllowedImageUrl(item.image_url)) {
+              console.warn('Blocked disallowed image URL:', item.image_url);
+              return null;
+            }
+
             const res = await fetch(item.image_url);
             if (!res.ok) return null;
             const buffer = Buffer.from(await res.arrayBuffer());
@@ -167,8 +223,8 @@ Respond with ONLY valid JSON (no markdown, no extra text):
   } catch (error) {
     console.error('API /api/clothes/visual-similarity crashed:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal Error' },
-      { status: 500 },
+      { error: 'Internal Error' },
+      { status: 500 }
     );
   }
 }
