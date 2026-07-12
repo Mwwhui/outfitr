@@ -8,6 +8,19 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Columns to return to the client — NEVER include password_hash
+const SAFE_USER_COLUMNS = [
+  "id",
+  "email",
+  "username",
+  "first_name",
+  "last_name",
+  "role",
+  "partner_id",
+  "created_at",
+  "updated_at",
+];
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -20,14 +33,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // Fetch user from Supabase users table
+    // Fetch user from Supabase users table (do NOT select password_hash)
     const { data: users, error } = await supabase
       .from("users")
-      .select("*")
+      .select("*") // We still need password_hash to verify, but we'll strip it after
       .eq("email", email)
       .limit(1);
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase login error:", error);
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
 
     const user = users?.[0];
     if (!user) {
@@ -43,13 +59,20 @@ export async function POST(req: Request) {
       );
     }
 
-    // You can generate a token or session here later
+    // Strip password_hash before returning
+    const safeUser: Record<string, any> = {};
+    for (const key of SAFE_USER_COLUMNS) {
+      if (key in user) {
+        safeUser[key] = user[key];
+      }
+    }
+
     return NextResponse.json(
-      { message: "Login successful!", user },
+      { message: "Login successful!", user: safeUser },
       { status: 200 }
     );
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("API /api/login crashed:", err);
+    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
   }
 }
