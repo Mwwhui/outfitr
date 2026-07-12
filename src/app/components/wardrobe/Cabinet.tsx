@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import ReactGridLayout, { useContainerWidth, noCompactor, type LayoutItem } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -44,6 +44,16 @@ export default function Cabinet({
     }
   }, [onLayoutChange]);
 
+  // Compute grid height manually to prevent autoSize resize cascades
+  const gridHeight = useMemo(() => {
+    if (!layout || layout.length === 0) return 300;
+    const maxRows = layout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
+    const rowHeight = 30;
+    const marginY = 8;
+    const paddingY = 12;
+    return maxRows * rowHeight + Math.max(0, maxRows - 1) * marginY + 2 * paddingY;
+  }, [layout]);
+
   if (width === 0) {
     return <div ref={rglContainerRef} className="cabinet-frame" style={{ minHeight: 300 }} />;
   }
@@ -73,7 +83,7 @@ export default function Cabinet({
             handles: ['se'],
           }}
           compactor={noCompactor}
-          autoSize
+          style={{ height: gridHeight }}
         >
           {children}
         </ReactGridLayout>
