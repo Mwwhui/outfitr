@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { LocationZone } from '@/hooks/queries/locations';
 import { getZoneIcon } from './ZoneIcons';
 import ConfirmModal from '../ConfirmModal';
@@ -32,6 +32,28 @@ const ZONE_TYPES: { value: LocationZone['type']; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+// Generate a default name for a zone type, auto-incrementing if the base name already exists
+function getDefaultName(type: LocationZone['type'], zones: LocationZone[]): string {
+  const typeDef = ZONE_TYPES.find((t) => t.value === type);
+  if (!typeDef) return '';
+  const base = typeDef.label;
+
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^${escaped}(?: (\\d+))?$`);
+
+  let maxNumber = 0;
+  for (const zone of zones) {
+    const match = zone.name.match(pattern);
+    if (match) {
+      const num = match[1] ? parseInt(match[1], 10) : 1;
+      maxNumber = Math.max(maxNumber, num);
+    }
+  }
+
+  if (maxNumber === 0) return base;
+  return `${base} ${maxNumber + 1}`;
+}
+
 export default function ZoneManager({
   open,
   zones,
@@ -49,6 +71,7 @@ export default function ZoneManager({
   const [orderedZones, setOrderedZones] = useState<LocationZone[]>([]);
   const [deleteZoneId, setDeleteZoneId] = useState<string | null>(null);
   const deleteTarget = deleteZoneId ? zones.find((z) => z.id === deleteZoneId) : null;
+  const isNameCustomizedRef = useRef(false);
 
   useEffect(() => {
     setOrderedZones(zones);
@@ -84,6 +107,20 @@ export default function ZoneManager({
     setType(zone.type);
     setColor(zone.color || '#e3e2e2');
     setMode('edit');
+  };
+
+  const handleOpenCreate = () => {
+    resetForm();
+    setMode('create');
+    setName(getDefaultName('shelf', zones));
+    isNameCustomizedRef.current = false;
+  };
+
+  const handleTypeChange = (newType: LocationZone['type']) => {
+    setType(newType);
+    if (mode === 'create' && !isNameCustomizedRef.current) {
+      setName(getDefaultName(newType, zones));
+    }
   };
 
   return (
@@ -203,7 +240,7 @@ export default function ZoneManager({
                   );
                 })}
                 <button
-                  onClick={() => setMode('create')}
+                  onClick={handleOpenCreate}
                   className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-outline-variant rounded-xl text-sm font-medium text-on-surface-variant hover:border-primary hover:text-primary transition"
                 >
                   <span className="material-symbols-outlined">add</span>
@@ -222,7 +259,10 @@ export default function ZoneManager({
                   <input
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      isNameCustomizedRef.current = true;
+                    }}
                     placeholder="e.g. Main Closet, Drawer 2"
                     className="w-full px-3 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                   />
@@ -239,7 +279,7 @@ export default function ZoneManager({
                       return (
                         <button
                           key={t.value}
-                          onClick={() => setType(t.value)}
+                          onClick={() => handleTypeChange(t.value)}
                           className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium border transition ${
                             type === t.value
                               ? 'border-primary bg-primary/5 text-primary'
