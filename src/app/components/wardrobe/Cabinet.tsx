@@ -23,6 +23,8 @@ export default function Cabinet({
   const { width: trackedWidth, containerRef: rglContainerRef } = useContainerWidth();
   const lastLayoutRef = useRef('');
   const lastWidthRef = useRef(0);
+  const propLayoutRef = useRef('');
+  const suppressUntilRef = useRef(0);
 
   // Width fluctuation guard: ignore changes smaller than 10px
   // This filters out scrollbar appear/disappear jitter
@@ -36,7 +38,22 @@ export default function Cabinet({
     }
   }, [trackedWidth]);
 
+  // Detect external layout prop changes and temporarily suppress onLayoutChange
+  // Prevents RGL's normalization of the prop from echoing back into the parent
+  useEffect(() => {
+    const key = JSON.stringify(layout);
+    if (key !== propLayoutRef.current) {
+      propLayoutRef.current = key;
+      suppressUntilRef.current = Date.now() + 100;
+    }
+  }, [layout]);
+
   const handleLayoutChange = useCallback((newLayout: readonly LayoutItem[]) => {
+    // Skip callbacks during the suppression window after external prop changes
+    if (Date.now() < suppressUntilRef.current) {
+      return;
+    }
+
     const mapped: ClosetLayoutItem[] = newLayout.map((item) => ({
       i: item.i,
       x: item.x,
