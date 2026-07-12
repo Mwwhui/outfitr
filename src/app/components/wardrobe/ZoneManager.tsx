@@ -39,6 +39,7 @@ export default function ZoneManager({
   onCreate,
   onUpdate,
   onDelete,
+  onReorder,
 }: ZoneManagerProps) {
   const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list');
   const [editingZone, setEditingZone] = useState<LocationZone | null>(null);
