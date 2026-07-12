@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import HangingRod from './HangingRod';
 import ShelfView from './ShelfView';
 import DrawerFront from './DrawerFront';
@@ -119,18 +120,20 @@ function OtherZone({
       ref={setNodeRef}
       className={`shelf-zone ${isOver ? 'zone-drop-active' : ''}`}
     >
-      <div className="shelf-items">
-        {items.length > 0 ? (
-          items.map((item) => (
-            <DraggableItem key={item.id} item={item} onClick={onItemClick} />
-          ))
-        ) : (
-          <span className="empty-hint">
-            <span className="material-symbols-outlined empty-hint-icon">inventory_2</span>
-            Drag items here
-          </span>
-        )}
-      </div>
+      <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
+        <div className="shelf-items">
+          {items.length > 0 ? (
+            items.map((item) => (
+              <DraggableItem key={item.id} item={item} onClick={onItemClick} />
+            ))
+          ) : (
+            <span className="empty-hint">
+              <span className="material-symbols-outlined empty-hint-icon">inventory_2</span>
+              Drag items here
+            </span>
+          )}
+        </div>
+      </SortableContext>
     </div>
   );
 }

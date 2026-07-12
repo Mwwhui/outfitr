@@ -1,6 +1,7 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import DraggableItem from './DraggableItem';
 import type { ClothingItem } from '@/hooks/queries/wardrobe';
 import type { LocationZone } from '@/hooks/queries/locations';
@@ -22,18 +23,20 @@ export default function DrawerFront({
   return (
     <div ref={setNodeRef} className={`drawer-zone ${isOver ? 'zone-drop-active' : ''}`}>
       <div className="drawer-interior">
-        <div className="drawer-items">
-          {items.length > 0 ? (
-            items.map((item) => (
-              <DraggableItem key={item.id} item={item} onClick={onItemClick} />
-            ))
-          ) : (
-            <span className="empty-hint">
-              <span className="material-symbols-outlined empty-hint-icon">archive</span>
-              Empty drawer
-            </span>
-          )}
-        </div>
+        <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
+          <div className="drawer-items">
+            {items.length > 0 ? (
+              items.map((item) => (
+                <DraggableItem key={item.id} item={item} onClick={onItemClick} />
+              ))
+            ) : (
+              <span className="empty-hint">
+                <span className="material-symbols-outlined empty-hint-icon">archive</span>
+                Empty drawer
+              </span>
+            )}
+          </div>
+        </SortableContext>
       </div>
     </div>
   );

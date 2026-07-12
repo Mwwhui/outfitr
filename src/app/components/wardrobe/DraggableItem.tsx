@@ -1,7 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { useDraggable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { RobeIcon } from './ZoneIcons';
 import type { ClothingItem } from '@/hooks/queries/wardrobe';
 
@@ -11,21 +12,27 @@ export default function DraggableItem({
   overlay = false,
 }: {
   item: ClothingItem;
-  onClick?: (item: ClothingItem) => void;
+  onClick?: (clothingItem: ClothingItem) => void;
   overlay?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: item.id,
-    data: { item },
+    data: { item, type: 'item' },
     disabled: overlay,
   });
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        zIndex: isDragging ? 50 : undefined,
-      }
-    : undefined;
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+  };
 
   return (
     <div
@@ -34,7 +41,7 @@ export default function DraggableItem({
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
       onClick={() => onClick?.(item)}
-      className={`shrink-0 w-20 cursor-grab active:cursor-grabbing ${overlay ? 'opacity-90' : ''}`}
+      className={`shrink-0 w-20 cursor-grab active:cursor-grabbing ${overlay ? 'opacity-90' : ''} ${isDragging ? 'opacity-40' : ''}`}
     >
       <div className="aspect-[2/3] rounded-lg overflow-hidden bg-surface-variant border border-outline-variant shadow-sm relative hover:shadow-md hover:border-primary/40 transition-all">
         {item.image_url ? (

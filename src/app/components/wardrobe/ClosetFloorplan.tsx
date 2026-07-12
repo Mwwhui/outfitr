@@ -8,9 +8,13 @@ import toast from 'react-hot-toast';
 import {
   DndContext,
   DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import type { ClothingItem } from '@/hooks/queries/wardrobe';
 import type { LocationZone, ClosetLayoutItem } from '@/hooks/queries/locations';
 import { useSaveClosetLayout } from '@/hooks/mutations/layout';
@@ -210,6 +214,14 @@ export default function ClosetFloorplan({
   const [zoneManagerOpen, setZoneManagerOpen] = useState(false);
   const [layoutInitialized, setLayoutInitialized] = useState(false);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
   useEffect(() => {
     setGroupedItems(groupItemsByZone(items, zones));
   }, [items, zones]);
@@ -242,9 +254,10 @@ export default function ClosetFloorplan({
 
       if (!over || editMode) return;
 
-      const targetZoneId = over.id as string;
       const itemId = active.id as string;
+      const overId = over.id as string;
 
+      // Find source zone
       let sourceZoneId = 'unassigned';
       for (const [zoneId, zoneItems] of Object.entries(groupedItems)) {
         if (zoneItems.some((i) => i.id === itemId)) {
@@ -253,40 +266,109 @@ export default function ClosetFloorplan({
         }
       }
 
-      if (sourceZoneId === targetZoneId) return;
+      // Determine if overId is a zone or an item
+      const isZoneOver = zones.some((z) => z.id === overId) || overId === 'unassigned';
 
-      setGroupedItems((prev) => {
-        const item = prev[sourceZoneId]?.find((i) => i.id === itemId);
-        if (!item) return prev;
+      let targetZoneId = 'unassigned';
+      let overItemIndex = -1;
 
-        const newSource = prev[sourceZoneId].filter((i) => i.id !== itemId);
-        const newTarget = [
-          ...prev[targetZoneId],
-          { ...item, zone_id: targetZoneId === 'unassigned' ? null : targetZoneId },
-        ];
+      if (isZoneOver) {
+        targetZoneId = overId;
+      } else {
+        // overId is an item ID — find its zone and index
+        for (const [zoneId, zoneItems] of Object.entries(groupedItems)) {
+          const idx = zoneItems.findIndex((i) => i.id === overId);
+          if (idx !== -1) {
+            targetZoneId = zoneId;
+            overItemIndex = idx;
+            break;
+          }
+        }
+      }
 
-        return {
+      if (sourceZoneId === targetZoneId) {
+        if (isZoneOver) return; // Dropped on same zone background, no-op
+
+        // Same zone: reorder
+        const zoneItems = groupedItems[sourceZoneId] || [];
+        const oldIndex = zoneItems.findIndex((i) => i.id === itemId);
+        const newIndex = overItemIndex;
+
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+        const reordered = arrayMove(zoneItems, oldIndex, newIndex);
+
+        setGroupedItems((prev) => ({
           ...prev,
-          [sourceZoneId]: newSource,
-          [targetZoneId]: newTarget,
-        };
-      });
+          [sourceZoneId]: reordered,
+        }));
 
-      const updates: Array<{ id: string; zone_id: string | null; sort_order: number }> = [];
-      const sourceItems = groupedItems[sourceZoneId] || [];
-      sourceItems
-        .filter((i) => i.id !== itemId)
-        .forEach((item, idx) => {
-          updates.push({
-            id: item.id,
-            zone_id: sourceZoneId === 'unassigned' ? null : sourceZoneId,
-            sort_order: idx,
+        const updates = reordered.map((item, idx) => ({
+          id: item.id,
+          zone_id: sourceZoneId === 'unassigned' ? null : sourceZoneId,
+          sort_order: idx,
+        }));
+
+        try {
+          const res = await fetch('/api/clothes/batch-reorder', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: updates }),
           });
-        });
+          if (!res.ok) throw new Error('Failed to save reorder');
+          toast.success('Items reordered');
+          onRefetch();
+        } catch {
+          toast.error('Failed to save reorder');
+          onRefetch();
+        }
+
+        return;
+      }
+
+      // Different zone: transfer
+      const sourceItems = groupedItems[sourceZoneId] || [];
       const targetItems = groupedItems[targetZoneId] || [];
       const movedItem = sourceItems.find((i) => i.id === itemId);
-      const newTargetList = movedItem ? [...targetItems, movedItem] : targetItems;
-      newTargetList.forEach((item, idx) => {
+      if (!movedItem) return;
+
+      // Build new source list (without moved item)
+      const newSourceItems = sourceItems.filter((i) => i.id !== itemId);
+
+      // Build new target list (with moved item inserted at position)
+      let newTargetItems: ClothingItem[];
+      if (overItemIndex >= 0) {
+        // Insert at specific position (dropped over an item)
+        newTargetItems = [
+          ...targetItems.slice(0, overItemIndex),
+          { ...movedItem, zone_id: targetZoneId === 'unassigned' ? null : targetZoneId },
+          ...targetItems.slice(overItemIndex),
+        ];
+      } else {
+        // Append (dropped on zone background)
+        newTargetItems = [
+          ...targetItems,
+          { ...movedItem, zone_id: targetZoneId === 'unassigned' ? null : targetZoneId },
+        ];
+      }
+
+      // Update local state
+      setGroupedItems((prev) => ({
+        ...prev,
+        [sourceZoneId]: newSourceItems,
+        [targetZoneId]: newTargetItems,
+      }));
+
+      // Build API updates
+      const updates: Array<{ id: string; zone_id: string | null; sort_order: number }> = [];
+      newSourceItems.forEach((item, idx) => {
+        updates.push({
+          id: item.id,
+          zone_id: sourceZoneId === 'unassigned' ? null : sourceZoneId,
+          sort_order: idx,
+        });
+      });
+      newTargetItems.forEach((item, idx) => {
         updates.push({
           id: item.id,
           zone_id: targetZoneId === 'unassigned' ? null : targetZoneId,
@@ -300,11 +382,7 @@ export default function ClosetFloorplan({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: updates }),
         });
-
-        if (!res.ok) {
-          throw new Error('Failed to save changes');
-        }
-
+        if (!res.ok) throw new Error('Failed to save changes');
         toast.success('Item moved');
         onRefetch();
       } catch {
@@ -312,7 +390,7 @@ export default function ClosetFloorplan({
         onRefetch();
       }
     },
-    [groupedItems, onRefetch, editMode]
+    [groupedItems, onRefetch, editMode, zones]
   );
 
   const handleItemClick = useCallback(
@@ -498,6 +576,7 @@ export default function ClosetFloorplan({
         </div>
       ) : (
         <DndContext
+          sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
