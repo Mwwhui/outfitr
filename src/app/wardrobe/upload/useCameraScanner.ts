@@ -31,6 +31,23 @@ import {
   fetchWithTimeout,
 } from './upload-utils';
 
+const YOLO_CATEGORY_MAP: [RegExp, string][] = [
+  [/\b(?:shirt|blouse|t[- ]?shirts?|tank\s*top|crop\s*top|tops?|sweater|hoodie|cardigan|polo|henley|turtleneck|pullover|jumper|sweatshirt|vest|tunics?|camisole)\b/i, 'Tops'],
+  [/\b(?:pants?|jeans?|trousers?|leggings?|shorts?|skirt|chinos?|slacks?|joggers?|sweat[-_ ]?pants?|culottes?|cargo|bermuda|palazzo|wide[- ]?leg|denim)\b/i, 'Bottoms'],
+  [/\b(?:jackets?|coats?|blazers?|parkas?|puffers?|trench|bomber|denim\s*jacket|leather\s*jacket|windbreakers?|raincoats?|overcoats?)\b/i, 'Outerwear'],
+  [/\b(?:dresses?|jumpsuits?|rompers?|overalls?|bodysuits?|gowns?)\b/i, 'One-Piece'],
+  [/\b(?:shoes?|sneakers?|boots?|sandals?|heels?|loafers?|flats?|mules?|oxfords?|pumps?)\b/i, 'Shoes'],
+  [/\b(?:hats?|caps?|bags?|belts?|scarfs?|scarves|watches?|glasses?|sunglasses?|jewelry|necklaces?|earrings?|bracelets?|wallets?|backpacks?)\b/i, 'Accessories'],
+];
+
+function mapYoloTypeToCategory(yoloType: string): string {
+  const t = yoloType.trim();
+  for (const [pattern, category] of YOLO_CATEGORY_MAP) {
+    if (pattern.test(t)) return category;
+  }
+  return 'Tops';
+}
+
 export interface CameraScannerReturn {
   cameraMode: boolean;
   scanning: boolean;
@@ -602,7 +619,8 @@ export function useCameraScanner(): CameraScannerReturn {
         3,
       );
       const color = hsvCandidates[0] || '';
-      const type = item.type || item.yolo_type || '';
+      const rawType = item.type || item.yolo_type || '';
+      const type = mapYoloTypeToCategory(rawType);
       const seasonGuess = detectSeason(item.yolo_type, type);
       const desc = item.yolo_type || type || '';
       const itemName = [color, desc]
