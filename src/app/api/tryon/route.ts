@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
-import Replicate from "replicate";
 
 export const maxDuration = 60;
 
@@ -11,10 +10,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
-
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN!,
-});
 
 const inMemoryCache = new Map<string, { url: string; ts: number }>();
 const IN_MEMORY_TTL = 60 * 60 * 1000;
@@ -198,21 +193,62 @@ export async function POST(req: Request) {
       person_image: profileImageUrl,
       garment_images: garmentImages,
       preserve_input_size: true,
+      turbo: true,
     };
 
     if (prompt) {
       input.prompt = prompt;
     }
 
-    // Call Replicate
-    const rawOutput = await replicate.run("prunaai/p-image-try-on", { input });
+    // Call Replicate API directly (bypasses SDK file-detection issues)
+    const replicateToken = process.env.REPLICATE_API_TOKEN!;
+    const modelVersion = "0e122964dd5d7fce695da14e9206f8dd48c0c5595ecb7e3cf1a4078701fb2665";
+
+    const createRes = await fetch(
+      "https://api.replicate.com/v1/predictions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${replicateToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ version: modelVersion, input }),
+      },
+    );
+
+    if (!createRes.ok) {
+      const errBody = await createRes.text();
+      throw new Error(`Replicate create failed: ${createRes.status} ${errBody}`);
+    }
+
+    const prediction = await createRes.json();
+
+    // Poll until complete (max 120s)
+    const pollStart = Date.now();
+    const POLL_TIMEOUT = 120_000;
+    let current = prediction;
+
+    while (current.status !== "succeeded" && current.status !== "failed") {
+      await new Promise((r) => setTimeout(r, 1000));
+      const pollRes = await fetch(prediction.urls.get, {
+        headers: { Authorization: `Bearer ${replicateToken}` },
+      });
+      current = await pollRes.json();
+
+      if (Date.now() - pollStart > POLL_TIMEOUT) {
+        throw new Error("Replicate prediction timed out (120s)");
+      }
+    }
+
+    if (current.status === "failed") {
+      throw new Error(current.error || "Replicate prediction failed");
+    }
+
+    const rawOutput = current.output;
 
     let tempUrl: string;
     if (Array.isArray(rawOutput) && rawOutput.length > 0) {
-      const first = rawOutput[0];
-      tempUrl = typeof first === "string" ? first : first.url().toString();
-    } else if (rawOutput && typeof (rawOutput as { url: () => { toString: () => string } }).url === "function") {
-      tempUrl = (rawOutput as { url: () => { toString: () => string } }).url().toString();
+      tempUrl = String(rawOutput[0]);
     } else if (typeof rawOutput === "string") {
       tempUrl = rawOutput;
     } else {
