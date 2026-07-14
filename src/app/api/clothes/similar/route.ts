@@ -1,5 +1,7 @@
 import { supabaseServer } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { normalizeColor, colorSimilarity } from '@/lib/colorNorm';
 
 interface SimilarItem {
@@ -12,19 +14,25 @@ interface SimilarItem {
 }
 
 export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const supabase = supabaseServer();
   const { searchParams } = new URL(req.url);
-  const user_id = searchParams.get('user_id');
   const type = searchParams.get('type');
   const color = searchParams.get('color');
   const exclude_id = searchParams.get('exclude_id');
 
-  if (!user_id || !type) {
+  if (!type) {
     return NextResponse.json(
-      { error: 'user_id and type are required' },
+      { error: 'type is required' },
       { status: 400 },
     );
   }
+
+  const user_id = session.user.id;
 
   const typeLower = type.toLowerCase();
 
