@@ -27,16 +27,6 @@ export default function PartnerDashboard() {
   const { data: pledges = [], isLoading, refetch } = usePartnerPledges(session?.user?.id, activeTab !== 'all' ? activeTab : undefined);
   const updatePledge = useUpdatePledgeStatus(session?.user?.id, activeTab !== 'all' ? activeTab : undefined);
 
-  if (status === 'unauthenticated') {
-    router.push('/auth/login');
-    return null;
-  }
-
-  if (status === 'authenticated' && session.user.role !== 'partner') {
-    router.push('/home');
-    return null;
-  }
-
   const handleAccept = useCallback(
     async (id: string) => {
       try {
@@ -75,6 +65,16 @@ export default function PartnerDashboard() {
     },
     [updatePledge],
   );
+
+  if (status === 'unauthenticated') {
+    router.push('/auth/login');
+    return null;
+  }
+
+  if (status === 'authenticated' && session.user.role !== 'partner') {
+    router.push('/home');
+    return null;
+  }
 
   if (status === 'loading') {
     return (
