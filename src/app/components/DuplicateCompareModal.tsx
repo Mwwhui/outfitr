@@ -15,7 +15,7 @@ interface ClusterItem {
   status?: string | null;
 }
 
-interface DuplicateGroup {
+export interface DuplicateGroup {
   type: string;
   color: string;
   items: ClusterItem[];
