@@ -179,7 +179,7 @@ function computeStatisticalDNA(
     season?: string;
   }>,
 ): OutfitDNA {
-  // 1. Strong pairs — co-occurrence count
+  // Strong pairs — co-occurrence count
   const pairCounts = new Map<
     string,
     { item_a: string; item_b: string; count: number }
@@ -206,7 +206,7 @@ function computeStatisticalDNA(
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  // 2. Formula — most common type combo pattern
+  // Formula： most common type combo pattern
   const typePatternCounts = new Map<string, number>();
   for (const outfit of outfitHistory) {
     const types = [...new Set(outfit.items.map((i) => i.type))].sort();
@@ -220,7 +220,7 @@ function computeStatisticalDNA(
   )[0];
   const formula = topPattern ? topPattern[0].toLowerCase() : 'mixed styles';
 
-  // 3. Color habits — dominant color family per type
+  // Color habits，dominant color family per type
   const typeColors = new Map<string, Map<string, number>>();
   for (const outfit of outfitHistory) {
     for (const item of outfit.items) {
@@ -244,7 +244,7 @@ function computeStatisticalDNA(
     }
   }
 
-  // 4. Never tried — items never paired, prioritizing underutilized items
+  // Never tried — items never paired, prioritizing underutilized items
   const wornPairs = new Set<string>();
   for (const outfit of outfitHistory) {
     for (let i = 0; i < outfit.items.length; i++) {
@@ -333,7 +333,7 @@ function computeStatisticalDNA(
       item_b_id,
     }));
 
-  // 5. Pattern breakers — outfits that deviate from the dominant type pattern
+  // Pattern breakers， outfits that deviate from the dominant type pattern
   const pattern_breakers: Array<{
     combo: string[];
     combo_items: ComboItem[];
@@ -382,7 +382,7 @@ function computeStatisticalDNA(
     }
   }
 
-  // 6. Style summary — template-based
+  // Style summary — template-based
   const totalOutfits = outfitHistory.length;
   const uniqueItems = new Set(
     outfitHistory.flatMap((o) => o.items.map((i) => i.name)),
@@ -405,7 +405,6 @@ function computeStatisticalDNA(
   };
 }
 
-// POST /api/outfits/dna
 // Body: { user_id: string }
 export async function POST(req: Request) {
   try {
@@ -632,7 +631,7 @@ Return ONLY valid JSON (no markdown, no extra text):
         const lower = searchName.toLowerCase();
         // Exact match
         if (nameToItem.has(lower)) return nameToItem.get(lower);
-        // Contains match: "navy blazer" matches "Navy Blue Blazer"
+
         for (const [key, item] of nameToItem) {
           if (key.includes(lower) || lower.includes(key)) return item;
         }
@@ -675,12 +674,14 @@ Return ONLY valid JSON (no markdown, no extra text):
         }
       }
 
-      // Resolve names to IDs — prefer exact match, then fuzzy
+      // Resolve names to IDs , prefer exact match, then fuzzy
       const resolveItem = (name: string) => {
         const exact = allClothes.find((c) => c.name === name);
         if (exact) return exact;
         const lower = name.toLowerCase();
-        const contains = allClothes.find((c) => c.name.toLowerCase().includes(lower));
+        const contains = allClothes.find((c) =>
+          c.name.toLowerCase().includes(lower),
+        );
         if (contains) return contains;
         return allClothes.find((c) => lower.includes(c.name.toLowerCase()));
       };

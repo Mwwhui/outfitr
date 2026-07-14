@@ -11,7 +11,6 @@ interface SimilarItem {
   similarity: number;
 }
 
-// GET /api/clothes/similar?user_id=X&type=Tops&color=Navy+Blue&exclude_id=Y
 export async function GET(req: Request) {
   const supabase = supabaseServer();
   const { searchParams } = new URL(req.url);

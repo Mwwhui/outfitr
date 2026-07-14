@@ -1,24 +1,24 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import bcrypt from "bcrypt";
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import bcrypt from 'bcrypt';
 
 // Initialize Supabase client (server-side)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 // Columns to return to the client — NEVER include password_hash
 const SAFE_USER_COLUMNS = [
-  "id",
-  "email",
-  "username",
-  "first_name",
-  "last_name",
-  "role",
-  "partner_id",
-  "created_at",
-  "updated_at",
+  'id',
+  'email',
+  'username',
+  'first_name',
+  'last_name',
+  'role',
+  'partner_id',
+  'created_at',
+  'updated_at',
 ];
 
 export async function POST(req: Request) {
@@ -28,34 +28,37 @@ export async function POST(req: Request) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: "Email and password are required." },
-        { status: 400 }
+        { error: 'Email and password are required.' },
+        { status: 400 },
       );
     }
 
-    // Fetch user from Supabase users table (do NOT select password_hash)
+    // Fetch user from Supabase users table
     const { data: users, error } = await supabase
-      .from("users")
-      .select("*") // We still need password_hash to verify, but we'll strip it after
-      .eq("email", email)
+      .from('users')
+      .select('*')
+      .eq('email', email)
       .limit(1);
 
     if (error) {
-      console.error("Supabase login error:", error);
-      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+      console.error('Supabase login error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 },
+      );
     }
 
     const user = users?.[0];
     if (!user) {
-      return NextResponse.json({ error: "User not found." }, { status: 404 });
+      return NextResponse.json({ error: 'User not found.' }, { status: 404 });
     }
 
     // Compare password
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       return NextResponse.json(
-        { error: "Invalid email or password." },
-        { status: 401 }
+        { error: 'Invalid email or password.' },
+        { status: 401 },
       );
     }
 
@@ -68,11 +71,11 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { message: "Login successful!", user: safeUser },
-      { status: 200 }
+      { message: 'Login successful!', user: safeUser },
+      { status: 200 },
     );
   } catch (err: any) {
-    console.error("API /api/login crashed:", err);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    console.error('API /api/login crashed:', err);
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }

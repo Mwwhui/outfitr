@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]/route';
 import { supabaseServer } from '@/lib/supabase/server';
 
-// GET /api/closet-layout — fetch the user's saved closet layout
+// fetch the user's saved closet layout
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -21,7 +21,10 @@ export async function GET() {
 
     if (error) {
       console.error('Supabase error /api/closet-layout GET:', error);
-      return NextResponse.json({ error: 'Failed to fetch layout' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch layout' },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ layout: data?.layout_json || [] });
@@ -31,7 +34,7 @@ export async function GET() {
   }
 }
 
-// PUT /api/closet-layout — save the user's closet layout
+//  save the user's closet layout
 export async function PUT(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -44,7 +47,10 @@ export async function PUT(req: Request) {
     const { layout } = body;
 
     if (!Array.isArray(layout)) {
-      return NextResponse.json({ error: 'Layout must be an array' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Layout must be an array' },
+        { status: 400 },
+      );
     }
 
     const supabase = supabaseServer();
@@ -52,12 +58,15 @@ export async function PUT(req: Request) {
       .from('closet_layouts')
       .upsert(
         { user_id, layout_json: layout, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
+        { onConflict: 'user_id' },
       );
 
     if (error) {
       console.error('Supabase error /api/closet-layout PUT:', error);
-      return NextResponse.json({ error: 'Failed to save layout' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to save layout' },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ success: true });

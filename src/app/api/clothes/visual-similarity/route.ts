@@ -12,14 +12,14 @@ interface VisualSimilarityResponse {
   confidence: number;
 }
 
-// In-memory cache with 7-day TTL (keyed by new_image hash + existing IDs)
+// In-memory cache with 7-day TTL
 const VIS_CACHE = new Map<
   string,
   { data: VisualSimilarityResponse; ts: number }
 >();
 const VIS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
-// Allowlist: only fetch images from our own Supabase Storage bucket
+// only fetch images from Supabase Storage bucket
 const ALLOWED_IMAGE_HOSTS = [
   process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('https://', '') || 'localhost',
 ];
@@ -33,11 +33,9 @@ function isAllowedImageUrl(url: string): boolean {
   }
 }
 
-// POST /api/clothes/visual-similarity
-// Body: { new_image: base64, existing_images: [{ id, image_url, name }], type: string }
 export async function POST(req: Request) {
   try {
-    // 1. Authenticate
+    // Authenticate
     const session = await getServerSession(authOptions);
     const user_id = session?.user?.id;
 
@@ -49,7 +47,7 @@ export async function POST(req: Request) {
     if (!apiKey) {
       return NextResponse.json(
         { error: 'Gemini API key not configured' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -59,11 +57,11 @@ export async function POST(req: Request) {
     if (!new_image || !existing_images?.length) {
       return NextResponse.json(
         { error: 'new_image and existing_images are required' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // 2. Verify ownership of existing items (fetch from DB with user_id check)
+    // Verify ownership of existing items (fetch from DB with user_id check)
     const supabase = supabaseServer();
     const existingIds = existing_images.map((e: { id: string }) => e.id);
     const { data: ownedItems, error: ownershipError } = await supabase
@@ -75,7 +73,10 @@ export async function POST(req: Request) {
 
     if (ownershipError || !ownedItems) {
       console.error('Ownership check failed:', ownershipError);
-      return NextResponse.json({ error: 'Failed to verify item ownership' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to verify item ownership' },
+        { status: 500 },
+      );
     }
 
     // Only compare items that actually belong to the user
@@ -135,29 +136,27 @@ Respond with ONLY valid JSON (no markdown, no extra text):
 
     // Fetch existing images in parallel (only from allowed hosts)
     const imageResults = await Promise.all(
-      toCompare.map(
-        async (item: { image_url: string; name: string }) => {
-          try {
-            // SSRF defense: only fetch from our own Supabase Storage
-            if (!isAllowedImageUrl(item.image_url)) {
-              console.warn('Blocked disallowed image URL:', item.image_url);
-              return null;
-            }
-
-            const res = await fetch(item.image_url);
-            if (!res.ok) return null;
-            const buffer = Buffer.from(await res.arrayBuffer());
-            const contentType = res.headers.get('content-type') || 'image/jpeg';
-            return {
-              name: item.name,
-              mimeType: contentType.split(';')[0],
-              base64: buffer.toString('base64'),
-            };
-          } catch {
+      toCompare.map(async (item: { image_url: string; name: string }) => {
+        try {
+          // SSRF defense: only fetch from our own Supabase Storage
+          if (!isAllowedImageUrl(item.image_url)) {
+            console.warn('Blocked disallowed image URL:', item.image_url);
             return null;
           }
-        },
-      ),
+
+          const res = await fetch(item.image_url);
+          if (!res.ok) return null;
+          const buffer = Buffer.from(await res.arrayBuffer());
+          const contentType = res.headers.get('content-type') || 'image/jpeg';
+          return {
+            name: item.name,
+            mimeType: contentType.split(';')[0],
+            base64: buffer.toString('base64'),
+          };
+        } catch {
+          return null;
+        }
+      }),
     );
 
     // Add fetched images to prompt (skip nulls)
@@ -172,7 +171,7 @@ Respond with ONLY valid JSON (no markdown, no extra text):
       });
     }
 
-    // Guard: if no existing images were fetched, skip Gemini call
+    // If no existing images were fetched, skip Gemini call
     const hasExistingImages = imageResults.some(Boolean);
     if (!hasExistingImages) {
       return NextResponse.json({
@@ -222,9 +221,6 @@ Respond with ONLY valid JSON (no markdown, no extra text):
     return NextResponse.json(result);
   } catch (error) {
     console.error('API /api/clothes/visual-similarity crashed:', error);
-    return NextResponse.json(
-      { error: 'Internal Error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }

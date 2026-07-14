@@ -15,7 +15,7 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 export async function POST(req: Request) {
   try {
-    // 1. Authenticate
+    // Authenticate
     const session = await getServerSession(authOptions);
     const user_id = session?.user?.id;
 
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Parse multipart form
+    // Parse multipart form
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
 
@@ -31,19 +31,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    // 3. Validate file size
+    // Validate file size
     if (file.size > MAX_FILE_SIZE_BYTES) {
       return NextResponse.json(
         { error: `File too large. Max size is ${MAX_FILE_SIZE_MB}MB.` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // 4. Validate MIME type
+    // Validate MIME type
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
       return NextResponse.json(
         { error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     if (!apiKey) {
       return NextResponse.json(
         { error: 'Gemini API key is not configured' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
 
     const data = await response.json();
     let color = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-    // Clean up Gemini's messy output: strip quotes, periods, take first line only
+    // Clean up Gemini's messy output
     color = color
       .replace(/["''`]/g, '')
       .replace(/\.$/, '')
