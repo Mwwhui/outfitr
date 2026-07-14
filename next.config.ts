@@ -5,7 +5,7 @@ const csp = [
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' https://lntdirhpnollkntuoryq.supabase.co https://*.tile.openstreetmap.org https://raw.githubusercontent.com data: blob:",
+  "img-src 'self' https://lntdirhpnollkntuoryq.supabase.co https://*.tile.openstreetmap.org https://raw.githubusercontent.com https://pixabay.com data: blob:",
   "connect-src 'self' https://lntdirhpnollkntuoryq.supabase.co https://generativelanguage.googleapis.com https://api.open-meteo.com https://clothing-detection-production.up.railway.app https://www.googleapis.com https://identitytoolkit.googleapis.com https://mwwhui--outfitr-leffa-tryon-leffatryon-tryon.modal.run",
   "frame-src 'self' https://accounts.google.com",
   "worker-src 'self' blob:",
