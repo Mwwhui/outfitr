@@ -4,7 +4,6 @@ import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useEffect } from 'react';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet/dist/leaflet.css';
 
 const PIN_BASE =
   'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/';

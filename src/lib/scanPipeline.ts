@@ -102,20 +102,20 @@ function getCurrentSeason(): string {
 // ---------- YOLO type mapping ----------
 
 const YOLO_CATEGORY_MAP: [RegExp, string][] = [
-  [/shirt|blouse|t[- ]?shirts?|tank\s*top|crop\s*top|top|sweater|hoodie|cardigan|polo|henley|turtleneck|pullover|jumper|sweatshirt|vest/, 'Tops'],
-  [/pants|jeans|trousers|leggings|shorts|skirt|chinos|slacks|joggers|sweatpants|culottes/, 'Bottoms'],
-  [/jacket|coat|blazer|parka|puffer|trench|bomber|denim\s*jacket|leather\s*jacket|windbreaker|raincoat|overcoat/, 'Outerwear'],
-  [/dress|jumpsuit|romper|overalls|bodysuit|gown/, 'One-Piece'],
-  [/shoe|sneaker|boot|sandal|heel|loafer|flats?|mules?|oxford|pump/, 'Shoes'],
-  [/hat|cap|bag|belt|scarf|watch|glasses|sunglasses|jewelry|necklace|earring|bracelet|wallet|backpack/, 'Accessories'],
+  [/\b(?:shirt|blouse|t[- ]?shirts?|tank\s*top|crop\s*top|tops?|sweater|hoodie|cardigan|polo|henley|turtleneck|pullover|jumper|sweatshirt|vest|tunics?|camisole)\b/i, 'Tops'],
+  [/\b(?:pants?|jeans?|trousers?|leggings?|shorts?|skirt|chinos?|slacks?|joggers?|sweat[-_ ]?pants?|culottes?|cargo|bermuda|palazzo|wide[- ]?leg|denim)\b/i, 'Bottoms'],
+  [/\b(?:jackets?|coats?|blazers?|parkas?|puffers?|trench|bomber|denim\s*jacket|leather\s*jacket|windbreakers?|raincoats?|overcoats?)\b/i, 'Outerwear'],
+  [/\b(?:dresses?|jumpsuits?|rompers?|overalls?|bodysuits?|gowns?)\b/i, 'One-Piece'],
+  [/\b(?:shoes?|sneakers?|boots?|sandals?|heels?|loafers?|flats?|mules?|oxfords?|pumps?)\b/i, 'Shoes'],
+  [/\b(?:hats?|caps?|bags?|belts?|scarfs?|scarves|watches?|glasses?|sunglasses?|jewelry|necklaces?|earrings?|bracelets?|wallets?|backpacks?)\b/i, 'Accessories'],
 ];
 
-function mapYoloTypeToCategory(yoloType: string): string {
-  const t = yoloType.toLowerCase().trim();
+function mapYoloTypeToCategory(yoloType: string): string | null {
+  const t = yoloType.trim();
   for (const [pattern, category] of YOLO_CATEGORY_MAP) {
     if (pattern.test(t)) return category;
   }
-  return 'Tops';
+  return null;
 }
 
 // ---------- Garment detection ----------
@@ -199,12 +199,14 @@ async function detectGarmentWithYolo(
 
   if (yoloResult) {
     const category = mapYoloTypeToCategory(yoloResult.type);
-    const enrichment = await enrichGarmentWithGemini(apiKey, category, yoloResult.color, yoloResult.type);
-    return {
-      garment: { type: category, color: yoloResult.color, ...enrichment },
-      source: 'yolo',
-      rateLimited: enrichment.rateLimited,
-    };
+    if (category) {
+      const enrichment = await enrichGarmentWithGemini(apiKey, category, yoloResult.color, yoloResult.type);
+      return {
+        garment: { type: category, color: yoloResult.color, ...enrichment },
+        source: 'yolo',
+        rateLimited: enrichment.rateLimited,
+      };
+    }
   }
 
   const { garment, rateLimited } = await detectGarment(apiKey, base64Data, mimeType);
