@@ -11,7 +11,6 @@ export const maxDuration = 30;
 const SUGGEST_CACHE = new Map<string, { data: unknown; ts: number }>();
 const SUGGEST_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-// POST /api/outfits/suggest
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -159,9 +158,13 @@ Return ONLY valid JSON array:
   ...
 ]`;
 
-    const { response } = await callGeminiWithFallback(apiKey, {
-      contents: [{ parts: [{ text: prompt }] }],
-    }, 0);
+    const { response } = await callGeminiWithFallback(
+      apiKey,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+      },
+      0,
+    );
 
     let aiReasoning: Array<{
       index: number;
