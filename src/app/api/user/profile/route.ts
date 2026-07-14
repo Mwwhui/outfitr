@@ -12,9 +12,18 @@ export async function GET() {
     }
 
     const supabase = supabaseServer();
+
+    const { data: pwCheck } = await supabase
+      .from("users")
+      .select("password_hash")
+      .eq("id", session.user.id)
+      .single();
+
+    const has_password = !!pwCheck?.password_hash;
+
     const { data, error } = await supabase
       .from("users")
-      .select("id, username, email, first_name, last_name, dob, nationality, gender, contact_no, password_hash, role, created_at, updated_at")
+      .select("id, username, email, first_name, last_name, dob, nationality, gender, contact_no, role, created_at, updated_at")
       .eq("id", session.user.id)
       .single();
 
@@ -22,8 +31,7 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const { password_hash, ...safeUser } = data;
-    return NextResponse.json({ user: safeUser, has_password: !!password_hash });
+    return NextResponse.json({ user: data, has_password });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Failed to fetch profile" }, { status: 500 });

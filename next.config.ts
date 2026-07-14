@@ -1,5 +1,19 @@
 import type { NextConfig } from "next";
 
+const csp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' https://lntdirhpnollkntuoryq.supabase.co data: blob:",
+  "connect-src 'self' https://lntdirhpnollkntuoryq.supabase.co https://generativelanguage.googleapis.com https://api.open-meteo.com https://clothing-detection-production.up.railway.app https://www.googleapis.com https://identitytoolkit.googleapis.com https://mwwhui--outfitr-leffa-tryon-leffatryon-tryon.modal.run",
+  "frame-src 'self' https://accounts.google.com",
+  "worker-src 'self' blob:",
+  "media-src 'self' blob:",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
@@ -19,6 +33,18 @@ const nextConfig: NextConfig = {
         pathname: "/vi/**",
       },
     ],
+  },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "Content-Security-Policy", value: csp },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+        ],
+      },
+    ];
   },
 };
 

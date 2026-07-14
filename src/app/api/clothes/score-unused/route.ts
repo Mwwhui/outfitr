@@ -8,19 +8,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-const UNUSED_THRESHOLD = 30; // score above this → flagged unused
+const UNUSED_THRESHOLD = 30; // score above this → flagged as unused
 const WEAR_LOG_DAYS = 90; // look back window
 
 export async function POST(req: Request) {
   let userId: string | undefined;
 
-  // Accept userId from body (for internal fire-and-forget calls from outfit_plans)
+  // Accept userId from body
   try {
     const body = await req.json();
     userId = body.userId;
-  } catch {
-    // body not JSON — ignore
-  }
+  } catch {}
 
   if (!userId) {
     const session = await getServerSession(authOptions);
@@ -31,7 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // 1. Fetch all user's clothes
+  // Fetch all user's clothes
   const { data: clothes, error: clothesError } = await supabase
     .from('clothes')
     .select('id, user_id, name, type, created_at')
@@ -47,7 +45,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 2. Fetch wear logs from last 90 days
+  // Fetch wear logs from last 90 days
   const since = new Date();
   since.setDate(since.getDate() - WEAR_LOG_DAYS);
   const sinceStr = since.toISOString().slice(0, 10);
@@ -66,7 +64,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3. Build a map: cloth_id → { count, lastWornAt }
+  // Build a map: cloth_id → { count, lastWornAt }
   const wearMap = new Map<string, { count: number; lastWornAt: string }>();
 
   for (const log of wearLogs ?? []) {
@@ -81,7 +79,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // 4. Score each item and build update rows
+  // Score each item and build update rows
   const today = new Date().toISOString().slice(0, 10);
 
   const updates = clothes.map((item) => {
@@ -114,7 +112,7 @@ export async function POST(req: Request) {
     };
   });
 
-  // 5. Batch update all items in Supabase
+  // Batch update all items in Supabase
   const { error: updateError } = await supabase
     .from('clothes')
     .upsert(updates, { onConflict: 'id' });

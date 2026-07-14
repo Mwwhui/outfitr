@@ -6,7 +6,7 @@ import bcrypt from 'bcrypt';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 export const authOptions: NextAuthOptions = {
@@ -34,7 +34,7 @@ export const authOptions: NextAuthOptions = {
 
         const isValid = await bcrypt.compare(
           credentials.password,
-          data.password_hash
+          data.password_hash,
         );
 
         if (!isValid) {
@@ -148,7 +148,7 @@ export const authOptions: NextAuthOptions = {
           : undefined;
       }
 
-      // ALSO: fetch DB user id, role, partner_id so session.user has them
+      // fetch DB user id, role, partner_id
       // Only query DB when token doesn't already have id (first login / new token)
       if (token.email && !token.id) {
         const { data } = await supabase

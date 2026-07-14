@@ -31,18 +31,6 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-/**
- * GET /api/categories
- * Returns a list of clothing categories with color codes
- *
- * Query Parameters:
- * - search: (optional) Filter categories by search term (case-insensitive)
- * - format: (optional) 'names' returns just category names, 'full' returns full objects (default: 'full')
- *
- * Response:
- * - 200: Array of category objects or names
- * - 500: Server error
- */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -51,7 +39,7 @@ export async function GET(req: Request) {
 
     let result: Category[] | string[] = CATEGORIES;
 
-    // Filter by search term if provided
+    // Filter by search term
     if (search && search.trim()) {
       const searchLower = search.toLowerCase();
       result = CATEGORIES.filter((category) =>
@@ -74,11 +62,6 @@ export async function GET(req: Request) {
   }
 }
 
-/**
- * POST /api/categories
- * This endpoint is for reference only - categories are hardcoded
- * To add/remove categories, update the CATEGORIES array above
- */
 export async function POST(req: Request) {
   return NextResponse.json(
     {

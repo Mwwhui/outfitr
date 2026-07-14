@@ -6,7 +6,6 @@ import { supabaseServer } from '@/lib/supabase/server';
 const ALERTS_CACHE = new Map<string, { data: unknown; ts: number }>();
 const ALERTS_CACHE_TTL = 30 * 1000;
 
-// GET /api/home/alerts
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -31,8 +30,12 @@ export async function GET() {
       console.error('Home alerts pledges error:', pledgesError);
     }
 
-    const pending = (pledges || []).filter((p) => p.status === 'pending').length;
-    const accepted = (pledges || []).filter((p) => p.status === 'accepted').length;
+    const pending = (pledges || []).filter(
+      (p) => p.status === 'pending',
+    ).length;
+    const accepted = (pledges || []).filter(
+      (p) => p.status === 'accepted',
+    ).length;
 
     const { data: unusedItems, error: unusedError } = await supabase
       .from('clothes')
@@ -109,7 +112,7 @@ export async function GET() {
     console.error('API /api/home/alerts crashed:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal Error' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

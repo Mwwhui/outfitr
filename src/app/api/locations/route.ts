@@ -1,16 +1,20 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]/route";
 
+// GET /api/locations — list authenticated user's unique locations
 export async function GET(req: Request) {
-  const supabase = supabaseServer();
-  const { searchParams } = new URL(req.url);
-  const user_id = searchParams.get("user_id");
-
-  if (!user_id) {
-    return NextResponse.json({ locations: [] });
-  }
-
   try {
+    const session = await getServerSession(authOptions);
+    const user_id = session?.user?.id;
+
+    if (!user_id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const supabase = supabaseServer();
+
     const { data, error } = await supabase
       .from("clothes")
       .select("location")
@@ -21,7 +25,7 @@ export async function GET(req: Request) {
 
     if (error) {
       console.error("Supabase error /api/locations:", error);
-      return NextResponse.json({ error }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     const locations = [...new Set(data.map((item) => item.location))].sort();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import ReactGridLayout, { useContainerWidth, noCompactor, type LayoutItem } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -22,14 +22,38 @@ export default function Cabinet({
   const [width, setWidth] = useState(0);
   const { width: trackedWidth, containerRef: rglContainerRef } = useContainerWidth();
   const lastLayoutRef = useRef('');
+  const lastWidthRef = useRef(0);
+  const propLayoutRef = useRef('');
+  const suppressUntilRef = useRef(0);
 
+  // Width fluctuation guard: ignore changes smaller than 10px
+  // This filters out scrollbar appear/disappear jitter
   useEffect(() => {
     if (trackedWidth > 0) {
-      setWidth(trackedWidth);
+      const diff = Math.abs(trackedWidth - lastWidthRef.current);
+      if (diff > 10 || lastWidthRef.current === 0) {
+        lastWidthRef.current = trackedWidth;
+        setWidth(trackedWidth);
+      }
     }
   }, [trackedWidth]);
 
+  // Detect external layout prop changes and temporarily suppress onLayoutChange
+  // Prevents RGL's normalization of the prop from echoing back into the parent
+  useEffect(() => {
+    const key = JSON.stringify(layout);
+    if (key !== propLayoutRef.current) {
+      propLayoutRef.current = key;
+      suppressUntilRef.current = Date.now() + 100;
+    }
+  }, [layout]);
+
   const handleLayoutChange = useCallback((newLayout: readonly LayoutItem[]) => {
+    // Skip callbacks during the suppression window after external prop changes
+    if (Date.now() < suppressUntilRef.current) {
+      return;
+    }
+
     const mapped: ClosetLayoutItem[] = newLayout.map((item) => ({
       i: item.i,
       x: item.x,
@@ -44,6 +68,51 @@ export default function Cabinet({
     }
   }, [onLayoutChange]);
 
+  // Compute grid height manually to prevent autoSize resize cascades
+  const gridHeight = useMemo(() => {
+    if (!layout || layout.length === 0) return 300;
+    const maxRows = layout.reduce((max, item) => Math.max(max, item.y + item.h), 0);
+    const rowHeight = 30;
+    const marginY = 8;
+    const paddingY = 12;
+    return maxRows * rowHeight + Math.max(0, maxRows - 1) * marginY + 2 * paddingY;
+  }, [layout]);
+
+  // Memoize inline config objects so RGL doesn't re-process on every render
+  const gridConfig = useMemo(
+    () => ({
+      cols: 12,
+      rowHeight: 30,
+      margin: [8, 8] as readonly [number, number],
+      containerPadding: [12, 12] as readonly [number, number],
+      maxRows: Infinity,
+    }),
+    []
+  );
+
+  const dragConfig = useMemo(
+    () => ({
+      enabled: editMode,
+      bounded: true,
+      handle: '.drag-handle',
+      threshold: 5,
+    }),
+    [editMode]
+  );
+
+  const resizeConfig = useMemo(
+    () => ({
+      enabled: editMode,
+      handles: ['se'] as const,
+    }),
+    [editMode]
+  );
+
+  const containerStyle = useMemo(
+    () => ({ height: gridHeight }),
+    [gridHeight]
+  );
+
   if (width === 0) {
     return <div ref={rglContainerRef} className="cabinet-frame" style={{ minHeight: 300 }} />;
   }
@@ -55,25 +124,11 @@ export default function Cabinet({
           width={width}
           layout={layout as unknown as LayoutItem[]}
           onLayoutChange={editMode ? handleLayoutChange : undefined}
-          gridConfig={{
-            cols: 12,
-            rowHeight: 30,
-            margin: [8, 8] as readonly [number, number],
-            containerPadding: [12, 12] as readonly [number, number],
-            maxRows: Infinity,
-          }}
-          dragConfig={{
-            enabled: editMode,
-            bounded: true,
-            handle: '.drag-handle',
-            threshold: 5,
-          }}
-          resizeConfig={{
-            enabled: editMode,
-            handles: ['se'],
-          }}
+          gridConfig={gridConfig}
+          dragConfig={dragConfig}
+          resizeConfig={resizeConfig}
           compactor={noCompactor}
-          autoSize
+          style={containerStyle}
         >
           {children}
         </ReactGridLayout>

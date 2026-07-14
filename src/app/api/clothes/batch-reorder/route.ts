@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { supabaseServer } from '@/lib/supabase/server';
 
-// PATCH /api/clothes/batch-reorder — batch update zone_id and sort_order
+// batch update zone_id and sort_order
 export async function PATCH(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -18,7 +18,10 @@ export async function PATCH(req: Request) {
     };
 
     if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'Items array is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Items array is required' },
+        { status: 400 },
+      );
     }
 
     const supabase = supabaseServer();
@@ -33,20 +36,26 @@ export async function PATCH(req: Request) {
       .is('deleted_at', null);
 
     if (verifyError) {
-      console.error('Supabase error /api/clothes/batch-reorder verify:', verifyError);
-      return NextResponse.json({ error: 'Failed to verify items' }, { status: 500 });
+      console.error(
+        'Supabase error /api/clothes/batch-reorder verify:',
+        verifyError,
+      );
+      return NextResponse.json(
+        { error: 'Failed to verify items' },
+        { status: 500 },
+      );
     }
 
     const validIds = new Set((existingItems || []).map((i) => i.id));
     if (validIds.size !== itemIds.length) {
       return NextResponse.json(
         { error: 'One or more items do not belong to you' },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
     // Batch update using a transaction via RPC or individual updates
-    // Supabase JS doesn't support true transactions, so we do sequential updates
+    // do sequential updates
     const updateErrors: string[] = [];
     for (const item of items) {
       const { error } = await supabase
@@ -68,7 +77,7 @@ export async function PATCH(req: Request) {
       console.error('Batch reorder errors:', updateErrors);
       return NextResponse.json(
         { error: 'Some items failed to update', details: updateErrors },
-        { status: 500 }
+        { status: 500 },
       );
     }
 

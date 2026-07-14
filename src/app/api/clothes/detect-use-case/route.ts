@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../../auth/[...nextauth]/route';
 import { callGeminiWithFallback } from '@/lib/gemini';
 
 const USE_CASE_OPTIONS = [
@@ -10,13 +12,48 @@ const USE_CASE_OPTIONS = [
   'date',
 ];
 
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/jpg',
+];
+
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 export async function POST(req: Request) {
   try {
+    // Authenticate
+    const session = await getServerSession(authOptions);
+    const user_id = session?.user?.id;
+
+    if (!user_id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Parse multipart form
     const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file') as File | null;
 
     if (!file) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: `File too large. Max size is ${MAX_FILE_SIZE_MB}MB.` },
+        { status: 400 },
+      );
+    }
+
+    // Validate MIME type
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' },
+        { status: 400 },
+      );
     }
 
     const apiKey = process.env.GEMINI_API_KEY;

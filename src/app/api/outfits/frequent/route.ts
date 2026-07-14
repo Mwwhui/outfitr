@@ -1,41 +1,40 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { supabaseServer } from "@/lib/supabase/server";
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { supabaseServer } from '@/lib/supabase/server';
 
-// GET /api/outfits/frequent?limit=10
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   const user_id = session?.user?.id;
 
   if (!user_id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const supabase = supabaseServer();
   const { searchParams } = new URL(req.url);
-  const limit = parseInt(searchParams.get("limit") || "10", 10);
+  const limit = parseInt(searchParams.get('limit') || '10', 10);
 
   try {
     // Fetch current wardrobe item IDs (exclude deleted items)
     const { data: currentItems } = await supabase
-      .from("clothes")
-      .select("id")
-      .eq("user_id", user_id)
-      .is("deleted_at", null)
-      .or("status.is.null,status.eq.available");
+      .from('clothes')
+      .select('id')
+      .eq('user_id', user_id)
+      .is('deleted_at', null)
+      .or('status.is.null,status.eq.available');
 
     const validItemIds = new Set((currentItems || []).map((i) => i.id));
 
     // Fetch all outfit plans for this user
     const { data: plans, error } = await supabase
-      .from("outfit_plans")
-      .select("id, date, time_slot, slots, name")
-      .eq("user_id", user_id)
-      .order("date", { ascending: false });
+      .from('outfit_plans')
+      .select('id, date, time_slot, slots, name')
+      .eq('user_id', user_id)
+      .order('date', { ascending: false });
 
     if (error) {
-      console.error("Supabase error /api/outfits/frequent:", error);
+      console.error('Supabase error /api/outfits/frequent:', error);
       return NextResponse.json({ error }, { status: 500 });
     }
 
@@ -69,12 +68,12 @@ export async function GET(req: Request) {
     let validPlanCount = 0;
 
     for (const plan of plans) {
-      if (!plan.slots || typeof plan.slots !== "object") continue;
+      if (!plan.slots || typeof plan.slots !== 'object') continue;
 
       // Filter out deleted items from slots
       const items: SlotItem[] = [];
       for (const val of Object.values(plan.slots)) {
-        if (val && typeof val === "object" && "id" in val) {
+        if (val && typeof val === 'object' && 'id' in val) {
           const item = val as SlotItem;
           if (validItemIds.has(item.id)) {
             items.push(item);
@@ -88,7 +87,7 @@ export async function GET(req: Request) {
 
       // Create a key from sorted item IDs
       const ids = items.map((i) => i.id).sort();
-      const key = ids.join("::");
+      const key = ids.join('::');
 
       const existing = comboMap.get(key);
       if (existing) {
@@ -115,11 +114,11 @@ export async function GET(req: Request) {
       .slice(0, limit);
 
     const combos = sorted.map((combo) => ({
-      key: combo.itemIds.join("::"),
+      key: combo.itemIds.join('::'),
       frequency: combo.frequency,
       last_worn: combo.lastDate,
       days_since_worn: Math.floor(
-        (Date.now() - new Date(combo.lastDate).getTime()) / 86400000
+        (Date.now() - new Date(combo.lastDate).getTime()) / 86400000,
       ),
       name: combo.name,
       items: combo.items.map((item) => ({
@@ -139,7 +138,7 @@ export async function GET(req: Request) {
       unique_combos: comboMap.size,
     });
   } catch (err) {
-    console.error("API /api/outfits/frequent crashed:", err);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+    console.error('API /api/outfits/frequent crashed:', err);
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }

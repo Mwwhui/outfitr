@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 export async function GET(req: Request) {
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   // Must be logged in (credentials or google).
   if (!session?.user?.id) {
     return NextResponse.redirect(
-      new URL('/auth/login', process.env.NEXTAUTH_URL)
+      new URL('/auth/login', process.env.NEXTAUTH_URL),
     );
   }
 
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
   if (error || !code || !state) {
     return NextResponse.redirect(
-      new URL('/calendar?gcal=failed', process.env.NEXTAUTH_URL)
+      new URL('/calendar?gcal=failed', process.env.NEXTAUTH_URL),
     );
   }
 
@@ -40,7 +40,7 @@ export async function GET(req: Request) {
 
   if (!storedState || storedState !== state || !verifier) {
     return NextResponse.redirect(
-      new URL('/calendar?gcal=state_mismatch', process.env.NEXTAUTH_URL)
+      new URL('/calendar?gcal=state_mismatch', process.env.NEXTAUTH_URL),
     );
   }
 
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
 
   if (!clientId || !clientSecret || !redirectUri) {
     return NextResponse.redirect(
-      new URL('/calendar?gcal=misconfigured', process.env.NEXTAUTH_URL)
+      new URL('/calendar?gcal=misconfigured', process.env.NEXTAUTH_URL),
     );
   }
 
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
   if (!tokenRes.ok) {
     console.error('Google token exchange failed:', await tokenRes.text());
     return NextResponse.redirect(
-      new URL('/calendar?gcal=token_failed', process.env.NEXTAUTH_URL)
+      new URL('/calendar?gcal=token_failed', process.env.NEXTAUTH_URL),
     );
   }
 
@@ -83,7 +83,7 @@ export async function GET(req: Request) {
 
   if (!accessToken) {
     return NextResponse.redirect(
-      new URL('/calendar?gcal=no_access', process.env.NEXTAUTH_URL)
+      new URL('/calendar?gcal=no_access', process.env.NEXTAUTH_URL),
     );
   }
 
@@ -118,7 +118,7 @@ export async function GET(req: Request) {
   if (existingErr) {
     console.error('Supabase read integration error:', existingErr);
     return NextResponse.redirect(
-      new URL('/calendar?gcal=db_read_failed', process.env.NEXTAUTH_URL)
+      new URL('/calendar?gcal=db_read_failed', process.env.NEXTAUTH_URL),
     );
   }
 
@@ -138,11 +138,11 @@ export async function GET(req: Request) {
   if (upsertErr) {
     console.error('Supabase upsert integration error:', upsertErr);
     return NextResponse.redirect(
-      new URL('/calendar?gcal=db_write_failed', process.env.NEXTAUTH_URL)
+      new URL('/calendar?gcal=db_write_failed', process.env.NEXTAUTH_URL),
     );
   }
 
   return NextResponse.redirect(
-    new URL('/calendar?gcal=connected', process.env.NEXTAUTH_URL)
+    new URL('/calendar?gcal=connected', process.env.NEXTAUTH_URL),
   );
 }

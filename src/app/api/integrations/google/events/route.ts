@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type StoredIntegrationRow = {
@@ -59,11 +59,15 @@ async function refreshAccessToken(refreshToken: string) {
   return { accessToken, expiresAt };
 }
 
-async function fetchGoogleEvents(accessToken: string, date: string, calendarId: string) {
+async function fetchGoogleEvents(
+  accessToken: string,
+  date: string,
+  calendarId: string,
+) {
   const { timeMin, timeMax, timeZone } = toDayRangeISO(date);
 
   const gUrl = new URL(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
   );
 
   gUrl.searchParams.set('timeMin', timeMin);
@@ -120,7 +124,7 @@ export async function GET(req: Request) {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json(
       { error: 'Missing or invalid date (expected YYYY-MM-DD)' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -131,24 +135,31 @@ export async function GET(req: Request) {
     .eq('user_id', session.user.id)
     .maybeSingle();
 
-  const integrationRow: StoredIntegrationRow | null = (integrationData as any) ?? null;
+  const integrationRow: StoredIntegrationRow | null =
+    (integrationData as any) ?? null;
 
   // Try linked integration first (it has refresh logic)
   if (integrationRow?.access_token) {
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = integrationRow.expires_at;
-    const needsRefresh = expiresAt !== null && expiresAt !== undefined && expiresAt <= now + 60;
+    const needsRefresh =
+      expiresAt !== null && expiresAt !== undefined && expiresAt <= now + 60;
 
     let linkedToken = integrationRow.access_token;
 
     if (needsRefresh && integrationRow.refresh_token) {
       try {
-        const refreshed = await refreshAccessToken(integrationRow.refresh_token);
+        const refreshed = await refreshAccessToken(
+          integrationRow.refresh_token,
+        );
         linkedToken = refreshed.accessToken;
 
         await supabase
           .from('google_calendar_integrations')
-          .update({ access_token: refreshed.accessToken, expires_at: refreshed.expiresAt })
+          .update({
+            access_token: refreshed.accessToken,
+            expires_at: refreshed.expiresAt,
+          })
           .eq('user_id', session.user.id);
       } catch (e) {
         console.error('Linked integration refresh failed:', e);
@@ -162,33 +173,48 @@ export async function GET(req: Request) {
   }
 
   // Fallback to session token from Google login (Scenario 1)
-  const sessionAccessToken = (session as any)?.googleAccessToken as string | undefined;
+  const sessionAccessToken = (session as any)?.googleAccessToken as
+    | string
+    | undefined;
 
   if (sessionAccessToken) {
-    const result = await fetchGoogleEvents(sessionAccessToken, date, calendarId);
+    const result = await fetchGoogleEvents(
+      sessionAccessToken,
+      date,
+      calendarId,
+    );
     if (result.ok) {
       return NextResponse.json({ date, calendarId, events: result.events });
     }
 
-    // Session token failed — return 401 so client can show reconnect prompt
+    // Session token failed, return 401 so client can show reconnect prompt
     if (result.status === 401) {
       return NextResponse.json(
-        { error: 'Google Calendar token expired', reconnect_url: '/api/integrations/google/start' },
-        { status: 401 }
+        {
+          error: 'Google Calendar token expired',
+          reconnect_url: '/api/integrations/google/start',
+        },
+        { status: 401 },
       );
     }
   }
 
-  // Both sources failed — return 403 (not connected) or 401 (expired)
+  // Both sources failed, return 403 (not connected) or 401 (expired)
   if (!integrationRow && !sessionAccessToken) {
     return NextResponse.json(
-      { error: 'Google Calendar not connected', reconnect_url: '/api/integrations/google/start' },
-      { status: 403 }
+      {
+        error: 'Google Calendar not connected',
+        reconnect_url: '/api/integrations/google/start',
+      },
+      { status: 403 },
     );
   }
 
   return NextResponse.json(
-    { error: 'Google Calendar token expired', reconnect_url: '/api/integrations/google/start' },
-    { status: 401 }
+    {
+      error: 'Google Calendar token expired',
+      reconnect_url: '/api/integrations/google/start',
+    },
+    { status: 401 },
   );
 }

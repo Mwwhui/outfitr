@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -213,6 +213,7 @@ export default function ClosetFloorplan({
   const [currentLayout, setCurrentLayout] = useState<ClosetLayoutItem[]>([]);
   const [zoneManagerOpen, setZoneManagerOpen] = useState(false);
   const [layoutInitialized, setLayoutInitialized] = useState(false);
+  const lastLayoutKeyRef = useRef('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -226,14 +227,32 @@ export default function ClosetFloorplan({
     setGroupedItems(groupItemsByZone(items, zones));
   }, [items, zones]);
 
+  // Reset layout state when all zones are deleted
+  useEffect(() => {
+    if (zones.length === 0) {
+      setLayoutInitialized(false);
+      lastLayoutKeyRef.current = '';
+    }
+  }, [zones]);
+
   useEffect(() => {
     if (savedLayout.length > 0 && zones.length > 0) {
       const synced = syncLayoutWithZones(savedLayout, zones);
-      setCurrentLayout(synced);
-      setLayoutInitialized(true);
+      const key = JSON.stringify(synced);
+      if (key !== lastLayoutKeyRef.current) {
+        lastLayoutKeyRef.current = key;
+        setCurrentLayout(synced);
+      }
+      if (!layoutInitialized) {
+        setLayoutInitialized(true);
+      }
     } else if (zones.length > 0 && !layoutInitialized) {
       const auto = generateAutoLayout(zones);
-      setCurrentLayout(auto);
+      const key = JSON.stringify(auto);
+      if (key !== lastLayoutKeyRef.current) {
+        lastLayoutKeyRef.current = key;
+        setCurrentLayout(auto);
+      }
       setLayoutInitialized(true);
     }
   }, [savedLayout, zones, layoutInitialized]);
@@ -512,6 +531,24 @@ export default function ClosetFloorplan({
     });
   }, [zones, currentLayout]);
 
+  // Memoize children to prevent unnecessary re-mounts in ReactGridLayout
+  const cabinetChildren = useMemo(
+    () =>
+      sortedZones.map((zone) => (
+        <div key={zone.id} style={{ height: '100%' }}>
+          <CabinetZone
+            zone={zone}
+            items={groupedItems[zone.id] || []}
+            editMode={editMode}
+            onItemClick={handleItemClick}
+            onDeleteZone={handleDeleteZone}
+            onTogglePin={handleTogglePin}
+          />
+        </div>
+      )),
+    [sortedZones, groupedItems, editMode, handleItemClick, handleDeleteZone, handleTogglePin]
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -585,18 +622,7 @@ export default function ClosetFloorplan({
             onLayoutChange={setCurrentLayout}
             editMode={editMode}
           >
-            {sortedZones.map((zone) => (
-              <div key={zone.id} style={{ height: '100%' }}>
-                <CabinetZone
-                  zone={zone}
-                  items={groupedItems[zone.id] || []}
-                  editMode={editMode}
-                  onItemClick={handleItemClick}
-                  onDeleteZone={handleDeleteZone}
-                  onTogglePin={handleTogglePin}
-                />
-              </div>
-            ))}
+            {cabinetChildren}
           </Cabinet>
 
           <UnassignedInbox
