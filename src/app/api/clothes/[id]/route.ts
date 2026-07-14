@@ -17,6 +17,7 @@ const ALLOWED_PATCH_FIELDS = [
   'favorite',
   'image_url',
   'use_case',
+  'categories',
   'description',
   'purchase_date',
   'location',

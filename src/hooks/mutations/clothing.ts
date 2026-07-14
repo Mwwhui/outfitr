@@ -72,6 +72,7 @@ export interface UpdateClothingData {
   favorite?: boolean;
   image_url?: string | null;
   use_case?: string[] | null;
+  categories?: string[] | null;
   description?: string | null;
   purchase_date?: string | null;
   location?: string | null;
