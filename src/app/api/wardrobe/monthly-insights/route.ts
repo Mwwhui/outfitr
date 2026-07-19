@@ -155,6 +155,7 @@ interface MonthlyInsights {
     type: string;
     times_worn_this_month: number;
     total_wears: number;
+    price: number | null;
   }>;
   shopping_list: Array<{
     item_type: string;
@@ -687,6 +688,7 @@ Rules:
         type: c.type,
         times_worn_this_month: thisMonthWears.get(c.id) || 0,
         total_wears: totalWearCount.get(c.id) || c.wear_count || 0,
+        price: c.price ?? null,
       }))
       .sort((a, b) => (b.times_worn_this_month || b.total_wears) - (a.times_worn_this_month || a.total_wears))
       .filter((c) => c.total_wears > 0)

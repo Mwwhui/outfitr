@@ -136,7 +136,7 @@ export default function PledgeFulfilled({
                   backgroundColor: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
+                  gap: '16px',
                 }}
               >
                 {item.image_url ? (

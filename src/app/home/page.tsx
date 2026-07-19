@@ -524,11 +524,17 @@ export default function HomePage() {
                 itemImage={topWornItem.image_url}
                 wearCount={topWornItem.times_worn_this_month}
                 totalWears={topWornItem.total_wears}
-                costPerWear={health.cost_per_wear}
+                costPerWear={
+                  topWornItem.price && topWornItem.total_wears > 0
+                    ? Math.round((topWornItem.price / topWornItem.total_wears) * 100) / 100
+                    : health.cost_per_wear
+                }
                 utilizationText={
-                  health.cost_per_wear > 0
-                    ? `Cost per wear: $${health.cost_per_wear.toFixed(2)} (${insights?.cost_per_wear_trend_text || ''})`
-                    : undefined
+                  topWornItem.price && topWornItem.total_wears > 0
+                    ? `Cost per wear: $${Math.round((topWornItem.price / topWornItem.total_wears) * 100) / 100}`
+                    : health.cost_per_wear > 0
+                      ? `Wardrobe avg: $${health.cost_per_wear.toFixed(2)}/wear`
+                      : undefined
                 }
               />
             )}

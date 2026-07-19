@@ -424,7 +424,7 @@ function sleepPenalty(items: ClothingItem[]): { score: number; detail: string } 
   if (sleepCount === items.length) {
     return { score: 0.0, detail: `All ${items.length} items are sleepwear — prioritising daytime outfits` };
   }
-  return { score: 0.3, detail: `${sleepCount} sleep item${sleepCount > 1 ? 's' : ''} — daytime use cases preferred` };
+  return { score: 0.0, detail: `${sleepCount} sleep item${sleepCount > 1 ? 's' : ''} — not recommended for daytime` };
 }
 
 function scoreCombo(
@@ -468,7 +468,7 @@ function scoreCombo(
   if (pairBoost.detail) {
     weighted.push({ label: 'You Like This', icon: '❤️', weight: 5, value: pairBoost.score, detail: pairBoost.detail });
   }
-  weighted.push({ label: 'Use Case', icon: '🌙', weight: 10, value: sleepResult.score, detail: sleepResult.detail });
+  weighted.push({ label: 'Use Case', icon: '🌙', weight: 20, value: sleepResult.score, detail: sleepResult.detail });
 
   const breakdown: ScoreBreakdown[] = weighted.map((w) => ({
     label: w.label,
@@ -542,6 +542,21 @@ export function suggestOutfits(
   let workingSet = filtered;
   if (workingSet.length === 0) {
     workingSet = filterBySeason(clothes, getSeasonsForTemp(30));
+  }
+  if (workingSet.length === 0) return [];
+
+  // Hard filter: only include items compatible with the target occasion
+  workingSet = workingSet.filter((item) => {
+    const tags = item.use_case || [];
+    if (tags.length === 0) return true;
+    return tags.includes(occasion);
+  });
+  // Exclude sleep items from non-sleep occasions
+  if (occasion !== 'sleep') {
+    workingSet = workingSet.filter((item) => {
+      const tags = item.use_case || [];
+      return !tags.includes('sleep');
+    });
   }
   if (workingSet.length === 0) return [];
 

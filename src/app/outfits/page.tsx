@@ -487,11 +487,6 @@ export default function OutfitsPage() {
   const secondaryItems = useMemo(() => {
     if (!dna?.never_tried.length) return [];
     const bentoIds = new Set(bentoItem?.items.map((i) => i.id) || []);
-    const frequentComboKeys = new Set(
-      enrichedFrequentCombos.map((c) =>
-        c.items.map((i) => i.id).sort().join('|||'),
-      ),
-    );
 
     const seenKeys = new Set<string>();
     const result: Array<{
@@ -515,10 +510,6 @@ export default function OutfitsPage() {
       // Filter: resolved items must not overlap with bento item
       if (bentoIds.has(itemA.id) || bentoIds.has(itemB.id)) continue;
 
-      // Filter: must not match an already-worn frequent combo
-      const freqKey = [itemA.id, itemB.id].sort().join('|||');
-      if (frequentComboKeys.has(freqKey)) continue;
-
       // Dedup: skip if same pair of items already shown
       const pairKey = [itemA.id, itemB.id].sort().join('|||');
       if (seenKeys.has(pairKey)) continue;
@@ -532,7 +523,7 @@ export default function OutfitsPage() {
     }
 
     return result;
-  }, [dna, clothes, bentoItem, enrichedFrequentCombos]);
+  }, [dna, clothes, bentoItem]);
 
   // Impact Meter computations
   const suggestionItems = suggestions.flatMap((s) => s.items);

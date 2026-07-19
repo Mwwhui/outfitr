@@ -168,7 +168,7 @@ export default function PledgeRejected({
                   backgroundColor: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
+                  gap: '16px',
                 }}
               >
                 {item.image_url ? (

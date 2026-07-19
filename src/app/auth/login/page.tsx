@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Loader from '../../components/Loader';
@@ -28,7 +28,12 @@ export default function LoginPage() {
       if (res?.error) {
         setErrorMsg(res.error);
       } else {
-        router.push('/home');
+        const session = await getSession();
+        if (session?.user?.role === 'partner') {
+          router.push('/partner/dashboard');
+        } else {
+          router.push('/home');
+        }
       }
     } catch (err) {
       setErrorMsg('An unexpected error occurred.');
@@ -106,7 +111,7 @@ export default function LoginPage() {
           </div>
 
           <button
-            onClick={() => signIn('google', { callbackUrl: '/home' })}
+            onClick={() => signIn('google', { callbackUrl: '/auth/callback' })}
             className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-lg py-2 hover:bg-gray-50 transition"
           >
             <Image

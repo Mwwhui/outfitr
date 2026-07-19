@@ -60,9 +60,7 @@ const USER_SECTIONS: NavSection[] = [
 
 const PARTNER_SECTIONS: NavSection[] = [
   {
-    title: 'Main',
     items: [
-      { icon: 'home', label: 'Home', href: '/home' },
       { icon: 'receipt_long', label: 'Requests', href: '/partner/dashboard' },
       { icon: 'qr_code_scanner', label: 'Scan QR', href: '/partner/scan' },
     ],

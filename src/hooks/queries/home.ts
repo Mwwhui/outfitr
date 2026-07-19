@@ -36,6 +36,7 @@ export interface InsightsData {
     type: string;
     times_worn_this_month: number;
     total_wears: number;
+    price: number | null;
   }>;
   shopping_list: Array<{
     item_type: string;
