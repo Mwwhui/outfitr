@@ -10,7 +10,8 @@
     "contextMenus",
     "activeTab",
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "scripting"
   ],
   "host_permissions": [
     "http://localhost:3000/*",

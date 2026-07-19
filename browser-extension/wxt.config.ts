@@ -20,7 +20,7 @@ export default defineConfig({
     name: 'Outfitr Scan',
     version: '1.0.0',
     description: 'Scan any product image against your wardrobe',
-    permissions: ['contextMenus', 'activeTab', 'storage', 'sidePanel'],
+    permissions: ['contextMenus', 'activeTab', 'storage', 'sidePanel', 'scripting'],
     host_permissions: [
       'http://localhost:3000/*',
       'https://outfitr.app/*',

@@ -49,6 +49,7 @@ export default defineBackground(() => {
       tab: { id: number | undefined },
     ) => {
       if (info.menuItemId === 'scan-outfitr' && info.srcUrl && tab?.id) {
+        chrome.sidePanel.open({ tabId: tab.id });
         handleScan(info.srcUrl, tab.id);
       }
     },
@@ -114,40 +115,64 @@ export default defineBackground(() => {
     });
     await setScanState('scanning');
 
-    // Open side panel immediately so user sees "Scanning..."
-    if (tabId) {
-      try {
-        await chrome.sidePanel.open({ tabId });
-      } catch (e) {
-        console.error('[background] sidePanel.open failed:', e);
-      }
-    }
-
     let stepTimer: ReturnType<typeof setInterval> | null = null;
 
     try {
-      const imgRes = await fetch(imageUrl, {
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!imgRes.ok) {
-        await setScanState('error', { lastError: 'Failed to fetch image' });
-        clearBadge();
-        return { error: 'Failed to fetch image' };
+      // Fetch image via content script to bypass CORS restrictions
+      let base64: string;
+      let mimeType: string;
+
+      if (tabId) {
+        const injectionResults = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: async (url: string) => {
+            const res = await fetch(url);
+            if (!res.ok) return { error: res.statusText };
+            const blob = await res.blob();
+            const buffer = await blob.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            const chunk = 8192;
+            for (let i = 0; i < bytes.length; i += chunk) {
+              binary += String.fromCharCode(...bytes.slice(i, i + chunk));
+            }
+            return { base64: btoa(binary), mimeType: blob.type || 'image/jpeg' };
+          },
+          args: [imageUrl],
+        });
+
+        const imgData = injectionResults?.[0]?.result;
+        if (!imgData || imgData.error) {
+          await setScanState('error', { lastError: imgData?.error || 'Failed to fetch image from page' });
+          clearBadge();
+          return { error: imgData?.error || 'Failed to fetch image from page' };
+        }
+        base64 = imgData.base64;
+        mimeType = imgData.mimeType;
+      } else {
+        // Fallback: direct fetch (may fail with CORS on external URLs)
+        const imgRes = await fetch(imageUrl, {
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!imgRes.ok) {
+          await setScanState('error', { lastError: 'Failed to fetch image' });
+          clearBadge();
+          return { error: 'Failed to fetch image' };
+        }
+        const blob = await imgRes.blob();
+        const buffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunk = 8192;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode(...bytes.slice(i, i + chunk));
+        }
+        base64 = btoa(binary);
+        mimeType = blob.type || 'image/jpeg';
       }
 
       // Step 1: image fetched, converting and analyzing
       await chrome.storage.session.set({ progressStep: 1 });
-
-      const blob = await imgRes.blob();
-      const buffer = await blob.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = '';
-      const chunk = 8192;
-      for (let i = 0; i < bytes.length; i += chunk) {
-        binary += String.fromCharCode(...bytes.slice(i, i + chunk));
-      }
-      const base64 = btoa(binary);
-      const mimeType = blob.type || 'image/jpeg';
 
       const cacheKey = base64.slice(0, 32);
       const cached = await getCachedResult(cacheKey);
