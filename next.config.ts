@@ -6,7 +6,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' https://lntdirhpnollkntuoryq.supabase.co https://*.tile.openstreetmap.org https://raw.githubusercontent.com https://pixabay.com data: blob:",
-  "connect-src 'self' https://lntdirhpnollkntuoryq.supabase.co https://generativelanguage.googleapis.com https://api.open-meteo.com https://clothing-detection-production.up.railway.app https://www.googleapis.com https://identitytoolkit.googleapis.com https://mwwhui--outfitr-leffa-tryon-leffatryon-tryon.modal.run",
+  "connect-src 'self' https://lntdirhpnollkntuoryq.supabase.co https://generativelanguage.googleapis.com https://api.open-meteo.com https://clothing-detection-production.up.railway.app https://www.googleapis.com https://identitytoolkit.googleapis.com https://mwwhui--outfitr-leffa-tryon-leffatryon-tryon.modal.run https://fastly.jsdelivr.net",
   "frame-src 'self' https://accounts.google.com",
   "worker-src 'self' blob:",
   "media-src 'self' blob:",
@@ -44,7 +44,7 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "Content-Security-Policy", value: csp },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self)" },
         ],
       },
     ];
