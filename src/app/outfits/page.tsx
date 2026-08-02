@@ -102,9 +102,15 @@ function getNextWeekday(dayIndex: number): string {
   const currentDay = now.getDay();
   let daysAhead = dayIndex - currentDay;
   if (daysAhead <= 0) daysAhead += 7;
-  const target = new Date(now);
-  target.setDate(now.getDate() + daysAhead);
-  return target.toISOString().slice(0, 10);
+  const target = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + daysAhead,
+  );
+  const y = target.getFullYear();
+  const m = String(target.getMonth() + 1).padStart(2, '0');
+  const d = String(target.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function itemsToPlannerParams(
@@ -670,7 +676,7 @@ export default function OutfitsPage() {
                       backgroundSize: '24px 24px',
                     }}
                   />
-                  <div className="flex-1 z-10">
+                  <div className="flex-1 min-w-0 z-10">
                     <div className="flex items-center gap-2 mb-3">
                       <span
                         className="material-symbols-outlined text-sm"
