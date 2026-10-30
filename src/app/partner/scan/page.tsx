@@ -11,7 +11,16 @@ import { useUpdatePledgeStatus } from '@/hooks/mutations/pledges';
 import type { IDetectedBarcode, IScannerError } from '@yudiel/react-qr-scanner';
 
 const Scanner = dynamic(
-  () => import('@yudiel/react-qr-scanner').then((m) => m.Scanner),
+  () =>
+    import('@yudiel/react-qr-scanner').then((m) => {
+      // Load the decoder from our origin instead of the default jsDelivr CDN (blocked by CSP).
+      // The filename version must match the installed zxing-wasm package.
+      m.setZXingModuleOverrides({
+        locateFile: (path: string, prefix: string) =>
+          path.endsWith('.wasm') ? '/wasm/zxing_reader-3.1.0.wasm' : prefix + path,
+      });
+      return m.Scanner;
+    }),
   { ssr: false },
 );
 
