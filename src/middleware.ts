@@ -16,6 +16,7 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth',
   '/api/login',
   '/api/register',
+  '/api/wardrobe/browser-scan', // verifies its own extension Bearer token
 ];
 
 const STATIC_PREFIXES = [

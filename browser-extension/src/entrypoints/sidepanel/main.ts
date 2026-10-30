@@ -362,6 +362,11 @@ async function init() {
     }
   };
   poll();
+
+  // The panel opens before the scan state is written, and may already be open
+  chrome.storage.session.onChanged.addListener((changes: Record<string, unknown>) => {
+    if ('scanningStatus' in changes) poll();
+  });
 }
 
 init();

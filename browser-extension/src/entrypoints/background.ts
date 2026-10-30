@@ -49,7 +49,11 @@ export default defineBackground(() => {
       tab: { id: number | undefined },
     ) => {
       if (info.menuItemId === 'scan-outfitr' && info.srcUrl && tab?.id) {
-        handleScan(info.srcUrl, tab.id);
+        // Must run before any await: sidePanel.open requires a user gesture
+        chrome.sidePanel.open({ tabId: tab.id }).catch((e: any) => {
+          console.error('[background] sidePanel.open failed:', e);
+        });
+        handleScan(info.srcUrl);
       }
     },
   );
@@ -63,7 +67,7 @@ export default defineBackground(() => {
       ) => any,
     ) => {
       if (msg.type === 'SCAN_PRODUCT') {
-        handleScan(msg.imageUrl, sender.tab?.id || msg.tabId)
+        handleScan(msg.imageUrl)
           .then((result) => sendResponse(result))
           .catch((err) => sendResponse({ error: err.message }));
         return true;
@@ -91,7 +95,7 @@ export default defineBackground(() => {
     },
   );
 
-  async function handleScan(imageUrl: string, tabId: number | undefined) {
+  async function handleScan(imageUrl: string) {
     const token = await getToken();
     if (!token) {
       try {
@@ -113,15 +117,6 @@ export default defineBackground(() => {
       startedAt: Date.now(),
     });
     await setScanState('scanning');
-
-    // Open side panel immediately so user sees "Scanning..."
-    if (tabId) {
-      try {
-        await chrome.sidePanel.open({ tabId });
-      } catch (e) {
-        console.error('[background] sidePanel.open failed:', e);
-      }
-    }
 
     let stepTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -195,8 +190,4 @@ export default defineBackground(() => {
       return { error: msg };
     }
   }
-
-  chrome.action.onClicked.addListener(async (tab: { id: any }) => {
-    await chrome.sidePanel.open({ tabId: tab.id! });
-  });
 });
