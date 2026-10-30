@@ -14,7 +14,8 @@
   ],
   "host_permissions": [
     "http://localhost:3000/*",
-    "https://outfitr.app/*"
+    "https://outfitr.app/*",
+    "https://*/*"
   ],
   "action": {
     "default_title": "Outfitr Scan",

@@ -24,6 +24,8 @@ export default defineConfig({
     host_permissions: [
       'http://localhost:3000/*',
       'https://outfitr.app/*',
+      // Product images are served from arbitrary shop CDNs
+      'https://*/*',
     ],
     action: {
       default_title: 'Outfitr Scan',
